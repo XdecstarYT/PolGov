@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+/* Class-based dark mode: <html class="dark"> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  Statecraft palette — "broadsheet and briefing folder".
+  Semantic tokens only. Dark mode overrides the same variables below, so every
+  utility built on these (bg-paper, text-ink, border-rule, ...) themes for free.
+*/
+@theme {
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* surfaces */
+  --color-paper: #f4f1e9;
+  --color-panel: #fbfaf6;
+  --color-sunk: #e9e4d8;
+
+  /* ink */
+  --color-ink: #1b1a17;
+  --color-ink-soft: #56514a;
+  --color-ink-faint: #837c71;
+
+  /* structure */
+  --color-rule: #d9d3c5;
+  --color-rule-strong: #b6ae9c;
+
+  /* accents — one warm seal, one civic blue */
+  --color-seal: #8c2f27;
+  --color-seal-soft: #b8544a;
+  --color-civic: #1f4e5f;
+  --color-civic-soft: #3d7d92;
+
+  /* semantic status (always paired with a text label — never color alone) */
+  --color-gain: #2f6b46;
+  --color-loss: #96341f;
+  --color-warn: #8a6412;
+}
+
+:root.dark {
+  --color-paper: #14130f;
+  --color-panel: #1d1b17;
+  --color-sunk: #26231e;
+
+  --color-ink: #ece6d9;
+  --color-ink-soft: #b3aa9a;
+  --color-ink-faint: #8a8171;
+
+  --color-rule: #35312a;
+  --color-rule-strong: #4c463c;
+
+  --color-seal: #d9796d;
+  --color-seal-soft: #a8463c;
+  --color-civic: #7fb6c9;
+  --color-civic-soft: #3d7d92;
+
+  --color-gain: #79c194;
+  --color-loss: #e2836a;
+  --color-warn: #d8ad4e;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular figures everywhere numbers change — stops the HUD jittering. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Visible focus for the keyboard turn loop. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-civic);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
