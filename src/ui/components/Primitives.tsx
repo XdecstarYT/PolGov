@@ -120,11 +120,15 @@ export function Stat({
   };
   return (
     <div className="min-w-0">
-      <div className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-ink-faint">
+      <div className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-ink-faint sm:text-[0.68rem]">
         {label}
       </div>
-      <div className={`font-serif text-xl leading-tight tnum ${tones[tone]}`}>{value}</div>
-      {detail && <div className="truncate text-xs text-ink-faint tnum">{detail}</div>}
+      <div className={`font-serif text-base leading-tight tnum sm:text-xl ${tones[tone]}`}>
+        {value}
+      </div>
+      {detail && (
+        <div className="truncate text-[0.65rem] text-ink-faint tnum sm:text-xs">{detail}</div>
+      )}
     </div>
   );
 }

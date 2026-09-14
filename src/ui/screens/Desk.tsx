@@ -63,8 +63,8 @@ export function Desk() {
       {/* ---------------------------- top bar ---------------------------- */}
       <header className="sticky top-0 z-20 border-b-2 border-ink bg-paper/95 backdrop-blur">
         <div className="mx-auto max-w-7xl px-4 py-2.5 sm:px-6">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-            <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <PartyMark color={player.color} glyph={player.glyph} />
                 <span className="truncate font-serif text-base font-bold text-ink">
@@ -77,7 +77,7 @@ export function Desk() {
               </div>
             </div>
 
-            <div className="flex flex-1 flex-wrap items-start gap-x-6 gap-y-2">
+            <div className="order-last grid w-full grid-cols-3 gap-x-3 gap-y-2 border-t border-rule pt-2 sm:order-none sm:flex sm:w-auto sm:flex-1 sm:flex-wrap sm:items-start sm:gap-x-6 sm:border-0 sm:pt-0">
               <Stat
                 label="Capital"
                 value={game.politicalCapital.toFixed(0)}
@@ -105,7 +105,7 @@ export function Desk() {
               />
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1.5">
               <Button variant="quiet" onClick={toggleTheme} title="Switch between light and dark">
                 {theme === 'dark' ? 'Light' : 'Dark'}
               </Button>
