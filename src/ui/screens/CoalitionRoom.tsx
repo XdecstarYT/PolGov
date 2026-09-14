@@ -17,6 +17,7 @@ import {
   SECTOR_LABELS,
   affinity,
   affinityLabel,
+  playerIsLargestParty,
   playerParty,
   projectedSeats,
 } from '../../game/index.ts';
@@ -37,6 +38,8 @@ export function CoalitionRoom() {
   const negotiation = game.negotiation;
   const player = playerParty(game.parties);
   const committed = projectedSeats(game.parties, negotiation.accepted);
+  const isLargest = playerIsLargestParty(game.parties);
+  const largest = [...game.parties].sort((a, b) => b.seats - a.seats)[0];
   const short = MAJORITY_SEATS - committed;
   const viable = committed >= MAJORITY_SEATS;
 
@@ -176,15 +179,26 @@ export function CoalitionRoom() {
                 Present this government
               </Button>
               <Button
+                variant={isLargest ? 'default' : 'danger'}
                 onClick={() => void dispatch({ type: 'negotiation_abandon' })}
                 className="w-full"
               >
-                Govern in a minority
+                {isLargest ? 'Govern in a minority' : 'Concede and go into opposition'}
               </Button>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-ink-faint">
-              A minority government is legitimate and sometimes correct — but every bill will have
-              to find its majority on the floor, vote by vote, without a partner obliged to help.
+              {isLargest ? (
+                <>
+                  As the largest party you may carry on without an agreement. It is legitimate and
+                  sometimes correct — but every bill will have to find its majority on the floor,
+                  vote by vote, without a partner obliged to help.
+                </>
+              ) : (
+                <>
+                  {largest?.name} holds more seats than you. Without an agreement they will be
+                  invited to form a government instead, and this run ends.
+                </>
+              )}
             </p>
             {negotiation.attempt > 1 && (
               <p className="mt-2 text-xs leading-relaxed text-warn">

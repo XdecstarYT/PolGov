@@ -322,6 +322,13 @@ export interface NegotiationState {
   attempt: number;
   /** Set once the player fails `COALITION_MAX_ATTEMPTS` times. */
   failed: boolean;
+  /**
+   * True when this negotiation follows a mid-term walkout rather than an
+   * election. It decides which way the run ends if no government can be
+   * formed: a government that falls has collapsed, a party that cannot form
+   * one after an election has been defeated.
+   */
+  crisis: boolean;
 }
 
 /* ------------------------------------------------------------------ *

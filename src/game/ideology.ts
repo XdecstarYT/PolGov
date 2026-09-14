@@ -5,12 +5,16 @@
  * which electorates warm to which party. No axis or direction is privileged.
  */
 
+import { IDEOLOGY_MAX_DISTANCE } from './balance.ts';
 import type { Ideology, IdeologyAxis } from './types.ts';
 
 export const AXES: IdeologyAxis[] = ['economic', 'social', 'environmental'];
 
-/** Longest possible distance in the 3-axis cube, used to normalise. */
-export const MAX_DISTANCE = Math.sqrt(3 * 2 * 2);
+/**
+ * The distance treated as maximal opposition when normalising.
+ * See IDEOLOGY_MAX_DISTANCE in balance.ts for why this is not sqrt(12).
+ */
+export const MAX_DISTANCE = IDEOLOGY_MAX_DISTANCE;
 
 export function clampIdeology(value: number): number {
   return Math.max(-1, Math.min(1, value));

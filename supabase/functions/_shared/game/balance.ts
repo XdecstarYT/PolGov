@@ -136,6 +136,24 @@ export const SECTOR_LABELS: Record<SectorKey, string> = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Ideology
+ * ------------------------------------------------------------------ */
+
+/**
+ * The distance at which two positions count as maximally opposed.
+ *
+ * NOT the theoretical maximum. Opposite corners of the 3-axis cube are
+ * sqrt(12) ≈ 3.46 apart, but no two parties ever sit that way: the widest real
+ * pair in the roster (Verdant Compact against Heritage Assembly) is about 1.7,
+ * and most pairs are under 1.1. Normalising against 3.46 squeezed every
+ * relationship into the friendly half of the scale, so every party at the
+ * negotiating table read as a natural ally. Calibrating to the range positions
+ * actually occupy makes affinity span its full −1..1 and gives the coalition,
+ * alignment and mood terms their intended spread.
+ */
+export const IDEOLOGY_MAX_DISTANCE = 2.2;
+
+/* ------------------------------------------------------------------ *
  * Legislature
  * ------------------------------------------------------------------ */
 

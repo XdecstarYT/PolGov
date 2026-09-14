@@ -66,6 +66,7 @@ export function coalitionPartners(parties: readonly Party[]): Party[] {
 export function buildNegotiation(
   parties: readonly Party[],
   attempt: number,
+  crisis = false,
 ): NegotiationState {
   const player = playerParty(parties);
   const candidates = parties
@@ -77,7 +78,7 @@ export function buildNegotiation(
     )
     .map((party) => buildDemand(party, player));
 
-  return { candidates, accepted: [], attempt, failed: false };
+  return { candidates, accepted: [], attempt, failed: false, crisis };
 }
 
 function buildDemand(party: Party, player: Party): CoalitionDemand {
@@ -102,6 +103,7 @@ function buildDemand(party: Party, player: Party): CoalitionDemand {
       party.coalitionMood ?? MOOD_START,
       SECTOR_LABELS[prioritySector],
       amount,
+      affinity(player.ideology, party.ideology),
     ),
     concessionsWon: 0,
   };
@@ -245,4 +247,26 @@ export function noConfidenceTriggered(
   walkedOut: readonly Party[],
 ): boolean {
   return walkedOut.length > 0 && blocLacksMajority(partiesAfterWalkouts);
+}
+
+/**
+ * Is the player the largest single party in the chamber?
+ *
+ * This is what entitles them to try to govern at all. A party that is not the
+ * largest and cannot assemble a majority does not get to carry on in a
+ * minority — somebody else forms the government and they go into opposition.
+ */
+export function playerIsLargestParty(parties: readonly Party[]): boolean {
+  const player = playerParty(parties);
+  return parties.every((p) => p.isPlayer || p.seats <= player.seats);
+}
+
+/**
+ * Could the player reach a majority even with every other party behind them?
+ * When they could not, formation is arithmetically hopeless and there is no
+ * point spending attempts on it.
+ */
+export function majorityIsReachable(parties: readonly Party[]): boolean {
+  const total = parties.reduce((sum, p) => sum + p.seats, 0);
+  return total >= MAJORITY_SEATS;
 }

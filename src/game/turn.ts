@@ -70,6 +70,7 @@ import {
   hasMajority,
   noConfidenceTriggered,
   partnersWalkingOut,
+  playerIsLargestParty,
   playerParty,
 } from './systems/coalition.ts';
 import { buildWeightContext, drawEvents } from './systems/eventEngine.ts';
@@ -622,7 +623,7 @@ export function advanceTurn(state: GameState): GameState {
    */
   if (next.confidenceCrisis) {
     next.confidenceCrisis = false;
-    next.negotiation = buildNegotiation(next.parties, 1);
+    next.negotiation = buildNegotiation(next.parties, 1, true);
     next.phase = 'coalition';
     return next;
   }
@@ -699,6 +700,27 @@ function acknowledgeElection(state: GameState): GameState {
 
   next.negotiation = buildNegotiation(next.parties, 1);
   next.phase = 'coalition';
+  return next;
+}
+
+
+/**
+ * End the run. A government that falls mid-term has collapsed; a party that
+ * cannot form one after an election has been defeated and goes into
+ * opposition. Both land on the career summary.
+ */
+function endRun(state: GameState, crisis: boolean, reason: string): GameState {
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.status = crisis ? 'collapsed' : 'defeated';
+  next.phase = 'career_summary';
+  next.negotiation = null;
+  log(entries, {
+    kind: 'note',
+    label: crisis ? 'The government has fallen' : 'Out of office',
+    delta: null,
+    cause: reason,
+  });
   return next;
 }
 
@@ -1250,14 +1272,20 @@ function handleFormGovernment(state: GameState): IntentResult {
 
       if (negotiation.failed) {
         /* A second consecutive failure ends the run. */
-        next.status = 'defeated';
-        next.phase = 'career_summary';
-        next.negotiation = null;
-        return ok(next);
+        return ok(
+          endRun(
+            next,
+            negotiation.crisis,
+            'No government could be formed after two general elections. Another party has been invited to try.',
+          ),
+        );
       }
 
       const afterElection = runElection(next);
-      afterElection.negotiation = { ...buildNegotiation(afterElection.parties, 1), failed: true };
+      afterElection.negotiation = {
+        ...buildNegotiation(afterElection.parties, 1, negotiation.crisis),
+        failed: true,
+      };
       return ok(afterElection);
     }
 
@@ -1282,11 +1310,31 @@ function handleFormGovernment(state: GameState): IntentResult {
   return ok(beginTurn(next));
 }
 
-/** Govern in a minority: take office with whatever the player has. */
+/**
+ * Govern in a minority — but only if entitled to.
+ *
+ * Carrying on without a majority is legitimate for the largest party in the
+ * chamber. It is not available to anyone else: if another party is larger,
+ * they are invited to form a government and the player goes into opposition.
+ * Without this the run could never be lost, because walking away from every
+ * negotiation would always leave the player in office.
+ */
 function handleAbandonNegotiation(state: GameState): IntentResult {
   if (state.phase !== 'coalition' || !state.negotiation) {
     return reject(state, 'There is no negotiation under way.');
   }
+
+  if (!playerIsLargestParty(state.parties)) {
+    const largest = [...state.parties].sort((a, b) => b.seats - a.seats)[0];
+    return ok(
+      endRun(
+        state,
+        state.negotiation.crisis,
+        `Without an agreement, ${largest?.name ?? 'the largest party'} commands more seats and has been invited to form a government.`,
+      ),
+    );
+  }
+
   const next = clone(state);
   const entries = currentLog(next);
   next.negotiation = null;

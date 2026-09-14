@@ -169,20 +169,40 @@ export function fallbackOppositionQuote(
     : `The ${leaderTitle} of the ${partyName} called the defeat of ${billTitle} "an entirely avoidable failure of arithmetic".`;
 }
 
-/** Negotiating line used when ai-narrator is unavailable. */
+/**
+ * Negotiating line used when ai-narrator is unavailable.
+ *
+ * Varies on ideological affinity as well as mood. At the moment a coalition is
+ * being formed nobody has a mood yet, so affinity is the only thing that
+ * distinguishes one partner from another — keying on mood alone gave every
+ * party at the table the same opening sentence.
+ */
 export function fallbackCoalitionLine(
   partyName: string,
   mood: number,
   sectorLabel: string,
   amount: number,
+  affinityValue = 0,
 ): string {
-  if (mood >= 65) {
-    return `${partyName} is willing to be constructive. They want ${sectorLabel} held at ₡${amount}bn and a serious share of the cabinet.`;
+  const terms = `₡${amount}bn for ${sectorLabel}`;
+
+  if (mood < 40) {
+    return `${partyName} is briefing that it can do without government. ${terms} is presented as a minimum, not an opening.`;
   }
-  if (mood >= 40) {
-    return `${partyName} will talk, but not indefinitely. ${sectorLabel} funding at ₡${amount}bn is where their conversation starts.`;
+
+  if (affinityValue >= 0.55) {
+    return `${partyName} sees a natural fit and says so publicly. They expect ${terms} and a cabinet share proportionate to what they bring.`;
   }
-  return `${partyName} is briefing that it can do without government. ₡${amount}bn for ${sectorLabel} is presented as a minimum, not an opening.`;
+  if (affinityValue >= 0.2) {
+    return `${partyName} is willing to be constructive, within limits. ${terms} is where their conversation starts, and the cabinet question comes after it.`;
+  }
+  if (affinityValue >= -0.15) {
+    return `${partyName} will deal, but they are candid that this is arithmetic rather than agreement. ${terms}, and the red lines are not for discussion.`;
+  }
+  if (affinityValue >= -0.5) {
+    return `${partyName} makes no pretence of enthusiasm. They will support a government that funds ${terms} and concedes them the posts — and not one that does less.`;
+  }
+  return `${partyName} regards an arrangement with you as a last resort, and prices it accordingly: ${terms}, the posts in full, and no movement on either.`;
 }
 
 /** Debate attack used when ai-narrator is unavailable. */
