@@ -284,6 +284,13 @@ export interface LogEntry {
   cause: string;
   /** Optional unit hint for formatting ('pts', '₡bn', 'seats'). */
   unit?: string;
+  /**
+   * True for lines that explain a figure rather than being a change to it —
+   * gross revenue, gross spending, interest charged, a change to a per-turn
+   * rate. They are shown in the report but excluded from net totals, so the
+   * summary at the top of the report cannot disagree with the top bar.
+   */
+  informational?: boolean;
 }
 
 export interface TurnLog {
@@ -392,6 +399,8 @@ export interface GameState {
   news: NewsItem[];
   logs: TurnLog[];
   elections: ElectionResult[];
+  /** One point per resolved turn, for the standing trend chart. */
+  approvalHistory: ApprovalPoint[];
 
   negotiation: NegotiationState | null;
   campaign: CampaignState | null;

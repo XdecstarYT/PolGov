@@ -243,3 +243,67 @@ describe('beginTurn', () => {
     expect(state.budgetUnlocked).toBe(false);
   });
 });
+
+describe('report totals reconcile with actual state changes', () => {
+  /**
+   * The End of Turn Report sums the log to show what moved. If that sum ever
+   * disagrees with the real change, the transparency pillar is broken — the
+   * player traces a number and finds the wrong answer.
+   */
+  const netOf = (state: GameState, kind: string) =>
+    (state.logs.find((l) => l.turnNumber === state.turnNumber)?.entries ?? [])
+      .filter((e) => e.kind === kind && e.delta !== null && !e.informational)
+      .reduce((total, e) => total + (e.delta ?? 0), 0);
+
+  it('treasury and debt totals match the change the turn actually made', () => {
+    const before = governing();
+    const after = resolveTurn(before);
+
+    expect(netOf(after, 'treasury')).toBeCloseTo(after.treasury - before.treasury, 4);
+    expect(netOf(after, 'debt')).toBeCloseTo(after.debt - before.debt, 4);
+  });
+
+  it('approval total matches the change the turn actually made', () => {
+    const before = governing();
+    const after = resolveTurn(before);
+    expect(netOf(after, 'approval')).toBeCloseTo(after.approval - before.approval, 4);
+  });
+
+  it('excludes gross flows and rate changes from the net figures', () => {
+    const after = resolveTurn(governing());
+    const entries = after.logs.find((l) => l.turnNumber === after.turnNumber)!.entries;
+
+    const revenue = entries.find((e) => e.label === 'Revenue');
+    const spending = entries.find((e) => e.label === 'Programme spending');
+    const interest = entries.find((e) => e.label === 'Debt service');
+
+    expect(revenue?.informational).toBe(true);
+    expect(spending?.informational).toBe(true);
+    expect(interest?.informational).toBe(true);
+  });
+
+  it('holds across a run where bills and events have moved money', () => {
+    let state = governing();
+    for (let turn = 0; turn < 6; turn += 1) {
+      const before = state;
+      state = applyIntent(state, { type: 'advance_phase' }).state;
+      for (const event of state.events.filter((e) => !e.resolved)) {
+        state = applyIntent(state, { type: 'resolve_event', eventId: event.id, choiceIndex: 0 }).state;
+      }
+      state = applyIntent(state, { type: 'advance_phase' }).state;
+      const bill = state.bills.find((b) => b.status === 'available');
+      if (bill) {
+        const attempt = applyIntent(state, { type: 'propose_bill', billId: bill.id, whipSteps: 0 });
+        if (!attempt.error) state = attempt.state;
+      }
+      state = applyIntent(state, { type: 'advance_phase' }).state;
+      const resolved = applyIntent(state, { type: 'advance_phase' }).state;
+
+      expect(netOf(resolved, 'treasury')).toBeCloseTo(resolved.treasury - before.treasury, 3);
+      expect(netOf(resolved, 'approval')).toBeCloseTo(resolved.approval - before.approval, 3);
+
+      state = applyIntent(resolved, { type: 'advance_phase' }).state;
+      if (state.phase !== 'briefing') break;
+    }
+  });
+});

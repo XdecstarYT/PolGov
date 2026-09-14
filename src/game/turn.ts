@@ -211,6 +211,8 @@ export function applyEffects(
       delta: effects.revenueDelta,
       cause,
       unit: '₡bn/turn',
+      /* A change to a per-turn rate, not cash moving this month. */
+      informational: true,
     });
   }
 
@@ -431,6 +433,7 @@ export function resolveTurn(state: GameState): GameState {
     delta: fiscal.revenue,
     cause: `Tax take at economy health ${economyHealth.toFixed(0)}`,
     unit: '₡bn',
+    informational: true,
   });
   log(entries, {
     kind: 'treasury',
@@ -438,6 +441,7 @@ export function resolveTurn(state: GameState): GameState {
     delta: -fiscal.spending,
     cause: 'Total allocated across five sectors',
     unit: '₡bn',
+    informational: true,
   });
   log(entries, {
     kind: 'debt',
@@ -445,7 +449,20 @@ export function resolveTurn(state: GameState): GameState {
     delta: -fiscal.debtService,
     cause: `Interest on ₡${Math.round(next.debt)}bn outstanding`,
     unit: '₡bn',
+    informational: true,
   });
+  if (Math.abs(fiscal.treasuryDelta) >= 0.05) {
+    log(entries, {
+      kind: 'treasury',
+      label: 'Treasury',
+      delta: fiscal.treasuryDelta,
+      cause:
+        fiscal.balance >= 0
+          ? 'Surplus remaining after debt repayment, banked as cash'
+          : 'Net cash movement for the month',
+      unit: '₡bn',
+    });
+  }
   if (fiscal.debtDelta > 0) {
     log(entries, {
       kind: 'debt',
@@ -479,6 +496,18 @@ export function resolveTurn(state: GameState): GameState {
       label: 'Debt',
       delta: overdraft,
       cause: 'Cash shortfall carried into borrowing',
+      unit: '₡bn',
+    });
+    /*
+     * Both halves of the transfer are logged. Recording only the debt side
+     * would leave the report's treasury total short by exactly the overdraft,
+     * and a player tracing the number would find the wrong answer.
+     */
+    log(entries, {
+      kind: 'treasury',
+      label: 'Treasury',
+      delta: overdraft,
+      cause: 'Cash shortfall covered by borrowing, returning the balance to zero',
       unit: '₡bn',
     });
   }
@@ -538,6 +567,11 @@ export function resolveTurn(state: GameState): GameState {
       unit: 'seats',
     });
   }
+
+  next.approvalHistory.push({
+    turn: (next.termNumber - 1) * TURNS_PER_TERM + next.turnNumber,
+    approval: next.approval,
+  });
 
   next.career.peakApproval = Math.max(next.career.peakApproval, next.approval);
   next.career.lowestApproval = Math.min(next.career.lowestApproval, next.approval);

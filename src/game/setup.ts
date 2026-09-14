@@ -170,6 +170,7 @@ export function createGame(options: NewGameOptions): GameState {
     news: [],
     logs: [],
     elections: [],
+    approvalHistory: [{ turn: 0, approval: APPROVAL_START }],
 
     negotiation: null,
     campaign: null,
