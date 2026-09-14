@@ -24,7 +24,7 @@ import {
   type Intent,
   type LegacyScore,
 } from '../game/index.ts';
-import { resolveStore, type GameStore, type GameSummary } from '../services/storage.ts';
+import { localStore, resolveStore, type GameStore, type GameSummary } from '../services/storage.ts';
 import { isCloudConfigured, supabase } from '../services/supabase.ts';
 
 export type Screen = 'title' | 'setup' | 'game';
@@ -275,12 +275,21 @@ export const useGame = create<AppState>((set, get) => ({
       journal: startedNewTurn ? [] : [...get().journal, intent],
     });
 
-    if (store) {
-      try {
+    /*
+     * In cloud mode the database copy is the authoritative one and is written
+     * only by resolve-turn. Persisting the client's own mid-turn state would
+     * hand the browser exactly the write path server authority exists to
+     * remove. Instead it is cached locally for crash recovery, which is not
+     * authoritative and is overwritten by the server's answer at end of turn.
+     */
+    try {
+      if (store && store.mode === 'local') {
         await store.save(next);
-      } catch (error) {
-        set({ error: error instanceof Error ? error.message : 'Could not save.' });
+      } else {
+        await localStore.save(next);
       }
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Could not save.' });
     }
   },
 
@@ -290,14 +299,19 @@ export const useGame = create<AppState>((set, get) => ({
    * call fails — the identical engine code runs locally so play continues.
    */
   async endTurn() {
-    const { game, store, turnStart, journal } = get();
+    const { game, store, journal } = get();
     if (!game) return;
 
-    if (isCloudConfigured && supabase && turnStart) {
+    if (isCloudConfigured && supabase && store?.mode === 'cloud') {
       set({ resolvingRemotely: true });
       try {
+        /*
+         * Only the game id and the player's actions are sent. No figure this
+         * client computed is uploaded; the server replays these intents
+         * against its own stored copy and returns the authoritative result.
+         */
         const { data, error } = await supabase.functions.invoke('resolve-turn', {
-          body: { gameId: game.id, turnStart, intents: journal },
+          body: { gameId: game.id, intents: journal },
         });
 
         const authoritative = (data as { state?: GameState } | null)?.state;
@@ -310,7 +324,8 @@ export const useGame = create<AppState>((set, get) => ({
             error: null,
             announcement: 'Turn resolved. The report is ready.',
           });
-          if (store) await store.save(authoritative).catch(() => undefined);
+          /* Refresh the local crash-recovery cache from the server's answer. */
+          await localStore.save(authoritative).catch(() => undefined);
           return;
         }
       } catch {
