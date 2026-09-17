@@ -31,10 +31,13 @@ import {
   TURNS_PER_TERM,
   WHIP_MAX_STEPS,
   AD_BUY_INVESTMENT,
-  AD_BUY_TREASURY_COST,
   CAMPAIGN_STOP_INVESTMENT,
   PC_REDRAW_BOUNDARIES,
   REDRAW_APPROVAL_PENALTY,
+  PC_COSTS_PARTY,
+  FUNDRAISING_DRIVE_YIELD,
+  HEADQUARTERS_COST,
+  AD_BUY_PARTY_COST,
 } from './balance.ts';
 import { generateNews, fallbackDebateAttack } from './content/news.ts';
 import { Rng } from './rng.ts';
@@ -79,6 +82,20 @@ import { buildWeightContext, drawEvents } from './systems/eventEngine.ts';
 import { simulateElection } from './systems/election.ts';
 import { meanDistortion, redrawBoundaries } from './systems/districts.ts';
 import {
+  authorityTarget,
+  cohesionTarget,
+  driftAuthority,
+  driftCohesion,
+  driftMembers,
+  facesLeadershipChallenge,
+  leadershipChallengeSupport,
+  membershipTarget,
+  partyFinanceTick,
+  rebellionRisks,
+  resolveRebellions,
+  surviveChallenge,
+} from './systems/partyInternals.ts';
+import {
   billPcCost,
   computePassChance,
   resolveBillVote,
@@ -104,6 +121,12 @@ export type Intent =
   | { type: 'ad_buy'; regionId: string }
   | { type: 'answer_debate'; debateId: string; choiceIndex: number }
   | { type: 'redraw_boundaries'; regionId: string }
+  | { type: 'rally_party' }
+  | { type: 'fundraising_drive' }
+  | { type: 'appoint_deputy'; factionId: string }
+  | { type: 'discipline_rebels'; factionId: string }
+  | { type: 'invest_headquarters' }
+  | { type: 'rename_party'; name: string }
   | { type: 'negotiation_accept'; partyId: string }
   | { type: 'negotiation_counter'; partyId: string }
   | { type: 'negotiation_remove'; partyId: string }
@@ -364,8 +387,51 @@ export function resolveTurn(state: GameState): GameState {
   next.phase = 'legislature';
   const tabled = next.bills.filter((b) => b.status === 'proposed');
 
+  const player = playerParty(next.parties);
+
   for (const bill of tabled) {
-    const breakdown = computePassChance(bill, next.parties, next.sectors, bill.whipSteps);
+    /*
+     * Roll the party's own benches first. A wing that refuses takes its seats
+     * out of the government's side before the chamber is counted at all.
+     */
+    const risks = rebellionRisks(
+      next.partyInternals,
+      player.seats,
+      bill.ideology,
+      bill.whipSteps,
+    );
+    const rebellion = resolveRebellions(rng, risks);
+
+    if (rebellion.rebelled.length > 0) {
+      next.partyInternals.rebellionsThisTerm += rebellion.rebelled.length;
+      next.partyInternals.cohesion = Math.max(
+        0,
+        next.partyInternals.cohesion + rebellion.cohesionCost,
+      );
+      for (const rebel of rebellion.rebelled) {
+        const faction = next.partyInternals.factions.find((f) => f.id === rebel.factionId);
+        if (faction) {
+          faction.rebelling = true;
+          faction.loyalty = Math.max(0, faction.loyalty - 5);
+        }
+        log(entries, {
+          kind: 'legislature',
+          label: `${rebel.factionName} rebels`,
+          delta: -rebel.seats,
+          cause: `${rebel.seats} of your own MPs refused to back ${bill.title}. It sits too far from where that wing stands.`,
+          unit: 'seats',
+        });
+      }
+    }
+
+    const breakdown = computePassChance(
+      bill,
+      next.parties,
+      next.sectors,
+      bill.whipSteps,
+      next.partyInternals,
+      rebellion.seatsLost,
+    );
     bill.passChance = breakdown.chance;
     const passed = resolveBillVote(rng, breakdown.chance);
     bill.status = passed ? 'passed' : 'failed';
@@ -534,7 +600,6 @@ export function resolveTurn(state: GameState): GameState {
   }
 
   /* Coalition mood drift. */
-  const player = playerParty(next.parties);
   for (const partner of coalitionPartners(next.parties)) {
     const moodTarget = computeMoodTarget(
       partner,
@@ -577,6 +642,103 @@ export function resolveTurn(state: GameState): GameState {
     turn: (next.termNumber - 1) * TURNS_PER_TERM + next.turnNumber,
     approval: next.approval,
   });
+
+  /* ---- the party's own affairs ---- */
+  const internals = next.partyInternals;
+
+  const finance = partyFinanceTick(internals, next.approval);
+  internals.funds = Math.max(0, internals.funds + finance.net);
+  log(entries, {
+    kind: 'note',
+    label: 'Party funds',
+    delta: finance.net,
+    cause: `Subscriptions ₡${finance.subscriptions.toFixed(1)}m and donations ₡${finance.donations.toFixed(1)}m against ₡${finance.overheads.toFixed(1)}m of running costs`,
+    unit: '₡m',
+  });
+
+  const beforeMembers = internals.members;
+  internals.members = driftMembers(
+    internals.members,
+    membershipTarget(next.approval, internals.cohesion),
+  );
+  const memberDelta = internals.members - beforeMembers;
+  if (Math.abs(memberDelta) >= 0.5) {
+    log(entries, {
+      kind: 'note',
+      label: 'Party membership',
+      delta: memberDelta,
+      cause:
+        memberDelta > 0
+          ? 'People are joining while the party is doing well'
+          : 'Members are letting their subscriptions lapse',
+      unit: 'k',
+    });
+  }
+
+  const beforeCohesion = internals.cohesion;
+  internals.cohesion = driftCohesion(internals.cohesion, cohesionTarget(internals));
+  const cohesionDelta = internals.cohesion - beforeCohesion;
+  if (Math.abs(cohesionDelta) >= 0.5) {
+    log(entries, {
+      kind: 'note',
+      label: 'Party discipline',
+      delta: cohesionDelta,
+      cause: `Drift toward the level your authority and the factions' loyalty sustain`,
+      unit: 'pts',
+    });
+  }
+
+  const beforeAuthority = internals.authority;
+  internals.authority = driftAuthority(
+    internals.authority,
+    authorityTarget(
+      next.approval,
+      internals.rebellionsThisTerm,
+      player.seats - (next.elections.at(-1)?.playerSeatsBefore ?? player.seats),
+    ),
+  );
+  const authorityDelta = internals.authority - beforeAuthority;
+  if (Math.abs(authorityDelta) >= 0.5) {
+    log(entries, {
+      kind: 'note',
+      label: 'Your authority in the party',
+      delta: authorityDelta,
+      cause:
+        internals.rebellionsThisTerm > 0
+          ? `${internals.rebellionsThisTerm} rebellion${internals.rebellionsThisTerm === 1 ? '' : 's'} this term have made the next one easier to organise`
+          : 'Drift toward the level your standing in the country sustains',
+      unit: 'pts',
+    });
+  }
+
+  /*
+   * A leader who has lost their own party is challenged for the job. The
+   * country does not get a vote; the factions do.
+   */
+  if (facesLeadershipChallenge(internals, next.turnNumber)) {
+    const support = leadershipChallengeSupport(internals);
+    if (support >= 50) {
+      next.partyInternals = surviveChallenge(internals, next.turnNumber);
+      log(entries, {
+        kind: 'note',
+        label: 'Leadership challenge survived',
+        delta: support,
+        cause: `A challenge was mounted and beaten with ${support.toFixed(0)}% of the party behind you. The benches have rallied — for now.`,
+        unit: '%',
+      });
+    } else {
+      internals.lastChallengeTurn = next.turnNumber;
+      next.status = 'collapsed';
+      next.phase = 'career_summary';
+      log(entries, {
+        kind: 'note',
+        label: 'Removed as leader',
+        delta: support,
+        cause: `The party voted you out with only ${support.toFixed(0)}% behind you. A government can survive the country turning on it; it cannot survive its own side doing so.`,
+        unit: '%',
+      });
+    }
+  }
 
   next.career.peakApproval = Math.max(next.career.peakApproval, next.approval);
   next.career.lowestApproval = Math.min(next.career.lowestApproval, next.approval);
@@ -774,6 +936,18 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleDebate(state, intent.debateId, intent.choiceIndex);
     case 'redraw_boundaries':
       return handleRedraw(state, intent.regionId);
+    case 'rally_party':
+      return handleRallyParty(state);
+    case 'fundraising_drive':
+      return handleFundraising(state);
+    case 'appoint_deputy':
+      return handleAppointDeputy(state, intent.factionId);
+    case 'discipline_rebels':
+      return handleDiscipline(state, intent.factionId);
+    case 'invest_headquarters':
+      return handleHeadquarters(state);
+    case 'rename_party':
+      return handleRenameParty(state, intent.name);
     case 'negotiation_accept':
       return handleNegotiationAccept(state, intent.partyId);
     case 'negotiation_counter':
@@ -904,7 +1078,13 @@ function handleProposeBill(
   target.whipSteps = steps;
   target.pcSpent = cost;
   target.turnProposed = next.turnNumber;
-  target.passChance = computePassChance(target, next.parties, next.sectors, steps).chance;
+  target.passChance = computePassChance(
+    target,
+    next.parties,
+    next.sectors,
+    steps,
+    next.partyInternals,
+  ).chance;
 
   log(entries, {
     kind: 'political_capital',
@@ -1134,20 +1314,29 @@ function handleAdBuy(state: GameState, regionId: string): IntentResult {
   const region = state.regions.find((r) => r.id === regionId);
   if (!region) return reject(state, 'No such region.');
 
+  /*
+   * Paid for out of PARTY funds, not the national treasury. A governing party
+   * billing the state for its own election advertising would be a scandal,
+   * not a strategy — and it is the reason the party needs money of its own.
+   */
+  if (state.partyInternals.funds < AD_BUY_PARTY_COST) {
+    return reject(state, `The party has only ₡${state.partyInternals.funds.toFixed(1)}m left. Raise more before buying advertising.`);
+  }
+
   const next = clone(state);
   const entries = currentLog(next);
   spendPc(next, PC_COSTS.adBuy);
-  next.treasury -= AD_BUY_TREASURY_COST;
+  next.partyInternals.funds -= AD_BUY_PARTY_COST;
   const target = next.regions.find((r) => r.id === regionId)!;
   target.campaignInvestment += AD_BUY_INVESTMENT;
   if (next.campaign) next.campaign.adBuys += 1;
 
   log(entries, {
-    kind: 'treasury',
-    label: 'Treasury',
-    delta: -AD_BUY_TREASURY_COST,
-    cause: `Advertising in ${target.name}`,
-    unit: '₡bn',
+    kind: 'note',
+    label: 'Party funds',
+    delta: -AD_BUY_PARTY_COST,
+    cause: `Advertising in ${target.name}, paid for by the party`,
+    unit: '₡m',
   });
   return ok(next);
 }
@@ -1244,6 +1433,211 @@ function handleRedraw(state: GameState, regionId: string): IntentResult {
     entries,
   );
 
+  return ok(next);
+}
+
+
+/* ------------------------- the party itself ------------------------ */
+
+const clamp100 = (value: number) => Math.max(0, Math.min(100, value));
+
+function requireAgenda(state: GameState, what: string): string | null {
+  return state.phase === 'agenda' ? null : `${what} happen during the agenda.`;
+}
+
+/**
+ * Address your own members. Shores up the leadership at the cost of time you
+ * could have spent on the country.
+ */
+function handleRallyParty(state: GameState): IntentResult {
+  const wrong = requireAgenda(state, 'Party addresses');
+  if (wrong) return reject(state, wrong);
+  if (state.politicalCapital < PC_COSTS_PARTY.rallyParty) {
+    return reject(state, 'Not enough political capital to address the party.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_PARTY.rallyParty);
+
+  next.partyInternals.authority = clamp100(next.partyInternals.authority + 7);
+  next.partyInternals.factions = next.partyInternals.factions.map((faction) => ({
+    ...faction,
+    loyalty: clamp100(faction.loyalty + 5),
+  }));
+
+  log(entries, {
+    kind: 'political_capital',
+    label: 'Political capital',
+    delta: -PC_COSTS_PARTY.rallyParty,
+    cause: 'Addressed the party membership',
+    unit: 'PC',
+  });
+  log(entries, {
+    kind: 'note',
+    label: 'Your authority in the party',
+    delta: 7,
+    cause: 'A direct appeal to the membership over the heads of the factions',
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/** Raise money for the party. Not for the treasury — this is the party's own. */
+function handleFundraising(state: GameState): IntentResult {
+  const wrong = requireAgenda(state, 'Fundraising drives');
+  if (wrong) return reject(state, wrong);
+  if (state.politicalCapital < PC_COSTS_PARTY.fundraisingDrive) {
+    return reject(state, 'Not enough political capital for a fundraising drive.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_PARTY.fundraisingDrive);
+
+  /* Donors give more to a party that looks like winning. */
+  const yieldAmount = FUNDRAISING_DRIVE_YIELD * (0.6 + next.approval / 100);
+  next.partyInternals.funds += yieldAmount;
+
+  log(entries, {
+    kind: 'political_capital',
+    label: 'Political capital',
+    delta: -PC_COSTS_PARTY.fundraisingDrive,
+    cause: 'Fundraising drive',
+    unit: 'PC',
+  });
+  log(entries, {
+    kind: 'note',
+    label: 'Party funds',
+    delta: yieldAmount,
+    cause: `Fundraising drive at ${Math.round(next.approval)}% approval — donors give more to a party that looks like winning`,
+    unit: '₡m',
+  });
+  return ok(next);
+}
+
+/**
+ * Give a faction the deputy leadership. Buys that wing's loyalty outright and
+ * tells every other wing exactly where they stand.
+ */
+function handleAppointDeputy(state: GameState, factionId: string): IntentResult {
+  const wrong = requireAgenda(state, 'Appointments');
+  if (wrong) return reject(state, wrong);
+  const faction = state.partyInternals.factions.find((f) => f.id === factionId);
+  if (!faction) return reject(state, 'No such faction.');
+  if (state.partyInternals.deputyFactionId === factionId) {
+    return reject(state, 'They already hold the deputy leadership.');
+  }
+  if (state.politicalCapital < PC_COSTS_PARTY.appointDeputy) {
+    return reject(state, 'Not enough political capital to reshape the leadership.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_PARTY.appointDeputy);
+
+  const previous = next.partyInternals.deputyFactionId;
+  next.partyInternals.deputyFactionId = factionId;
+  next.partyInternals.factions = next.partyInternals.factions.map((f) => {
+    if (f.id === factionId) return { ...f, loyalty: clamp100(f.loyalty + 14) };
+    /* Passing anyone over is noticed, and the outgoing deputy notices most. */
+    const slight = f.id === previous ? 12 : 4;
+    return { ...f, loyalty: clamp100(f.loyalty - slight) };
+  });
+
+  log(entries, {
+    kind: 'political_capital',
+    label: 'Political capital',
+    delta: -PC_COSTS_PARTY.appointDeputy,
+    cause: `${faction.name} given the deputy leadership`,
+    unit: 'PC',
+  });
+  log(entries, {
+    kind: 'note',
+    label: 'Deputy leadership',
+    delta: null,
+    cause: `${faction.name} take the deputy leadership. Every other wing has been passed over and knows it.`,
+  });
+  return ok(next);
+}
+
+/**
+ * Discipline a rebellious wing. Restores order and earns their resentment —
+ * exactly the trade a chief whip makes.
+ */
+function handleDiscipline(state: GameState, factionId: string): IntentResult {
+  const wrong = requireAgenda(state, 'Disciplinary actions');
+  if (wrong) return reject(state, wrong);
+  const faction = state.partyInternals.factions.find((f) => f.id === factionId);
+  if (!faction) return reject(state, 'No such faction.');
+  if (state.politicalCapital < PC_COSTS_PARTY.disciplineRebels) {
+    return reject(state, 'Not enough political capital to move against them.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_PARTY.disciplineRebels);
+
+  next.partyInternals.cohesion = clamp100(next.partyInternals.cohesion + 12);
+  next.partyInternals.factions = next.partyInternals.factions.map((f) =>
+    f.id === factionId
+      ? { ...f, loyalty: clamp100(f.loyalty - 15), rebelling: false }
+      : { ...f, loyalty: clamp100(f.loyalty + 2) },
+  );
+
+  log(entries, {
+    kind: 'political_capital',
+    label: 'Political capital',
+    delta: -PC_COSTS_PARTY.disciplineRebels,
+    cause: `Whip withdrawn from ${faction.name}`,
+    unit: 'PC',
+  });
+  log(entries, {
+    kind: 'note',
+    label: 'Party discipline',
+    delta: 12,
+    cause: `${faction.name} brought to heel. The rest of the party has taken the point; that wing has taken it differently.`,
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/** Invest party money in the machine that raises party money. */
+function handleHeadquarters(state: GameState): IntentResult {
+  const wrong = requireAgenda(state, 'Party investments');
+  if (wrong) return reject(state, wrong);
+  if (state.politicalCapital < PC_COSTS_PARTY.investHeadquarters) {
+    return reject(state, 'Not enough political capital.');
+  }
+  if (state.partyInternals.funds < HEADQUARTERS_COST) {
+    return reject(state, `The party cannot afford ₡${HEADQUARTERS_COST}m for that.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_PARTY.investHeadquarters);
+  next.partyInternals.funds -= HEADQUARTERS_COST;
+  next.partyInternals.headquarters += 1;
+
+  log(entries, {
+    kind: 'note',
+    label: 'Party funds',
+    delta: -HEADQUARTERS_COST,
+    cause: `Headquarters and staff expanded to level ${next.partyInternals.headquarters} — better fundraising, and higher running costs`,
+    unit: '₡m',
+  });
+  return ok(next);
+}
+
+function handleRenameParty(state: GameState, name: string): IntentResult {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return reject(state, 'A party needs a name.');
+  if (trimmed.length > 40) return reject(state, 'That name is too long.');
+
+  const next = clone(state);
+  const player = playerParty(next.parties);
+  player.name = trimmed;
+  player.shortName = trimmed.split(' ')[0] ?? trimmed;
   return ok(next);
 }
 

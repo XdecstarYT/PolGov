@@ -8,6 +8,7 @@
 import type { SegmentKey } from './content/segments.ts';
 import type { ElectoralSystem } from './systems/electoralSystems.ts';
 import type { District } from './systems/districts.ts';
+import type { PartyInternals } from './systems/partyInternals.ts';
 
 /* ------------------------------------------------------------------ *
  * Primitives
@@ -423,6 +424,12 @@ export interface GameState {
   debt: number;
   /** Recurring revenue modifier accumulated from passed bills. */
   revenueModifier: number;
+
+  /**
+   * The player's own party: factions, discipline, members, and money that is
+   * the party's rather than the state's.
+   */
+  partyInternals: PartyInternals;
 
   parties: Party[];
   sectors: Sector[];

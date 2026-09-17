@@ -20,6 +20,7 @@ export * from './systems/election.ts';
 export * from './systems/electorate.ts';
 export * from './systems/electoralSystems.ts';
 export * from './systems/districts.ts';
+export * from './systems/partyInternals.ts';
 export * from './systems/eventEngine.ts';
 export * from './systems/legacy.ts';
 export * from './systems/legislature.ts';
@@ -28,6 +29,8 @@ export { BILL_TEMPLATES, BILL_CATEGORY_LABELS } from './content/bills.ts';
 export { EVENT_TEMPLATES, EVENT_CATEGORY_LABELS } from './content/events.ts';
 export { PARTY_TEMPLATES, PLAYER_COLORS } from './content/parties.ts';
 export { REGION_TEMPLATES } from './content/regions.ts';
+export { FACTION_TEMPLATES, factionPosition } from './content/factions.ts';
+export type { FactionTemplate } from './content/factions.ts';
 export {
   ISSUE_KEYS,
   ISSUE_LABELS,

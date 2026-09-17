@@ -122,7 +122,7 @@ describe('intent validation', () => {
      */
     expect(ALLOWED_INTENT_TYPES.has('advance_phase')).toBe(true);
     expect(ALLOWED_INTENT_TYPES.has('propose_bill')).toBe(true);
-    expect(ALLOWED_INTENT_TYPES.size).toBe(21);
+    expect(ALLOWED_INTENT_TYPES.size).toBe(27);
   });
 });
 

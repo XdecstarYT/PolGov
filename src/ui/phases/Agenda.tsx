@@ -38,6 +38,7 @@ import {
 } from '../components/Primitives.tsx';
 import { EffectSummary } from './EventsPhase.tsx';
 import { RegionElectorate } from '../components/ElectoratePanel.tsx';
+import { PartyRoom } from '../components/PartyRoom.tsx';
 
 export function Agenda() {
   const { game, dispatch } = useGame();
@@ -78,6 +79,7 @@ export function Agenda() {
       {campaign && <CampaignPanel />}
 
       <PolicyDesk />
+      <PartyRoom />
       <CoalitionActions />
       <BoundaryReview />
       <ExtraordinaryActions />
@@ -203,7 +205,13 @@ function BillRow({
   const { game, dispatch } = useGame();
   if (!game) return null;
 
-  const breakdown = computePassChance(bill, game.parties, game.sectors, whipSteps);
+  const breakdown = computePassChance(
+    bill,
+    game.parties,
+    game.sectors,
+    whipSteps,
+    game.partyInternals,
+  );
   const cost = billPcCost(bill, whipSteps);
   const affordable = game.politicalCapital >= cost;
 
@@ -257,6 +265,28 @@ function BillRow({
               ))}
             </ul>
           </div>
+
+          {breakdown.rebellionRisks.some((r) => r.probability > 0.05) && (
+            <div className="border border-warn bg-sunk/40 p-2.5">
+              <Kicker>Your own benches</Kicker>
+              <ul className="space-y-0.5">
+                {breakdown.rebellionRisks
+                  .filter((risk) => risk.probability > 0.05)
+                  .map((risk) => (
+                    <li key={risk.factionId} className="text-sm leading-relaxed text-ink-soft">
+                      <span className="text-ink">{risk.factionName}</span> ({risk.seats} seats) —{' '}
+                      <span className="tnum">{(risk.probability * 100).toFixed(0)}%</span> likely to
+                      refuse. This sits a long way from where that wing stands.
+                    </li>
+                  ))}
+              </ul>
+              <p className="mt-1.5 text-xs text-ink-faint">
+                Expected loss from your own side:{' '}
+                <span className="tnum">{breakdown.expectedRebelSeats.toFixed(0)} seats</span>.
+                Whipping suppresses it.
+              </p>
+            </div>
+          )}
 
           {breakdown.breaches.length > 0 && (
             <div className="border border-loss bg-sunk/40 p-2.5">

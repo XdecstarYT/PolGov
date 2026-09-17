@@ -180,6 +180,90 @@ export const PASS_CHANCE_MIN = 0.05;
 export const PASS_CHANCE_MAX = 0.95;
 
 /* ------------------------------------------------------------------ *
+ * Party internals
+ * ------------------------------------------------------------------ */
+
+/** Party members at the start of a run, in thousands. */
+export const MEMBERS_START = 180;
+/** Party funds at the start of a run, in ₡m. Separate from the treasury. */
+export const PARTY_FUNDS_START = 40;
+/** Internal discipline at the start of a run, 0–100. */
+export const COHESION_START = 68;
+/** The leader's authority over their own party at the start, 0–100. */
+export const AUTHORITY_START = 70;
+
+/** Subscription income per thousand members per turn, in ₡m. */
+export const FUNDS_PER_MEMBER = 0.055;
+/** Additional donations scale with standing: this much at 100% approval. */
+export const FUNDS_APPROVAL_BONUS = 6;
+/** Running the party costs this much per turn before anything is spent. */
+export const PARTY_OVERHEADS = 3.5;
+/** Each level of headquarters investment adds this to fundraising. */
+export const FUNDS_PER_HQ_LEVEL = 2.2;
+
+/** Membership drifts toward a level implied by approval, at this rate. */
+export const MEMBERS_DRIFT_RATE = 0.12;
+/** Members at 0% and 100% approval respectively, in thousands. */
+export const MEMBERS_FLOOR = 60;
+export const MEMBERS_CEILING = 340;
+/** Members lost when the leadership crosses one of its own faction's lines. */
+export const MEMBERS_LOST_PER_REBELLION = 6;
+
+/** Cohesion drifts toward this, modified by authority and recent rebellions. */
+export const COHESION_BASE_TARGET = 62;
+export const COHESION_DRIFT_RATE = 0.22;
+/** Each point of authority above 50 adds this much to the cohesion target. */
+export const COHESION_PER_AUTHORITY = 0.35;
+/** A rebellion costs this much cohesion immediately. */
+export const COHESION_PER_REBELLION = -7;
+
+/**
+ * Ideological distance between a bill and a faction beyond which that faction
+ * starts seriously considering rebellion.
+ */
+export const REBELLION_TOLERANCE = 0.55;
+/** How sharply rebellion probability rises past that tolerance. */
+export const REBELLION_SENSITIVITY = 1.35;
+/** Each whip step suppresses this much rebellion probability. */
+export const REBELLION_WHIP_SUPPRESSION = 0.14;
+
+/** Authority drifts toward a level implied by approval and party results. */
+export const AUTHORITY_DRIFT_RATE = 0.2;
+/** A leadership challenge fires below this authority. */
+export const AUTHORITY_CHALLENGE_THRESHOLD = 25;
+/**
+ * Turns that must pass between challenges.
+ *
+ * Without this, a leader below the threshold faces a fresh challenge every
+ * single month and is removed almost immediately — which made the mechanic a
+ * guillotine rather than a risk. Parties do not move against their leader
+ * monthly; organising one costs the plotters something too.
+ */
+export const CHALLENGE_COOLDOWN_TURNS = 6;
+/** Surviving a challenge restores authority to at least this. */
+export const AUTHORITY_AFTER_SURVIVING = 55;
+
+export const PC_COSTS_PARTY = {
+  /** Address the party's own members to shore up the leadership. */
+  rallyParty: 7,
+  /** A fundraising drive: costs capital, raises money. */
+  fundraisingDrive: 6,
+  /** Promote a faction's figure to deputy leader. */
+  appointDeputy: 9,
+  /** Discipline rebels: raises cohesion, costs loyalty in the punished wing. */
+  disciplineRebels: 10,
+  /** Invest party funds in headquarters and staff. */
+  investHeadquarters: 5,
+} as const;
+
+/** Funds raised by one fundraising drive, in ₡m. */
+export const FUNDRAISING_DRIVE_YIELD = 14;
+/** Cost in ₡m of one level of headquarters investment. */
+export const HEADQUARTERS_COST = 18;
+/** Party funds spent per advertising push, in ₡m. */
+export const AD_BUY_PARTY_COST = 7;
+
+/* ------------------------------------------------------------------ *
  * Coalition
  * ------------------------------------------------------------------ */
 
@@ -270,8 +354,10 @@ export const ELECTION_APPROVAL_RANGE = 1.25;
 /** Effect of one campaign stop's investment on regional support. */
 export const CAMPAIGN_STOP_INVESTMENT = 1;
 export const CAMPAIGN_EFFECT_PER_INVESTMENT = 0.07;
-/** Treasury cost of one ad buy, and the investment it yields. */
-export const AD_BUY_TREASURY_COST = 6;
+/**
+ * Investment one advertising push buys in a region. The money for it comes
+ * from PARTY funds (AD_BUY_PARTY_COST), not the national treasury.
+ */
 export const AD_BUY_INVESTMENT = 0.8;
 /** Debate performance shifts national support by up to this fraction. */
 export const DEBATE_SWING_PER_WIN = 0.04;

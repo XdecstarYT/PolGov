@@ -25,6 +25,7 @@ import { affinity } from '../ideology.ts';
 import type { Bill, Party, RedLine, Sector } from '../types.ts';
 import type { Rng } from '../rng.ts';
 import { findSector } from './budget.ts';
+import { rebellionRisks, type PartyInternals, type RebellionRisk } from './partyInternals.ts';
 
 /** Does this bill cross this specific red line? */
 export function billViolatesRedLine(
@@ -88,6 +89,10 @@ export interface PassChanceBreakdown {
   totalSeats: number;
   terms: { label: string; value: number; detail: string }[];
   breaches: RedLineBreach[];
+  /** How each wing of the player's own party is likely to vote. */
+  rebellionRisks: RebellionRisk[];
+  /** Seats expected to be withheld by the player's own benches. */
+  expectedRebelSeats: number;
 }
 
 /**
@@ -106,6 +111,13 @@ export function computePassChance(
   parties: readonly Party[],
   sectors: readonly Sector[],
   whipSteps: number,
+  internals?: PartyInternals,
+  /**
+   * Seats actually withheld by the player's own benches. Supplied at the
+   * division, once the rebellion has been rolled; omitted beforehand, when the
+   * expected loss is the honest figure to show.
+   */
+  actualRebelSeats?: number,
 ): PassChanceBreakdown {
   const totalSeats = parties.reduce((sum, p) => sum + p.seats, 0);
   const breaches = findRedLineBreaches(bill, parties, sectors);
@@ -118,7 +130,26 @@ export function computePassChance(
   const defectingSeats = breaches.reduce((sum, b) => sum + b.party.seats, 0);
   const supportingSeats = (player?.seats ?? 0) + loyalPartners.reduce((s, p) => s + p.seats, 0);
 
-  const seatShare = totalSeats > 0 ? supportingSeats / totalSeats : 0;
+  /*
+   * Your own benches are the first parliament you have to win. A wing that
+   * finds the bill too far from where it stands simply does not turn up, and
+   * those seats come out of the government's side before anything else is
+   * counted. The EXPECTED loss is used here so the figure shown to the player
+   * before they commit reflects the risk they are taking; the actual walkout
+   * is rolled at the division.
+   */
+  const risks =
+    internals && player
+      ? rebellionRisks(internals, player.seats, bill.ideology, whipSteps)
+      : [];
+  const expectedRebelSeats = risks.reduce(
+    (sum, risk) => sum + risk.seats * risk.probability,
+    0,
+  );
+
+  const rebelSeats = actualRebelSeats ?? expectedRebelSeats;
+  const effectiveSupport = Math.max(0, supportingSeats - rebelSeats);
+  const seatShare = totalSeats > 0 ? effectiveSupport / totalSeats : 0;
   const base = seatShare * SEAT_SHARE_WEIGHT;
 
   const alignmentRaw =
@@ -144,7 +175,10 @@ export function computePassChance(
     {
       label: 'Seat arithmetic',
       value: base,
-      detail: `${supportingSeats} of ${totalSeats} seats voting for`,
+      detail:
+        rebelSeats >= 0.5
+          ? `${supportingSeats} of ${totalSeats} seats, less ${rebelSeats.toFixed(0)} withheld by your own benches`
+          : `${supportingSeats} of ${totalSeats} seats voting for`,
     },
     {
       label: 'Partner alignment',
@@ -177,7 +211,16 @@ export function computePassChance(
     });
   }
 
-  return { chance, supportingSeats, defectingSeats, totalSeats, terms, breaches };
+  return {
+    chance,
+    supportingSeats,
+    defectingSeats,
+    totalSeats,
+    terms,
+    breaches,
+    rebellionRisks: risks,
+    expectedRebelSeats,
+  };
 }
 
 /** The PC price of tabling a bill with a given amount of whipping. */

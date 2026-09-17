@@ -9,7 +9,11 @@
 
 import {
   APPROVAL_START,
+  AUTHORITY_START,
+  COHESION_START,
   DIFFICULTY,
+  MEMBERS_START,
+  PARTY_FUNDS_START,
   PC_START,
   SECTOR_BASELINE_FUNDING,
   SECTOR_KEYS,
@@ -20,6 +24,7 @@ import { PARTY_TEMPLATES } from './content/parties.ts';
 import { REGION_TEMPLATES } from './content/regions.ts';
 import { Rng, seedFromString } from './rng.ts';
 import { buildDistricts } from './systems/districts.ts';
+import { buildPartyInternals } from './systems/partyInternals.ts';
 import { MMP_DISTRICT_SHARE } from './balance.ts';
 import type { ElectoralSystem } from './systems/electoralSystems.ts';
 import { buildNegotiation, hasMajority } from './systems/coalition.ts';
@@ -201,6 +206,14 @@ export function createGame(options: NewGameOptions): GameState {
     treasury: 0,
     debt: profile.startingDebt,
     revenueModifier: 0,
+
+    partyInternals: {
+      ...buildPartyInternals(options.playerIdeology),
+      members: MEMBERS_START,
+      funds: PARTY_FUNDS_START,
+      cohesion: COHESION_START,
+      authority: AUTHORITY_START,
+    },
 
     parties,
     sectors,
