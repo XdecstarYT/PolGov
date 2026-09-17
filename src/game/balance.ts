@@ -264,6 +264,40 @@ export const HEADQUARTERS_COST = 18;
 export const AD_BUY_PARTY_COST = 7;
 
 /* ------------------------------------------------------------------ *
+ * The second chamber
+ * ------------------------------------------------------------------ */
+
+/** Seats in the Senate. Smaller than the lower house, and renewed by halves. */
+export const SENATE_SIZE = 60;
+/** Weight on the government's share of the upper house. */
+export const SENATE_SEAT_WEIGHT = 1.25;
+/** Weight on how the senators the government does not control view the bill. */
+export const SENATE_ALIGNMENT_WEIGHT = 0.35;
+export const SENATE_PASS_MIN = 0.08;
+export const SENATE_PASS_MAX = 0.97;
+
+/** Political capital for the procedural actions. */
+export const PC_COSTS_PROCEDURE = {
+  /** Send a bill to committee: delayed a month, returns stronger. */
+  sendToCommittee: 5,
+  /** Amend a bill toward a faction or partner to buy their votes. */
+  amendBill: 7,
+  /** Break a filibuster by closing debate. */
+  closeDebate: 12,
+  /** Buy a crossbench senator's vote on one bill. */
+  crossbenchDeal: 9,
+  /** Face the chamber at question time. */
+  questionTime: 4,
+} as const;
+
+/** How far one amendment moves a bill toward the target position, 0–1. */
+export const AMENDMENT_STRENGTH = 0.4;
+/** Each amendment waters the bill's effects down by this fraction. */
+export const AMENDMENT_DILUTION = 0.18;
+/** A crossbench deal adds this to a bill's Senate chance. */
+export const CROSSBENCH_SENATE_BONUS = 0.18;
+
+/* ------------------------------------------------------------------ *
  * Coalition
  * ------------------------------------------------------------------ */
 

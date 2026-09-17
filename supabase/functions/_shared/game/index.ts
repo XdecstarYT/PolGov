@@ -21,6 +21,7 @@ export * from './systems/electorate.ts';
 export * from './systems/electoralSystems.ts';
 export * from './systems/districts.ts';
 export * from './systems/partyInternals.ts';
+export * from './systems/parliament.ts';
 export * from './systems/eventEngine.ts';
 export * from './systems/legacy.ts';
 export * from './systems/legislature.ts';

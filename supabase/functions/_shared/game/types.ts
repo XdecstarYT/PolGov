@@ -9,6 +9,7 @@ import type { SegmentKey } from './content/segments.ts';
 import type { ElectoralSystem } from './systems/electoralSystems.ts';
 import type { District } from './systems/districts.ts';
 import type { PartyInternals } from './systems/partyInternals.ts';
+import type { Senate } from './systems/parliament.ts';
 
 /* ------------------------------------------------------------------ *
  * Primitives
@@ -38,7 +39,13 @@ export type Difficulty = 'stable' | 'standard' | 'fractured';
 
 export type BillMagnitude = 'minor' | 'major';
 
-export type BillStatus = 'available' | 'proposed' | 'passed' | 'failed';
+export type BillStatus =
+  | 'available'
+  | 'proposed'
+  /** Sent to committee: delayed a month, returns stronger. */
+  | 'in_committee'
+  | 'passed'
+  | 'failed';
 
 export type BillCategory =
   | 'fiscal'
@@ -190,6 +197,16 @@ export interface Bill {
   whipSteps: number;
   turnProposed: number | null;
   turnResolved: number | null;
+  /** Amendments made to buy votes. Each moderates the bill and dilutes it. */
+  amendments: number;
+  /** Bonus to the pass chance earned by committee scrutiny. */
+  committeeBonus: number;
+  /** Turn the bill is due back from committee. */
+  committeeReturnsOn: number | null;
+  /** Crossbench deals struck for the second chamber. */
+  crossbenchDeals: number;
+  /** Set when the bill cleared the lower house but died in the Senate. */
+  blockedBySenate?: boolean;
 }
 
 export interface EventChoice {
@@ -439,6 +456,11 @@ export interface GameState {
    * the rules mid-game is a constitutional act, not a settings toggle.
    */
   electoralSystem: ElectoralSystem;
+  /**
+   * The second chamber. Renewed by halves, so half of it always reflects a
+   * previous electorate.
+   */
+  senate: Senate;
   /**
    * Single-member seats. Empty under pure proportional counting, which needs
    * only regions.

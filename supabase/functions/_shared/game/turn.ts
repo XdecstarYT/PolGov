@@ -35,6 +35,10 @@ import {
   PC_REDRAW_BOUNDARIES,
   REDRAW_APPROVAL_PENALTY,
   PC_COSTS_PARTY,
+  PC_COSTS_PROCEDURE,
+  AMENDMENT_STRENGTH,
+  AMENDMENT_DILUTION,
+  CROSSBENCH_SENATE_BONUS,
   FUNDRAISING_DRIVE_YIELD,
   HEADQUARTERS_COST,
   AD_BUY_PARTY_COST,
@@ -82,6 +86,13 @@ import { buildWeightContext, drawEvents } from './systems/eventEngine.ts';
 import { simulateElection } from './systems/election.ts';
 import { meanDistortion, redrawBoundaries } from './systems/districts.ts';
 import {
+  committeeReport,
+  isMoneyBill,
+  renewSenate,
+  senateVerdict,
+  senateVote,
+} from './systems/parliament.ts';
+import {
   authorityTarget,
   cohesionTarget,
   driftAuthority,
@@ -127,6 +138,11 @@ export type Intent =
   | { type: 'discipline_rebels'; factionId: string }
   | { type: 'invest_headquarters' }
   | { type: 'rename_party'; name: string }
+  | { type: 'send_to_committee'; billId: string }
+  | { type: 'amend_bill'; billId: string; towardFactionId?: string; towardPartyId?: string }
+  | { type: 'crossbench_deal'; billId: string }
+  | { type: 'close_debate'; billId: string }
+  | { type: 'question_time' }
   | { type: 'negotiation_accept'; partyId: string }
   | { type: 'negotiation_counter'; partyId: string }
   | { type: 'negotiation_remove'; partyId: string }
@@ -389,6 +405,32 @@ export function resolveTurn(state: GameState): GameState {
 
   const player = playerParty(next.parties);
 
+  /* Bills come back from committee before anything else is counted. */
+  for (const bill of next.bills) {
+    if (bill.status !== 'in_committee') continue;
+    if (bill.committeeReturnsOn !== null && bill.committeeReturnsOn > next.turnNumber) continue;
+
+    const report = committeeReport(bill, rng);
+    bill.status = 'proposed';
+    bill.committeeBonus = report.chanceBonus;
+    bill.committeeReturnsOn = null;
+    /* Scrutiny sands the edges off: better drafted, less distinctive. */
+    bill.ideology = {
+      economic: bill.ideology.economic * (1 - report.moderation),
+      social: bill.ideology.social * (1 - report.moderation),
+      environmental: bill.ideology.environmental * (1 - report.moderation),
+    };
+    tabled.push(bill);
+
+    log(entries, {
+      kind: 'legislature',
+      label: `${bill.title} returns from committee`,
+      delta: report.chanceBonus * 100,
+      cause: report.findings,
+      unit: '%',
+    });
+  }
+
   for (const bill of tabled) {
     /*
      * Roll the party's own benches first. A wing that refuses takes its seats
@@ -433,17 +475,59 @@ export function resolveTurn(state: GameState): GameState {
       rebellion.seatsLost,
     );
     bill.passChance = breakdown.chance;
-    const passed = resolveBillVote(rng, breakdown.chance);
+    const chance = Math.min(0.97, breakdown.chance + bill.committeeBonus);
+    bill.passChance = chance;
+    const carriedInHouse = resolveBillVote(rng, chance);
+
+    /*
+     * Clearing the lower house is not the end of it. The Senate is renewed by
+     * halves, so half of it was elected by a previous electorate — a
+     * government with a fresh mandate can still be stopped by the last one.
+     * Money bills are the exception, by convention.
+     */
+    let passed = carriedInHouse;
+    let senateBlocked = false;
+
+    if (carriedInHouse) {
+      const verdict = senateVerdict(bill, next.senate, next.parties);
+      const senateChance = Math.min(
+        0.98,
+        verdict.chance + bill.crossbenchDeals * CROSSBENCH_SENATE_BONUS,
+      );
+      const clearedSenate = senateVote(rng, { ...verdict, chance: senateChance });
+
+      if (!clearedSenate) {
+        passed = false;
+        senateBlocked = true;
+        bill.blockedBySenate = true;
+        log(entries, {
+          kind: 'legislature',
+          label: `${bill.title} blocked by the Senate`,
+          delta: null,
+          cause: `Carried in the lower house and stopped in the upper, where the government holds ${verdict.supportingSeats} of ${verdict.size} seats.`,
+        });
+      } else if (!verdict.bypassed) {
+        log(entries, {
+          kind: 'legislature',
+          label: `${bill.title} clears the Senate`,
+          delta: null,
+          cause: `The upper house assented at ${(senateChance * 100).toFixed(0)}% projected.`,
+        });
+      }
+    }
+
     bill.status = passed ? 'passed' : 'failed';
     bill.turnResolved = next.turnNumber;
 
-    if (passed) {
+    if (senateBlocked) {
+      next.career.billsFailed += 1;
+    } else if (passed) {
       next.career.billsPassed += 1;
       log(entries, {
         kind: 'legislature',
         label: bill.title,
         delta: null,
-        cause: `Division passed at ${(breakdown.chance * 100).toFixed(0)}% projected — ${breakdown.supportingSeats} of ${breakdown.totalSeats} seats behind it.`,
+        cause: `Division passed at ${(chance * 100).toFixed(0)}% projected — ${breakdown.supportingSeats} of ${breakdown.totalSeats} seats behind it.`,
       });
       applyEffects(next, bill.effects, `${bill.title} enacted`, entries);
 
@@ -462,13 +546,13 @@ export function resolveTurn(state: GameState): GameState {
           unit: 'pts',
         });
       }
-    } else {
+    } else if (!senateBlocked) {
       next.career.billsFailed += 1;
       log(entries, {
         kind: 'legislature',
         label: bill.title,
         delta: null,
-        cause: `Division failed at ${(breakdown.chance * 100).toFixed(0)}% projected — ${breakdown.supportingSeats} of ${breakdown.totalSeats} seats behind it${breakdown.defectingSeats > 0 ? `, with ${breakdown.defectingSeats} partner seats withheld over a red line` : ''}.`,
+        cause: `Division failed at ${(chance * 100).toFixed(0)}% projected — ${breakdown.supportingSeats} of ${breakdown.totalSeats} seats behind it${breakdown.defectingSeats > 0 ? `, with ${breakdown.defectingSeats} partner seats withheld over a red line` : ''}.`,
       });
     }
   }
@@ -831,6 +915,12 @@ export function runElection(state: GameState): GameState {
     party.redLines = [];
   }
 
+  /*
+   * Half the Senate faces the voters; the other half carries on. This is what
+   * makes divided government normal rather than exceptional.
+   */
+  next.senate = renewSenate(next.senate, result.voteShareByParty);
+
   next.elections.push(result);
   next.career.termsServed += 1;
 
@@ -948,6 +1038,16 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleHeadquarters(state);
     case 'rename_party':
       return handleRenameParty(state, intent.name);
+    case 'send_to_committee':
+      return handleSendToCommittee(state, intent.billId);
+    case 'amend_bill':
+      return handleAmendBill(state, intent.billId, intent.towardFactionId, intent.towardPartyId);
+    case 'crossbench_deal':
+      return handleCrossbenchDeal(state, intent.billId);
+    case 'close_debate':
+      return handleCloseDebate(state, intent.billId);
+    case 'question_time':
+      return handleQuestionTime(state);
     case 'negotiation_accept':
       return handleNegotiationAccept(state, intent.partyId);
     case 'negotiation_counter':
@@ -1638,6 +1738,243 @@ function handleRenameParty(state: GameState, name: string): IntentResult {
   const player = playerParty(next.parties);
   player.name = trimmed;
   player.shortName = trimmed.split(' ')[0] ?? trimmed;
+  return ok(next);
+}
+
+
+/* --------------------------- procedure ---------------------------- */
+
+/** A bill on the order paper this turn, or a rejection explaining why not. */
+function tabledBill(state: GameState, billId: string): Bill | string {
+  if (state.phase !== 'agenda') return 'Procedural motions are moved during the agenda.';
+  const bill = state.bills.find((b) => b.id === billId);
+  if (!bill) return 'No such bill.';
+  if (bill.status !== 'proposed') return 'That bill is not before the house.';
+  return bill;
+}
+
+/**
+ * Send a bill to committee. It misses this month's division and comes back
+ * better drafted, less distinctive, and harder to vote against.
+ */
+function handleSendToCommittee(state: GameState, billId: string): IntentResult {
+  const found = tabledBill(state, billId);
+  if (typeof found === 'string') return reject(state, found);
+  if (state.politicalCapital < PC_COSTS_PROCEDURE.sendToCommittee) {
+    return reject(state, 'Not enough political capital to move the referral.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_PROCEDURE.sendToCommittee);
+
+  const target = next.bills.find((b) => b.id === billId)!;
+  target.status = 'in_committee';
+  target.committeeReturnsOn = next.turnNumber + 1;
+
+  log(entries, {
+    kind: 'legislature',
+    label: `${target.title} referred to committee`,
+    delta: -PC_COSTS_PROCEDURE.sendToCommittee,
+    cause: `It will miss this month's division and return next month, better drafted and less contentious.`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+/**
+ * Amend a bill toward a wing of your own party or a coalition partner.
+ *
+ * Moves its position toward theirs, which buys their votes — and waters the
+ * effects down, which is what an amendment costs. A bill amended three times
+ * passes easily and barely does anything.
+ */
+function handleAmendBill(
+  state: GameState,
+  billId: string,
+  towardFactionId?: string,
+  towardPartyId?: string,
+): IntentResult {
+  const found = tabledBill(state, billId);
+  if (typeof found === 'string') return reject(state, found);
+  if (state.politicalCapital < PC_COSTS_PROCEDURE.amendBill) {
+    return reject(state, 'Not enough political capital to move the amendment.');
+  }
+
+  const faction = towardFactionId
+    ? state.partyInternals.factions.find((f) => f.id === towardFactionId)
+    : undefined;
+  const party = towardPartyId
+    ? state.parties.find((p) => p.id === towardPartyId && !p.isPlayer)
+    : undefined;
+
+  const target = faction?.ideology ?? party?.ideology;
+  const towardName = faction?.name ?? party?.name;
+  if (!target || !towardName) {
+    return reject(state, 'Name the faction or partner the amendment is meant to satisfy.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_PROCEDURE.amendBill);
+
+  const bill = next.bills.find((b) => b.id === billId)!;
+  bill.ideology = {
+    economic: bill.ideology.economic + (target.economic - bill.ideology.economic) * AMENDMENT_STRENGTH,
+    social: bill.ideology.social + (target.social - bill.ideology.social) * AMENDMENT_STRENGTH,
+    environmental:
+      bill.ideology.environmental +
+      (target.environmental - bill.ideology.environmental) * AMENDMENT_STRENGTH,
+  };
+
+  /* Every concession takes something out of the bill. */
+  const keep = 1 - AMENDMENT_DILUTION;
+  const scale = (value?: number) => (value === undefined ? undefined : value * keep);
+  bill.effects = {
+    ...bill.effects,
+    approval: scale(bill.effects.approval),
+    treasury: scale(bill.effects.treasury),
+    debt: scale(bill.effects.debt),
+    revenueDelta: scale(bill.effects.revenueDelta),
+    politicalCapital: scale(bill.effects.politicalCapital),
+    sectorDeltas: bill.effects.sectorDeltas
+      ? Object.fromEntries(
+          Object.entries(bill.effects.sectorDeltas).map(([k, v]) => [k, (v ?? 0) * keep]),
+        )
+      : undefined,
+    fundingDeltas: bill.effects.fundingDeltas
+      ? Object.fromEntries(
+          Object.entries(bill.effects.fundingDeltas).map(([k, v]) => [k, (v ?? 0) * keep]),
+        )
+      : undefined,
+  };
+  bill.amendments += 1;
+
+  log(entries, {
+    kind: 'legislature',
+    label: `${bill.title} amended`,
+    delta: -PC_COSTS_PROCEDURE.amendBill,
+    cause: `Moved toward ${towardName} to secure their votes. The bill now does ${(Math.pow(keep, bill.amendments) * 100).toFixed(0)}% of what it originally would have.`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+/** Buy a crossbench senator's vote on one bill. */
+function handleCrossbenchDeal(state: GameState, billId: string): IntentResult {
+  const found = tabledBill(state, billId);
+  if (typeof found === 'string') return reject(state, found);
+  if (isMoneyBill(found)) {
+    return reject(state, 'A money bill does not go to the Senate. There is nothing to buy.');
+  }
+  if (state.politicalCapital < PC_COSTS_PROCEDURE.crossbenchDeal) {
+    return reject(state, 'Not enough political capital for a crossbench arrangement.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_PROCEDURE.crossbenchDeal);
+
+  const bill = next.bills.find((b) => b.id === billId)!;
+  bill.crossbenchDeals += 1;
+
+  log(entries, {
+    kind: 'legislature',
+    label: `Crossbench arrangement on ${bill.title}`,
+    delta: -PC_COSTS_PROCEDURE.crossbenchDeal,
+    cause: `Independent senators secured for the division — worth roughly ${(CROSSBENCH_SENATE_BONUS * 100).toFixed(0)}% on its chances in the upper house.`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+/**
+ * Close debate on a bill the opposition is talking out. Expensive, and it
+ * costs you something with anyone who thinks the chamber should be allowed to
+ * do its job.
+ */
+function handleCloseDebate(state: GameState, billId: string): IntentResult {
+  const found = tabledBill(state, billId);
+  if (typeof found === 'string') return reject(state, found);
+  if (state.politicalCapital < PC_COSTS_PROCEDURE.closeDebate) {
+    return reject(state, 'Not enough political capital to close debate.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_PROCEDURE.closeDebate);
+
+  const bill = next.bills.find((b) => b.id === billId)!;
+  bill.committeeBonus += 0.1;
+
+  log(entries, {
+    kind: 'legislature',
+    label: `Debate closed on ${bill.title}`,
+    delta: -PC_COSTS_PROCEDURE.closeDebate,
+    cause: 'The guillotine was moved and carried. The bill reaches a vote; the opposition has its grievance.',
+    unit: 'PC',
+  });
+  applyEffects(next, { approval: -1.2 }, `Closure motion on ${bill.title}`, entries);
+  return ok(next);
+}
+
+/**
+ * Face the chamber at question time.
+ *
+ * How it goes depends on the record you actually have. A government with
+ * something to show for itself does well; one without is simply handing the
+ * opposition a stage.
+ */
+function handleQuestionTime(state: GameState): IntentResult {
+  if (state.phase !== 'agenda') {
+    return reject(state, 'Question time is taken during the agenda.');
+  }
+  if (state.politicalCapital < PC_COSTS_PROCEDURE.questionTime) {
+    return reject(state, 'Not enough political capital to prepare properly.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_PROCEDURE.questionTime);
+
+  /* Preparation plus a record to point at. Neither alone is enough. */
+  const record = Math.min(1, next.career.billsPassed / 8);
+  const standing = next.approval / 100;
+  const authority = next.partyInternals.authority / 100;
+  const performance = record * 0.4 + standing * 0.35 + authority * 0.25;
+
+  const approvalSwing = (performance - 0.45) * 5;
+  const authoritySwing = (performance - 0.45) * 8;
+
+  next.partyInternals.authority = Math.max(
+    0,
+    Math.min(100, next.partyInternals.authority + authoritySwing),
+  );
+
+  log(entries, {
+    kind: 'political_capital',
+    label: 'Political capital',
+    delta: -PC_COSTS_PROCEDURE.questionTime,
+    cause: 'Question time',
+    unit: 'PC',
+  });
+  applyEffects(
+    next,
+    { approval: approvalSwing },
+    performance > 0.6
+      ? 'Question time — you had a record to point at and pointed at it'
+      : performance > 0.42
+        ? 'Question time — a competent, forgettable performance'
+        : 'Question time — the opposition had the better of it, because the figures were on their side',
+    entries,
+  );
+  log(entries, {
+    kind: 'note',
+    label: 'Your authority in the party',
+    delta: authoritySwing,
+    cause: 'Your own benches watched how that went',
+    unit: 'pts',
+  });
   return ok(next);
 }
 

@@ -17,6 +17,7 @@ import {
   MOOD_RED_LINE_VIOLATION,
   PC_COSTS,
   PC_REDRAW_BOUNDARIES,
+  PC_COSTS_PROCEDURE,
   meanDistortion,
   WHIP_MAX_STEPS,
   billPcCost,
@@ -39,6 +40,7 @@ import {
 import { EffectSummary } from './EventsPhase.tsx';
 import { RegionElectorate } from '../components/ElectoratePanel.tsx';
 import { PartyRoom } from '../components/PartyRoom.tsx';
+import { BillProcedure, ChamberPanel } from '../components/ChamberPanel.tsx';
 
 export function Agenda() {
   const { game, dispatch } = useGame();
@@ -62,6 +64,13 @@ export function Agenda() {
             Address the nation · {PC_COSTS.publicAddress} PC
           </Button>
           <Button
+            onClick={() => void dispatch({ type: 'question_time' })}
+            disabled={game.politicalCapital < PC_COSTS_PROCEDURE.questionTime}
+            title="How it goes depends on the record you actually have"
+          >
+            Take question time · {PC_COSTS_PROCEDURE.questionTime} PC
+          </Button>
+          <Button
             variant="primary"
             onClick={() => void dispatch({ type: 'advance_phase' })}
           >
@@ -79,6 +88,7 @@ export function Agenda() {
       {campaign && <CampaignPanel />}
 
       <PolicyDesk />
+      <ChamberPanel />
       <PartyRoom />
       <CoalitionActions />
       <BoundaryReview />
@@ -98,6 +108,7 @@ function PolicyDesk() {
   if (!game) return null;
 
   const tabled = game.bills.filter((b) => b.status === 'proposed');
+  const inCommittee = game.bills.filter((b) => b.status === 'in_committee');
   const available = useMemo(
     () =>
       game.bills.filter(
@@ -116,19 +127,35 @@ function PolicyDesk() {
       {tabled.length > 0 && (
         <div className="mb-4 border border-rule-strong bg-sunk/40 p-3">
           <Kicker>Tabled for this month&apos;s divisions</Kicker>
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {tabled.map((bill) => (
-              <li key={bill.id} className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="text-sm text-ink">{bill.title}</span>
-                <span className="flex items-center gap-3 text-xs text-ink-faint tnum">
-                  <span>{((bill.passChance ?? 0) * 100).toFixed(0)}% to pass</span>
-                  <Button
-                    variant="quiet"
-                    onClick={() => void dispatch({ type: 'withdraw_bill', billId: bill.id })}
-                  >
-                    Withdraw
-                  </Button>
-                </span>
+              <li key={bill.id}>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-sm text-ink">{bill.title}</span>
+                  <span className="flex items-center gap-3 text-xs text-ink-faint tnum">
+                    <span>{((bill.passChance ?? 0) * 100).toFixed(0)}% in the house</span>
+                    <Button
+                      variant="quiet"
+                      onClick={() => void dispatch({ type: 'withdraw_bill', billId: bill.id })}
+                    >
+                      Withdraw
+                    </Button>
+                  </span>
+                </div>
+                <BillProcedure billId={bill.id} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {inCommittee.length > 0 && (
+        <div className="mb-4 border border-rule p-3">
+          <Kicker>In committee — returns next month</Kicker>
+          <ul className="space-y-1">
+            {inCommittee.map((bill) => (
+              <li key={bill.id} className="text-sm text-ink-soft">
+                {bill.title}
               </li>
             ))}
           </ul>

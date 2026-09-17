@@ -25,6 +25,7 @@ import { REGION_TEMPLATES } from './content/regions.ts';
 import { Rng, seedFromString } from './rng.ts';
 import { buildDistricts } from './systems/districts.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
+import { buildSenate } from './systems/parliament.ts';
 import { MMP_DISTRICT_SHARE } from './balance.ts';
 import type { ElectoralSystem } from './systems/electoralSystems.ts';
 import { buildNegotiation, hasMajority } from './systems/coalition.ts';
@@ -98,6 +99,10 @@ export function buildBills(): Bill[] {
     whipSteps: 0,
     turnProposed: null,
     turnResolved: null,
+    amendments: 0,
+    committeeBonus: 0,
+    committeeReturnsOn: null,
+    crossbenchDeals: 0,
   }));
 }
 
@@ -219,6 +224,7 @@ export function createGame(options: NewGameOptions): GameState {
     sectors,
     regions,
     electoralSystem,
+    senate: buildSenate(opening.voteShareByParty),
     districts,
     bills: buildBills(),
     events: [],

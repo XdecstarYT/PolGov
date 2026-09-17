@@ -66,6 +66,10 @@ const makeBill = (ideology = makeIdeology(0, 0, 0)): Bill => ({
   whipSteps: 0,
   turnProposed: null,
   turnResolved: null,
+  amendments: 0,
+  committeeBonus: 0,
+  committeeReturnsOn: null,
+  crossbenchDeals: 0,
 });
 
 describe('factions', () => {
