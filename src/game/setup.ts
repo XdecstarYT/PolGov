@@ -82,6 +82,7 @@ export function buildRegions(): Region[] {
     character: template.character,
     seats: template.seats,
     lean: template.lean,
+    composition: template.composition,
     campaignInvestment: 0,
   }));
 }

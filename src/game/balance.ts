@@ -219,6 +219,42 @@ export const EVENT_BASE_CHANCE = 0.62;
 export const EVENT_SECOND_CHANCE = 0.3;
 
 /* ------------------------------------------------------------------ *
+ * The electorate
+ * ------------------------------------------------------------------ */
+
+/**
+ * How sharply voters favour parties near their own position. Support is
+ * exp(affinity * pull), so a close party does not merely lead a distant one —
+ * it dominates within that segment.
+ */
+export const SEGMENT_IDEOLOGY_PULL = 2.4;
+
+/**
+ * How far a segment's verdict on the government's record can move its vote,
+ * before the segment's own volatility is applied. A fully satisfied segment
+ * swings this far toward the incumbent; a fully dissatisfied one, away.
+ */
+export const INCUMBENT_PERFORMANCE_SWING = 0.55;
+/** The share of incumbent dissatisfaction that opposition parties pick up. */
+export const OPPOSITION_PERFORMANCE_SWING = 0.35;
+
+/** Baseline share of a segment that votes at all, before its own habit. */
+export const TURNOUT_BASELINE = 0.62;
+/** Campaign effort in a region lifts turnout among persuadable segments. */
+export const TURNOUT_CAMPAIGN_LIFT = 0.04;
+
+/** Debt at which the debt issue scores zero. Below it, the score scales up. */
+export const ISSUE_DEBT_ZERO_AT = 620;
+/** Each ₡bn of recurring revenue above baseline costs this much tax score. */
+export const ISSUE_TAX_PER_REVENUE = 2.1;
+/** Baseline tax score when the revenue modifier is zero. */
+export const ISSUE_TAX_BASE = 66;
+/** How much economy health moves the cost-of-living score, around health 60. */
+export const ISSUE_COST_ECONOMY_WEIGHT = 0.85;
+/** Each ₡bn of recurring revenue also raises prices for households. */
+export const ISSUE_COST_PER_REVENUE = 1.4;
+
+/* ------------------------------------------------------------------ *
  * Elections
  * ------------------------------------------------------------------ */
 
@@ -239,8 +275,13 @@ export const AD_BUY_TREASURY_COST = 6;
 export const AD_BUY_INVESTMENT = 0.8;
 /** Debate performance shifts national support by up to this fraction. */
 export const DEBATE_SWING_PER_WIN = 0.04;
-export const TURNOUT_BASE = 0.58;
-export const TURNOUT_APPROVAL_RANGE = 0.22;
+/**
+ * How much headline approval nudges the incumbent's vote on top of the
+ * electorate's own issue-by-issue verdict. Deliberately small: the things that
+ * move approval are already being weighed directly by voters, so a large value
+ * here would count them twice.
+ */
+export const NATIONAL_MOOD_WEIGHT = 0.35;
 
 /* ------------------------------------------------------------------ *
  * Difficulty

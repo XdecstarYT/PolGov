@@ -29,6 +29,7 @@ import {
   pct,
 } from '../components/Primitives.tsx';
 import { ApprovalTrend, SeatChart } from '../components/ChartsLazy.tsx';
+import { ElectoratePanel } from '../components/ElectoratePanel.tsx';
 
 export function Briefing() {
   const { game, dispatch } = useGame();
@@ -122,6 +123,8 @@ export function Briefing() {
           </Panel>
         </div>
       </div>
+
+      <ElectoratePanel />
 
       <Panel title="How your standing is derived" aside="no black boxes">
         <p className="mb-3 text-sm text-ink-soft">

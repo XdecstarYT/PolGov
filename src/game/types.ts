@@ -5,6 +5,8 @@
  * functions, so it stays free of any platform-specific imports.
  */
 
+import type { SegmentKey } from './content/segments.ts';
+
 /* ------------------------------------------------------------------ *
  * Primitives
  * ------------------------------------------------------------------ */
@@ -219,7 +221,16 @@ export interface Region {
   /** One line of fictional character, shown on the campaign map. */
   character: string;
   seats: number;
+  /**
+   * Summary position of the electorate here. Kept for display; the
+   * authoritative model is `composition`.
+   */
   lean: Ideology;
+  /**
+   * Who lives here, as relative weights per voter segment. Segments overlap,
+   * so these are weights on a shared electorate rather than exclusive shares.
+   */
+  composition: Partial<Record<SegmentKey, number>>;
   campaignInvestment: number;
 }
 

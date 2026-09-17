@@ -649,6 +649,10 @@ export function runElection(state: GameState): GameState {
     next.campaign,
     next.termNumber,
     rng,
+    /* The electorate judges the record directly, so pass it the record. */
+    next.sectors,
+    next.debt,
+    next.revenueModifier,
   );
 
   for (const party of next.parties) {

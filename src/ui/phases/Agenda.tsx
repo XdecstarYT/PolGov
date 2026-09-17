@@ -35,6 +35,7 @@ import {
   money,
 } from '../components/Primitives.tsx';
 import { EffectSummary } from './EventsPhase.tsx';
+import { RegionElectorate } from '../components/ElectoratePanel.tsx';
 
 export function Agenda() {
   const { game, dispatch } = useGame();
@@ -393,6 +394,7 @@ function CampaignPanel() {
             <p className="mt-1 text-xs tnum text-ink-faint">
               effort invested: {region.campaignInvestment.toFixed(1)}
             </p>
+            <RegionElectorate regionId={region.id} />
             <div className="mt-2 flex flex-wrap gap-1.5">
               <Button
                 variant="quiet"

@@ -8,12 +8,10 @@
  */
 
 import {
-  CAMPAIGN_EFFECT_PER_INVESTMENT,
   ELECTION_APPROVAL_FLOOR,
   ELECTION_APPROVAL_RANGE,
+  NATIONAL_MOOD_WEIGHT,
   REGION_AFFINITY_SPREAD,
-  TURNOUT_APPROVAL_RANGE,
-  TURNOUT_BASE,
 } from '../balance.ts';
 import { distance } from '../ideology.ts';
 import type {
@@ -22,8 +20,10 @@ import type {
   Party,
   Region,
   RegionResult,
+  Sector,
 } from '../types.ts';
 import type { Rng } from '../rng.ts';
+import { computeIssueScores, regionBreakdown, type SupportContext } from './electorate.ts';
 
 /**
  * How warmly a region receives a party, on a 0..1-ish curve. Gaussian falloff
@@ -76,8 +76,17 @@ export function approvalMultiplier(approval: number): number {
 }
 
 /**
- * Run a general election. Deterministic given the RNG cursor, so an election
- * can be replayed server-side and reach the same result.
+ * Run a general election.
+ *
+ * Vote shares now come from the electorate model: each region's segments judge
+ * the government on the issues they care about, and their ideological
+ * proximity to each party decides where that verdict lands. Approval survives
+ * only as a small national mood term, because the things that drive approval —
+ * services, the economy, debt — are already being weighed directly by voters,
+ * and counting them twice would make elections hypersensitive to one number.
+ *
+ * Deterministic given the RNG cursor, so an election can be replayed
+ * server-side and reach the same result.
  */
 export function simulateElection(
   parties: readonly Party[],
@@ -86,49 +95,67 @@ export function simulateElection(
   campaign: CampaignState | null,
   termNumber: number,
   rng: Rng,
+  sectors?: readonly Sector[],
+  debt = 0,
+  revenueModifier = 0,
 ): ElectionResult {
-  const playerMultiplier = approvalMultiplier(approval);
-  const debateSwing = campaign?.debateSwing ?? 0;
+  const player = parties.find((p) => p.isPlayer);
+
+  /*
+   * Without sectors we cannot score the issues, so fall back to treating the
+   * whole electorate as neutral on the record and let ideology and mood decide.
+   * setup.ts seats the opening parliament through this path.
+   */
+  const scores = sectors
+    ? computeIssueScores(sectors, debt, revenueModifier)
+    : {
+        economy: 50,
+        health: 50,
+        education: 50,
+        infrastructure: 50,
+        environment: 50,
+        cost_of_living: 50,
+        tax: 50,
+        debt: 50,
+      };
+
+  const context: SupportContext = {
+    scores,
+    incumbentId: player?.id ?? 'player',
+    incumbentBonus:
+      ((approval - 50) / 100) * NATIONAL_MOOD_WEIGHT + (campaign?.debateSwing ?? 0),
+  };
 
   const regionResults: RegionResult[] = [];
   const nationalVotes: Record<string, number> = {};
   const nationalSeats: Record<string, number> = {};
   let totalVotes = 0;
+  let turnoutWeighted = 0;
 
   for (const region of regions) {
-    const raw: Record<string, number> = {};
+    const breakdown = regionBreakdown(region, parties, context);
 
+    /* Small seeded local variation so identical runs still feel alive. */
+    const jittered: Record<string, number> = {};
+    let jitterTotal = 0;
     for (const party of parties) {
-      const affinityHere = regionalAffinity(party.ideology, region.lean);
-      let strength = party.baseStrength * affinityHere;
-
-      if (party.isPlayer) {
-        strength *= playerMultiplier * (1 + debateSwing);
-        strength *= 1 + region.campaignInvestment * CAMPAIGN_EFFECT_PER_INVESTMENT;
-      } else {
-        /* Opposition picks up what an unpopular incumbent sheds. */
-        strength *= 1 + (1 - playerMultiplier) * 0.5;
-      }
-
-      /* Small seeded local variation so identical runs still feel alive. */
-      strength *= rng.range(0.93, 1.07);
-      raw[party.id] = Math.max(0.0001, strength);
+      const value = Math.max(1e-6, (breakdown.shares[party.id] ?? 0) * rng.range(0.94, 1.06));
+      jittered[party.id] = value;
+      jitterTotal += value;
     }
 
-    const rawTotal = Object.values(raw).reduce((a, b) => a + b, 0);
     const shares: Record<string, number> = {};
-    for (const party of parties) {
-      shares[party.id] = (raw[party.id] ?? 0) / rawTotal;
-    }
+    for (const party of parties) shares[party.id] = (jittered[party.id] ?? 0) / jitterTotal;
 
     const seatsByParty = allocateSeats(shares, region.seats);
 
     for (const party of parties) {
-      const regionVotes = (shares[party.id] ?? 0) * region.seats;
-      nationalVotes[party.id] = (nationalVotes[party.id] ?? 0) + regionVotes;
+      nationalVotes[party.id] =
+        (nationalVotes[party.id] ?? 0) + (shares[party.id] ?? 0) * region.seats;
       nationalSeats[party.id] = (nationalSeats[party.id] ?? 0) + (seatsByParty[party.id] ?? 0);
     }
     totalVotes += region.seats;
+    turnoutWeighted += breakdown.turnout * region.seats;
 
     regionResults.push({
       regionId: region.id,
@@ -144,13 +171,11 @@ export function simulateElection(
     voteShareByParty[party.id] = (nationalVotes[party.id] ?? 0) / totalVotes;
   }
 
-  const player = parties.find((p) => p.isPlayer);
-  const turnout =
-    TURNOUT_BASE + (approval / 100) * TURNOUT_APPROVAL_RANGE * rng.range(0.9, 1.1);
+  const turnout = (turnoutWeighted / totalVotes) * rng.range(0.97, 1.03);
 
   return {
     termNumber,
-    turnout: Math.max(0.35, Math.min(0.92, turnout)),
+    turnout: Math.max(0.35, Math.min(0.95, turnout)),
     seatsByParty: nationalSeats,
     voteShareByParty,
     regions: regionResults,
