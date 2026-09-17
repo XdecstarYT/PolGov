@@ -26,6 +26,7 @@ export const ALLOWED_INTENT_TYPES: ReadonlySet<Intent['type']> = new Set([
   'campaign_stop',
   'ad_buy',
   'answer_debate',
+  'redraw_boundaries',
   'negotiation_accept',
   'negotiation_counter',
   'negotiation_remove',

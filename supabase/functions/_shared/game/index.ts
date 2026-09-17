@@ -18,6 +18,8 @@ export * from './systems/budget.ts';
 export * from './systems/coalition.ts';
 export * from './systems/election.ts';
 export * from './systems/electorate.ts';
+export * from './systems/electoralSystems.ts';
+export * from './systems/districts.ts';
 export * from './systems/eventEngine.ts';
 export * from './systems/legacy.ts';
 export * from './systems/legislature.ts';

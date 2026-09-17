@@ -19,6 +19,9 @@ import { BILL_TEMPLATES } from './content/bills.ts';
 import { PARTY_TEMPLATES } from './content/parties.ts';
 import { REGION_TEMPLATES } from './content/regions.ts';
 import { Rng, seedFromString } from './rng.ts';
+import { buildDistricts } from './systems/districts.ts';
+import { MMP_DISTRICT_SHARE } from './balance.ts';
+import type { ElectoralSystem } from './systems/electoralSystems.ts';
 import { buildNegotiation, hasMajority } from './systems/coalition.ts';
 import { simulateElection } from './systems/election.ts';
 import type {
@@ -30,6 +33,7 @@ import type {
   Region,
   Sector,
 } from './types.ts';
+import type { District } from './systems/districts.ts';
 
 export interface NewGameOptions {
   gameId: string;
@@ -40,8 +44,33 @@ export interface NewGameOptions {
   playerColor: string;
   playerGlyph: string;
   playerIdeology: Ideology;
+  /** How votes become seats. Defaults to proportional. */
+  electoralSystem?: ElectoralSystem;
   /** Optional explicit seed; defaults to one derived from the game id. */
   seed?: number;
+}
+
+/**
+ * Lay out the single-member seats for a run.
+ *
+ * Pure proportional counting needs no districts at all. Mixed-member needs
+ * fewer, larger ones, because the remainder of the chamber is filled from a
+ * national list.
+ */
+export function buildDistrictsFor(
+  regions: Region[],
+  system: ElectoralSystem,
+  rng: Rng,
+): District[] {
+  if (system === 'proportional') return [];
+
+  return regions.flatMap((region) => {
+    const count =
+      system === 'mixed_member'
+        ? Math.max(1, Math.round(region.seats * MMP_DISTRICT_SHARE))
+        : region.seats;
+    return buildDistricts(region, rng, count);
+  });
 }
 
 /** Electoral mass for the player's party — enough to usually lead, never to coast. */
@@ -137,9 +166,20 @@ export function createGame(options: NewGameOptions): GameState {
   const parties = buildParties(options);
   const regions = buildRegions();
   const sectors = buildSectors();
+  const electoralSystem = options.electoralSystem ?? 'proportional';
+  const districts = buildDistrictsFor(regions, electoralSystem, rng);
 
   /* Seat the opening parliament with the real election model. */
-  const opening = simulateElection(parties, regions, APPROVAL_START, null, 0, rng);
+  const opening = simulateElection({
+    parties,
+    regions,
+    districts,
+    system: electoralSystem,
+    approval: APPROVAL_START,
+    campaign: null,
+    termNumber: 0,
+    rng,
+  });
   for (const party of parties) {
     party.seats = opening.seatsByParty[party.id] ?? 0;
   }
@@ -165,6 +205,8 @@ export function createGame(options: NewGameOptions): GameState {
     parties,
     sectors,
     regions,
+    electoralSystem,
+    districts,
     bills: buildBills(),
     events: [],
 

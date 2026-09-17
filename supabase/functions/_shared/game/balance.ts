@@ -283,6 +283,33 @@ export const DEBATE_SWING_PER_WIN = 0.04;
  */
 export const NATIONAL_MOOD_WEIGHT = 0.35;
 
+/**
+ * Share of the chamber elected in districts under mixed-member proportional.
+ * The remainder is filled from a national list to correct the total toward
+ * each party's vote share.
+ */
+export const MMP_DISTRICT_SHARE = 0.6;
+
+/**
+ * How strongly districts sort geographically.
+ *
+ * Real electorates are not uniform samples of their region: the industrial
+ * district and the professional district sit a few miles apart and vote
+ * nothing alike. Each district draws a character, and segments concentrate
+ * where they fit it. At 0 districts are statistically identical and
+ * single-member systems degenerate into winner-takes-the-region.
+ */
+export const DISTRICT_SORTING = 4.5;
+
+/** Political capital to redraw one region's boundaries. */
+export const PC_REDRAW_BOUNDARIES = 22;
+/**
+ * Approval cost when a boundary redraw becomes public knowledge, scaled by how
+ * distorted the map has become. Drawing your own districts is legal here, and
+ * it is never free.
+ */
+export const REDRAW_APPROVAL_PENALTY = 9;
+
 /* ------------------------------------------------------------------ *
  * Difficulty
  * ------------------------------------------------------------------ */

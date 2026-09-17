@@ -11,7 +11,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../../state/store.ts';
-import { MAJORITY_SEATS, playerParty } from '../../game/index.ts';
+import {
+  ELECTORAL_SYSTEM_LABELS,
+  MAJORITY_SEATS,
+  playerParty,
+} from '../../game/index.ts';
 import { Button, Kicker, Panel, PartyMark, Stat, Tag, pct } from '../components/Primitives.tsx';
 
 const REVEAL_INTERVAL_MS = 1100;
@@ -67,6 +71,23 @@ export function ElectionNight() {
           Turnout {pct(election.turnout * 100, 1)} · {declaredSeats} of{' '}
           {election.regions.reduce((sum, r) => sum + r.seats, 0)} seats declared
         </p>
+        {election.system && (
+          <p className="mt-1 text-xs text-ink-faint">
+            Counted under {ELECTORAL_SYSTEM_LABELS[election.system].toLowerCase()}.
+            {election.disproportionality !== undefined && (
+              <>
+                {' '}
+                Disproportionality{' '}
+                <span className="tnum">{election.disproportionality.toFixed(1)}</span> —{' '}
+                {election.disproportionality < 2
+                  ? 'the chamber closely mirrors the votes cast.'
+                  : election.disproportionality < 6
+                    ? 'the rules have reshaped the result noticeably.'
+                    : 'the rules have reshaped the result substantially.'}
+              </>
+            )}
+          </p>
+        )}
       </header>
 
       <div className="mt-5 flex flex-wrap items-start gap-x-8 gap-y-3">

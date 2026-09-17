@@ -16,6 +16,8 @@ import {
   BILL_CATEGORY_LABELS,
   MOOD_RED_LINE_VIOLATION,
   PC_COSTS,
+  PC_REDRAW_BOUNDARIES,
+  meanDistortion,
   WHIP_MAX_STEPS,
   billPcCost,
   coalitionPartners,
@@ -77,6 +79,7 @@ export function Agenda() {
 
       <PolicyDesk />
       <CoalitionActions />
+      <BoundaryReview />
       <ExtraordinaryActions />
     </div>
   );
@@ -453,6 +456,55 @@ function CampaignPanel() {
 }
 
 /* ------------------------- extraordinary --------------------------- */
+
+/**
+ * Boundary reviews. Only shown where boundaries decide anything — under
+ * proportional counting there are no districts to redraw.
+ */
+function BoundaryReview() {
+  const { game, dispatch } = useGame();
+  if (!game || game.electoralSystem === 'proportional' || game.districts.length === 0) return null;
+
+  return (
+    <Panel title="Boundary commission" aside={`${game.districts.length} seats`}>
+      <p className="text-sm leading-relaxed text-ink-soft">
+        Redrawing a region&apos;s boundaries concedes one seat outright so that the rest become
+        winnable — hostile voters packed into a district you were losing anyway, your own supporters
+        spread across the marginals. It is legal, it works, and it is never free: the more distorted
+        a map becomes, the more it costs you when the public notices.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {game.regions.map((region) => {
+          const inRegion = game.districts.filter((d) => d.regionId === region.id);
+          if (inRegion.length < 2) return null;
+          const distortion = meanDistortion(inRegion);
+          return (
+            <li
+              key={region.id}
+              className="flex flex-wrap items-center justify-between gap-2 border border-rule p-2.5"
+            >
+              <span className="min-w-0">
+                <span className="font-serif text-sm font-semibold text-ink">{region.name}</span>
+                <span className="ml-2 text-xs tnum text-ink-faint">
+                  {inRegion.length} seats · map {(distortion * 100).toFixed(0)}% distorted
+                </span>
+              </span>
+              <span className="flex items-center gap-2">
+                {distortion > 0.5 && <Tag tone="loss">heavily redrawn</Tag>}
+                <Button
+                  disabled={game.politicalCapital < PC_REDRAW_BOUNDARIES}
+                  onClick={() => void dispatch({ type: 'redraw_boundaries', regionId: region.id })}
+                >
+                  Commission review · {PC_REDRAW_BOUNDARIES} PC
+                </Button>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
+  );
+}
 
 function ExtraordinaryActions() {
   const { game, dispatch } = useGame();

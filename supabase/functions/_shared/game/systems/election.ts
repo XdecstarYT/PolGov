@@ -23,7 +23,26 @@ import type {
   Sector,
 } from '../types.ts';
 import type { Rng } from '../rng.ts';
-import { computeIssueScores, regionBreakdown, type SupportContext } from './electorate.ts';
+import {
+  compositionBreakdown,
+  computeIssueScores,
+  regionBreakdown,
+  type SupportContext,
+} from './electorate.ts';
+import {
+  allocateMixedMember,
+  contestFptp,
+  contestPreferential,
+  contestTwoRound,
+  gallagherIndex,
+  tallyDistricts,
+  type DistrictOutcome,
+  type DistrictVote,
+  type ElectoralSystem,
+  type PartyPosition,
+  type Shares,
+} from './electoralSystems.ts';
+import type { District } from './districts.ts';
 
 /**
  * How warmly a region receives a party, on a 0..1-ish curve. Gaussian falloff
@@ -75,49 +94,56 @@ export function approvalMultiplier(approval: number): number {
   return ELECTION_APPROVAL_FLOOR + (approval / 100) * ELECTION_APPROVAL_RANGE;
 }
 
+/** Everything an election needs to run. */
+export interface ElectionInput {
+  parties: readonly Party[];
+  regions: readonly Region[];
+  /** Single-member seats. Ignored under pure proportional counting. */
+  districts: readonly District[];
+  system: ElectoralSystem;
+  approval: number;
+  campaign: CampaignState | null;
+  termNumber: number;
+  rng: Rng;
+  /** The record the electorate judges. Omitted only for the opening parliament. */
+  sectors?: readonly Sector[];
+  debt?: number;
+  revenueModifier?: number;
+}
+
+const NEUTRAL_SCORES = {
+  economy: 50,
+  health: 50,
+  education: 50,
+  infrastructure: 50,
+  environment: 50,
+  cost_of_living: 50,
+  tax: 50,
+  debt: 50,
+};
+
 /**
- * Run a general election.
+ * Run a general election under whichever rules the country uses.
  *
- * Vote shares now come from the electorate model: each region's segments judge
- * the government on the issues they care about, and their ideological
- * proximity to each party decides where that verdict lands. Approval survives
- * only as a small national mood term, because the things that drive approval —
- * services, the economy, debt — are already being weighed directly by voters,
- * and counting them twice would make elections hypersensitive to one number.
+ * Vote shares come from the electorate model: each district or region's
+ * segments judge the government on the issues they care about, and their
+ * ideological proximity to each party decides where that verdict lands.
+ * Approval survives only as a small national mood term, because the things
+ * that drive approval are already being weighed directly by voters.
+ *
+ * The counting then differs entirely by system, which is the point — the same
+ * votes produce a different parliament depending on the rules.
  *
  * Deterministic given the RNG cursor, so an election can be replayed
  * server-side and reach the same result.
  */
-export function simulateElection(
-  parties: readonly Party[],
-  regions: readonly Region[],
-  approval: number,
-  campaign: CampaignState | null,
-  termNumber: number,
-  rng: Rng,
-  sectors?: readonly Sector[],
-  debt = 0,
-  revenueModifier = 0,
-): ElectionResult {
+export function simulateElection(input: ElectionInput): ElectionResult {
+  const { parties, regions, districts, system, approval, campaign, termNumber, rng } = input;
   const player = parties.find((p) => p.isPlayer);
 
-  /*
-   * Without sectors we cannot score the issues, so fall back to treating the
-   * whole electorate as neutral on the record and let ideology and mood decide.
-   * setup.ts seats the opening parliament through this path.
-   */
-  const scores = sectors
-    ? computeIssueScores(sectors, debt, revenueModifier)
-    : {
-        economy: 50,
-        health: 50,
-        education: 50,
-        infrastructure: 50,
-        environment: 50,
-        cost_of_living: 50,
-        tax: 50,
-        debt: 50,
-      };
+  const scores = input.sectors
+    ? computeIssueScores(input.sectors, input.debt ?? 0, input.revenueModifier ?? 0)
+    : NEUTRAL_SCORES;
 
   const context: SupportContext = {
     scores,
@@ -126,60 +152,137 @@ export function simulateElection(
       ((approval - 50) / 100) * NATIONAL_MOOD_WEIGHT + (campaign?.debateSwing ?? 0),
   };
 
-  const regionResults: RegionResult[] = [];
-  const nationalVotes: Record<string, number> = {};
-  const nationalSeats: Record<string, number> = {};
-  let totalVotes = 0;
+  /** Seeded local variation, so identical runs still feel alive. */
+  const jitter = (shares: Shares): Shares => {
+    const out: Shares = {};
+    let total = 0;
+    for (const party of parties) {
+      const value = Math.max(1e-6, (shares[party.id] ?? 0) * rng.range(0.94, 1.06));
+      out[party.id] = value;
+      total += value;
+    }
+    for (const party of parties) out[party.id] = (out[party.id] ?? 0) / total;
+    return out;
+  };
+
+  const positions: PartyPosition[] = parties.map((p) => ({ id: p.id, ideology: p.ideology }));
+
+  /* ---- regional vote shares, always computed: they are the popular vote ---- */
+  const regionShares = new Map<string, Shares>();
   let turnoutWeighted = 0;
+  let seatTotal = 0;
 
   for (const region of regions) {
     const breakdown = regionBreakdown(region, parties, context);
-
-    /* Small seeded local variation so identical runs still feel alive. */
-    const jittered: Record<string, number> = {};
-    let jitterTotal = 0;
-    for (const party of parties) {
-      const value = Math.max(1e-6, (breakdown.shares[party.id] ?? 0) * rng.range(0.94, 1.06));
-      jittered[party.id] = value;
-      jitterTotal += value;
-    }
-
-    const shares: Record<string, number> = {};
-    for (const party of parties) shares[party.id] = (jittered[party.id] ?? 0) / jitterTotal;
-
-    const seatsByParty = allocateSeats(shares, region.seats);
-
-    for (const party of parties) {
-      nationalVotes[party.id] =
-        (nationalVotes[party.id] ?? 0) + (shares[party.id] ?? 0) * region.seats;
-      nationalSeats[party.id] = (nationalSeats[party.id] ?? 0) + (seatsByParty[party.id] ?? 0);
-    }
-    totalVotes += region.seats;
+    regionShares.set(region.id, jitter(breakdown.shares));
     turnoutWeighted += breakdown.turnout * region.seats;
+    seatTotal += region.seats;
+  }
 
-    regionResults.push({
+  const nationalVotes: Shares = {};
+  for (const region of regions) {
+    const shares = regionShares.get(region.id)!;
+    for (const party of parties) {
+      nationalVotes[party.id] = (nationalVotes[party.id] ?? 0) + (shares[party.id] ?? 0) * region.seats;
+    }
+  }
+  const voteShareByParty: Shares = {};
+  for (const party of parties) voteShareByParty[party.id] = (nationalVotes[party.id] ?? 0) / seatTotal;
+
+  /* ---- district vote shares, for the systems that need them ---- */
+  const districtVotes: DistrictVote[] = districts.map((district) => {
+    const region = regions.find((r) => r.id === district.regionId);
+    const breakdown = compositionBreakdown(
+      district.composition,
+      region?.campaignInvestment ?? 0,
+      parties,
+      context,
+    );
+    return {
+      districtId: district.id,
+      regionId: district.regionId,
+      shares: jitter(breakdown.shares),
+    };
+  });
+
+  /* ---- counting ---- */
+  let seatsByParty: Record<string, number> = {};
+  let outcomes: DistrictOutcome[] = [];
+  let listSeats: Record<string, number> | undefined;
+
+  if (system === 'proportional' || districts.length === 0) {
+    for (const region of regions) {
+      const allocation = allocateSeats(regionShares.get(region.id)!, region.seats);
+      for (const party of parties) {
+        seatsByParty[party.id] = (seatsByParty[party.id] ?? 0) + (allocation[party.id] ?? 0);
+      }
+    }
+  } else if (system === 'mixed_member') {
+    outcomes = contestFptp(districtVotes);
+    const districtSeats = tallyDistricts(outcomes);
+    const list = allocateMixedMember(
+      districtSeats,
+      voteShareByParty,
+      Math.max(0, seatTotal - districts.length),
+    );
+    listSeats = list.list;
+    seatsByParty = list.total;
+    for (const party of parties) seatsByParty[party.id] = seatsByParty[party.id] ?? 0;
+  } else {
+    outcomes =
+      system === 'preferential'
+        ? contestPreferential(districtVotes, positions)
+        : system === 'two_round'
+          ? contestTwoRound(districtVotes, positions)
+          : contestFptp(districtVotes);
+    seatsByParty = tallyDistricts(outcomes);
+    for (const party of parties) seatsByParty[party.id] = seatsByParty[party.id] ?? 0;
+  }
+
+  /* ---- per-region reporting ---- */
+  const regionResults: RegionResult[] = regions.map((region) => {
+    const shares = regionShares.get(region.id)!;
+    const local: Record<string, number> = {};
+
+    if (outcomes.length > 0) {
+      for (const outcome of outcomes) {
+        if (outcome.regionId !== region.id || !outcome.winner) continue;
+        local[outcome.winner] = (local[outcome.winner] ?? 0) + 1;
+      }
+    } else {
+      Object.assign(local, allocateSeats(shares, region.seats));
+    }
+
+    for (const party of parties) local[party.id] = local[party.id] ?? 0;
+
+    return {
       regionId: region.id,
       regionName: region.name,
-      seats: region.seats,
-      seatsByParty,
+      seats: Object.values(local).reduce((a, b) => a + b, 0),
+      seatsByParty: local,
       voteShareByParty: shares,
-    });
-  }
+    };
+  });
 
-  const voteShareByParty: Record<string, number> = {};
-  for (const party of parties) {
-    voteShareByParty[party.id] = (nationalVotes[party.id] ?? 0) / totalVotes;
-  }
-
-  const turnout = (turnoutWeighted / totalVotes) * rng.range(0.97, 1.03);
+  const turnout = (turnoutWeighted / seatTotal) * rng.range(0.97, 1.03);
 
   return {
     termNumber,
     turnout: Math.max(0.35, Math.min(0.95, turnout)),
-    seatsByParty: nationalSeats,
+    system,
+    disproportionality: gallagherIndex(voteShareByParty, seatsByParty),
+    seatsByParty,
     voteShareByParty,
     regions: regionResults,
+    districtOutcomes: outcomes.map((outcome) => ({
+      districtId: outcome.districtId,
+      regionId: outcome.regionId,
+      districtName: districts.find((d) => d.id === outcome.districtId)?.name ?? outcome.districtId,
+      winner: outcome.winner,
+      shares: outcome.shares,
+    })),
+    listSeats,
     playerSeatsBefore: player?.seats ?? 0,
-    playerSeatsAfter: nationalSeats[player?.id ?? ''] ?? 0,
+    playerSeatsAfter: seatsByParty[player?.id ?? ''] ?? 0,
   };
 }

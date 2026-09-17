@@ -33,6 +33,8 @@ import {
   AD_BUY_INVESTMENT,
   AD_BUY_TREASURY_COST,
   CAMPAIGN_STOP_INVESTMENT,
+  PC_REDRAW_BOUNDARIES,
+  REDRAW_APPROVAL_PENALTY,
 } from './balance.ts';
 import { generateNews, fallbackDebateAttack } from './content/news.ts';
 import { Rng } from './rng.ts';
@@ -75,6 +77,7 @@ import {
 } from './systems/coalition.ts';
 import { buildWeightContext, drawEvents } from './systems/eventEngine.ts';
 import { simulateElection } from './systems/election.ts';
+import { meanDistortion, redrawBoundaries } from './systems/districts.ts';
 import {
   billPcCost,
   computePassChance,
@@ -100,6 +103,7 @@ export type Intent =
   | { type: 'campaign_stop'; regionId: string }
   | { type: 'ad_buy'; regionId: string }
   | { type: 'answer_debate'; debateId: string; choiceIndex: number }
+  | { type: 'redraw_boundaries'; regionId: string }
   | { type: 'negotiation_accept'; partyId: string }
   | { type: 'negotiation_counter'; partyId: string }
   | { type: 'negotiation_remove'; partyId: string }
@@ -642,18 +646,20 @@ export function runElection(state: GameState): GameState {
   const next = clone(state);
   const rng = new Rng(next.rngState);
 
-  const result = simulateElection(
-    next.parties,
-    next.regions,
-    next.approval,
-    next.campaign,
-    next.termNumber,
+  const result = simulateElection({
+    parties: next.parties,
+    regions: next.regions,
+    districts: next.districts,
+    system: next.electoralSystem,
+    approval: next.approval,
+    campaign: next.campaign,
+    termNumber: next.termNumber,
     rng,
     /* The electorate judges the record directly, so pass it the record. */
-    next.sectors,
-    next.debt,
-    next.revenueModifier,
-  );
+    sectors: next.sectors,
+    debt: next.debt,
+    revenueModifier: next.revenueModifier,
+  });
 
   for (const party of next.parties) {
     party.seats = result.seatsByParty[party.id] ?? 0;
@@ -766,6 +772,8 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleAdBuy(state, intent.regionId);
     case 'answer_debate':
       return handleDebate(state, intent.debateId, intent.choiceIndex);
+    case 'redraw_boundaries':
+      return handleRedraw(state, intent.regionId);
     case 'negotiation_accept':
       return handleNegotiationAccept(state, intent.partyId);
     case 'negotiation_counter':
@@ -1173,6 +1181,69 @@ function handleDebate(
     cause: `${response.label} — national support moved ${swing >= 0 ? 'up' : 'down'} ${Math.abs(swing * 100).toFixed(1)}%`,
     unit: '%',
   });
+  return ok(next);
+}
+
+
+/**
+ * Redraw a region's boundaries in your own favour.
+ *
+ * Legal in Verdana, and never free. The map gets more distorted each time, and
+ * the approval penalty scales with total distortion — the first redraw is
+ * barely noticed, the fourth is a scandal. Only meaningful under systems that
+ * use single-member seats; proportional counting ignores boundaries entirely.
+ */
+function handleRedraw(state: GameState, regionId: string): IntentResult {
+  if (state.phase !== 'agenda') {
+    return reject(state, 'Boundary reviews are commissioned during the agenda.');
+  }
+  if (state.electoralSystem === 'proportional') {
+    return reject(
+      state,
+      'Boundaries do not decide anything under proportional counting. There is nothing to gain.',
+    );
+  }
+  const region = state.regions.find((r) => r.id === regionId);
+  if (!region) return reject(state, 'No such region.');
+
+  const inRegion = state.districts.filter((d) => d.regionId === regionId);
+  if (inRegion.length < 2) {
+    return reject(state, 'That region has too few seats for boundaries to matter.');
+  }
+  if (state.politicalCapital < PC_REDRAW_BOUNDARIES) {
+    return reject(state, 'Not enough political capital to commission a boundary review.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_REDRAW_BOUNDARIES);
+
+  const player = playerParty(next.parties);
+  const target = next.districts.filter((d) => d.regionId === regionId);
+  const result = redrawBoundaries(target, player.ideology, 0.6);
+
+  next.districts = next.districts.map(
+    (district) => result.districts.find((d) => d.id === district.id) ?? district,
+  );
+
+  /* The cost rises with how far the map has already been bent. */
+  const distortion = meanDistortion(next.districts.filter((d) => d.regionId === regionId));
+  const penalty = -REDRAW_APPROVAL_PENALTY * distortion;
+
+  log(entries, {
+    kind: 'political_capital',
+    label: 'Political capital',
+    delta: -PC_REDRAW_BOUNDARIES,
+    cause: `Boundary review commissioned in ${region.name}`,
+    unit: 'PC',
+  });
+  applyEffects(
+    next,
+    { approval: penalty },
+    `Boundaries redrawn in ${region.name} — ${result.packed.length} seat conceded, ${result.cracked.length} made competitive. The map there is now ${(distortion * 100).toFixed(0)}% distorted.`,
+    entries,
+  );
+
   return ok(next);
 }
 

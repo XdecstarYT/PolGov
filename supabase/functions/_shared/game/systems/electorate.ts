@@ -220,7 +220,25 @@ export function regionBreakdown(
   parties: readonly Party[],
   context: SupportContext,
 ): RegionBreakdown {
-  const entries = Object.entries(region.composition ?? {}) as [SegmentKey, number][];
+  return compositionBreakdown(
+    region.composition ?? {},
+    region.campaignInvestment,
+    parties,
+    context,
+  );
+}
+
+/**
+ * The same calculation for any electorate expressed as segment weights —
+ * a region, or a single district within one.
+ */
+export function compositionBreakdown(
+  composition: Partial<Record<SegmentKey, number>>,
+  campaignInvestment: number,
+  parties: readonly Party[],
+  context: SupportContext,
+): RegionBreakdown {
+  const entries = Object.entries(composition) as [SegmentKey, number][];
 
   /* A region with no composition falls back to a single average voter. */
   if (entries.length === 0) {
@@ -238,7 +256,7 @@ export function regionBreakdown(
   const localContext: SupportContext = {
     ...context,
     incumbentBonus:
-      (context.incumbentBonus ?? 0) + region.campaignInvestment * CAMPAIGN_EFFECT_PER_INVESTMENT,
+      (context.incumbentBonus ?? 0) + campaignInvestment * CAMPAIGN_EFFECT_PER_INVESTMENT,
   };
 
   const detail: RegionBreakdown['segments'] = [];
@@ -250,7 +268,7 @@ export function regionBreakdown(
   for (const [key, weight] of entries) {
     if (!weight) continue;
     const segment = segmentTemplate(key);
-    const turnout = segmentTurnout(segment, region.campaignInvestment);
+    const turnout = segmentTurnout(segment, campaignInvestment);
     const shares = segmentVoteShares(segment, parties, localContext);
     const effective = weight * turnout;
 

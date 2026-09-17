@@ -6,6 +6,8 @@
  */
 
 import type { SegmentKey } from './content/segments.ts';
+import type { ElectoralSystem } from './systems/electoralSystems.ts';
+import type { District } from './systems/districts.ts';
 
 /* ------------------------------------------------------------------ *
  * Primitives
@@ -247,6 +249,23 @@ export interface RegionResult {
 export interface ElectionResult {
   termNumber: number;
   turnout: number;
+  /** The rules this election was counted under. */
+  system?: ElectoralSystem;
+  /**
+   * Gallagher index: how far the result departed from the votes cast.
+   * 0 is perfectly proportional; above ~5 the system is visibly reshaping it.
+   */
+  disproportionality?: number;
+  /** Per-district outcomes, for district-based systems. */
+  districtOutcomes?: {
+    districtId: string;
+    regionId: string;
+    districtName: string;
+    winner: string;
+    shares: Record<string, number>;
+  }[];
+  /** Top-up seats awarded from the national list under mixed-member. */
+  listSeats?: Record<string, number>;
   /** partyId → total seats. */
   seatsByParty: Record<string, number>;
   /** partyId → national vote share 0..1. */
@@ -408,6 +427,16 @@ export interface GameState {
   parties: Party[];
   sectors: Sector[];
   regions: Region[];
+  /**
+   * How votes become seats. Chosen at setup and fixed for the run — changing
+   * the rules mid-game is a constitutional act, not a settings toggle.
+   */
+  electoralSystem: ElectoralSystem;
+  /**
+   * Single-member seats. Empty under pure proportional counting, which needs
+   * only regions.
+   */
+  districts: District[];
 
   /** Bills available to table this term, plus everything already resolved. */
   bills: Bill[];

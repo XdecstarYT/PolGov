@@ -19,6 +19,7 @@ import {
   computeLegacy,
   createGame,
   type Difficulty,
+  type ElectoralSystem,
   type GameState,
   type Ideology,
   type Intent,
@@ -36,6 +37,7 @@ export interface NewGameForm {
   ideology: Ideology;
   difficulty: Difficulty;
   countryName: string;
+  electoralSystem: ElectoralSystem;
 }
 
 interface AppState {
@@ -177,6 +179,7 @@ export const useGame = create<AppState>((set, get) => ({
         playerColor: form.color,
         playerGlyph: form.glyph,
         playerIdeology: form.ideology,
+        electoralSystem: form.electoralSystem,
       });
 
       const store = get().store ?? (await resolveStore());

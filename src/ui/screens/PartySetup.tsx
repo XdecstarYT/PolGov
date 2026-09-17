@@ -10,12 +10,15 @@ import { useMemo, useState } from 'react';
 import { useGame, type NewGameForm } from '../../state/store.ts';
 import {
   DIFFICULTY,
+  ELECTORAL_SYSTEM_BLURBS,
+  ELECTORAL_SYSTEM_LABELS,
   PARTY_TEMPLATES,
   PLAYER_COLORS,
   affinity,
   affinityLabel,
   axisLabel,
   type Difficulty,
+  type ElectoralSystem,
   type IdeologyAxis,
 } from '../../game/index.ts';
 import { Button, Kicker, Panel, PartyMark, Rule } from '../components/Primitives.tsx';
@@ -51,6 +54,7 @@ export function PartySetup() {
     ideology: { economic: 0, social: 0, environmental: 0 },
     difficulty: 'standard',
     countryName: 'Verdana',
+    electoralSystem: 'proportional',
   });
 
   const compatibility = useMemo(
@@ -187,6 +191,38 @@ export function PartySetup() {
                 </li>
               ))}
             </ul>
+          </Panel>
+
+          <Panel title="How votes become seats">
+            <p className="text-sm leading-relaxed text-ink-soft">
+              The counting rules are not neutral machinery. The same votes produce a different
+              parliament under each of these, and a government elected under one would not
+              necessarily exist under another. Fixed for the run once chosen.
+            </p>
+            <div className="mt-3 space-y-2">
+              {(Object.keys(ELECTORAL_SYSTEM_LABELS) as ElectoralSystem[]).map((key) => {
+                const selected = form.electoralSystem === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setForm({ ...form, electoralSystem: key })}
+                    aria-pressed={selected}
+                    className={`block w-full border p-2.5 text-left ${
+                      selected ? 'border-ink bg-sunk/50' : 'border-rule'
+                    }`}
+                  >
+                    <div className="font-serif text-sm font-semibold text-ink">
+                      {ELECTORAL_SYSTEM_LABELS[key]}
+                    </div>
+                    <p className="mt-0.5 text-xs leading-relaxed text-ink-faint">
+                      {ELECTORAL_SYSTEM_BLURBS[key]}
+                    </p>
+                    {selected && <span className="sr-only">(selected)</span>}
+                  </button>
+                );
+              })}
+            </div>
           </Panel>
 
           <Panel title="Difficulty">

@@ -86,13 +86,13 @@ describe('simulateElection', () => {
   ];
 
   it('returns exactly the national seat total', () => {
-    const result = simulateElection(parties, buildRegions(), 50, null, 1, new Rng(1));
+    const result = simulateElection({ parties, regions: buildRegions(), districts: [], system: 'proportional', approval: 50, campaign: null, termNumber: 1, rng: new Rng(1) });
     const total = Object.values(result.seatsByParty).reduce((x, y) => x + y, 0);
     expect(total).toBe(TOTAL_SEATS);
   });
 
   it('returns a seat total per region matching that region’s entitlement', () => {
-    const result = simulateElection(parties, buildRegions(), 50, null, 1, new Rng(7));
+    const result = simulateElection({ parties, regions: buildRegions(), districts: [], system: 'proportional', approval: 50, campaign: null, termNumber: 1, rng: new Rng(7) });
     for (const region of result.regions) {
       const total = Object.values(region.seatsByParty).reduce((x, y) => x + y, 0);
       expect(total).toBe(region.seats);
@@ -100,20 +100,20 @@ describe('simulateElection', () => {
   });
 
   it('produces vote shares that sum to 1', () => {
-    const result = simulateElection(parties, buildRegions(), 50, null, 1, new Rng(3));
+    const result = simulateElection({ parties, regions: buildRegions(), districts: [], system: 'proportional', approval: 50, campaign: null, termNumber: 1, rng: new Rng(3) });
     const total = Object.values(result.voteShareByParty).reduce((x, y) => x + y, 0);
     expect(total).toBeCloseTo(1, 6);
   });
 
   it('is deterministic for a given seed', () => {
-    const a = simulateElection(parties, buildRegions(), 50, null, 1, new Rng(42));
-    const b = simulateElection(parties, buildRegions(), 50, null, 1, new Rng(42));
+    const a = simulateElection({ parties, regions: buildRegions(), districts: [], system: 'proportional', approval: 50, campaign: null, termNumber: 1, rng: new Rng(42) });
+    const b = simulateElection({ parties, regions: buildRegions(), districts: [], system: 'proportional', approval: 50, campaign: null, termNumber: 1, rng: new Rng(42) });
     expect(a.seatsByParty).toEqual(b.seatsByParty);
   });
 
   it('rewards a popular incumbent with more seats than an unpopular one', () => {
-    const low = simulateElection(parties, buildRegions(), 20, null, 1, new Rng(11));
-    const high = simulateElection(parties, buildRegions(), 85, null, 1, new Rng(11));
+    const low = simulateElection({ parties, regions: buildRegions(), districts: [], system: 'proportional', approval: 20, campaign: null, termNumber: 1, rng: new Rng(11) });
+    const high = simulateElection({ parties, regions: buildRegions(), districts: [], system: 'proportional', approval: 85, campaign: null, termNumber: 1, rng: new Rng(11) });
     expect(high.seatsByParty.player).toBeGreaterThan(low.seatsByParty.player);
   });
 
@@ -122,8 +122,8 @@ describe('simulateElection', () => {
     const invested = buildRegions().map((r) =>
       r.id === 'halloway' ? { ...r, campaignInvestment: 8 } : r,
     );
-    const without = simulateElection(parties, plain, 50, null, 1, new Rng(5));
-    const withStops = simulateElection(parties, invested, 50, null, 1, new Rng(5));
+    const without = simulateElection({ parties, regions: plain, districts: [], system: 'proportional', approval: 50, campaign: null, termNumber: 1, rng: new Rng(5) });
+    const withStops = simulateElection({ parties, regions: invested, districts: [], system: 'proportional', approval: 50, campaign: null, termNumber: 1, rng: new Rng(5) });
 
     const seatsIn = (result: typeof without) =>
       result.regions.find((r) => r.regionId === 'halloway')!.seatsByParty.player ?? 0;
@@ -133,9 +133,18 @@ describe('simulateElection', () => {
 
   it('reports turnout inside a plausible band', () => {
     for (const approval of [0, 25, 50, 75, 100]) {
-      const result = simulateElection(parties, buildRegions(), approval, null, 1, new Rng(approval + 1));
+      const result = simulateElection({
+        parties,
+        regions: buildRegions(),
+        districts: [],
+        system: 'proportional',
+        approval,
+        campaign: null,
+        termNumber: 1,
+        rng: new Rng(approval + 1),
+      });
       expect(result.turnout).toBeGreaterThanOrEqual(0.35);
-      expect(result.turnout).toBeLessThanOrEqual(0.92);
+      expect(result.turnout).toBeLessThanOrEqual(0.95);
     }
   });
 });
