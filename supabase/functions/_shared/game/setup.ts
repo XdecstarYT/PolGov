@@ -250,6 +250,9 @@ export function createGame(options: NewGameOptions): GameState {
 
     rngState: rng.state,
     addressesThisTerm: 0,
+    promises: [],
+    executiveOrdersThisTerm: 0,
+    referendums: [],
     budgetUnlocked: false,
     confidenceCrisis: false,
 

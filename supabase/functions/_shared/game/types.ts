@@ -207,6 +207,23 @@ export interface Bill {
   crossbenchDeals: number;
   /** Set when the bill cleared the lower house but died in the Senate. */
   blockedBySenate?: boolean;
+  /** Carries a sunset clause: lapses unless renewed. */
+  sunset?: boolean;
+  /** Turn on which this law lapses, once passed with a sunset clause. */
+  lapsesOn?: number | null;
+  /** Turn on which a passed bill's effects actually land. */
+  takesEffectOn?: number | null;
+  /** True once the delayed effects have been applied. */
+  inEffect?: boolean;
+}
+
+/** A commitment made in a manifesto, and whether it was honoured. */
+export interface ManifestoPromise {
+  id: string;
+  billKey: string;
+  title: string;
+  termMade: number;
+  status: 'outstanding' | 'kept' | 'broken';
 }
 
 export interface EventChoice {
@@ -488,6 +505,18 @@ export interface GameState {
   rngState: number;
   /** Public addresses made this term, for diminishing returns. */
   addressesThisTerm: number;
+  /** Manifesto commitments made at the last election. */
+  promises: ManifestoPromise[];
+  /** Executive orders issued this term. Each one costs more than the last. */
+  executiveOrdersThisTerm: number;
+  /** Referendums held, most recent last. */
+  referendums: {
+    termNumber: number;
+    question: string;
+    yesShare: number;
+    turnout: number;
+    passed: boolean;
+  }[];
   /** True once an emergency budget has unlocked the budget on a non-budget turn. */
   budgetUnlocked: boolean;
   /**

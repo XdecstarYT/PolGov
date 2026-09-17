@@ -327,6 +327,48 @@ export const COUNTER_OFFER_PC_COST = 10;
 export const COUNTER_OFFER_RELIEF = 0.35;
 
 /* ------------------------------------------------------------------ *
+ * Policy lifecycle
+ * ------------------------------------------------------------------ */
+
+/**
+ * Turns between a law passing and being felt.
+ *
+ * Nothing arrives the month it passes. Major programmes take longer, which is
+ * the quiet tragedy of a twelve-month term: the things worth doing land after
+ * the election that decides whether you were right to do them.
+ */
+export const IMPLEMENTATION_DELAY_MINOR = 1;
+export const IMPLEMENTATION_DELAY_MAJOR = 2;
+
+/** Turns before a bill with a sunset clause lapses unless renewed. */
+export const SUNSET_DEFAULT_TURNS = 8;
+
+/** Approval for each manifesto promise kept, and each one broken. */
+export const PROMISE_KEPT_APPROVAL = 2.4;
+export const PROMISE_BROKEN_APPROVAL = -5.5;
+/** Promises a manifesto may carry. */
+export const MANIFESTO_SIZE = 3;
+
+/** Referendums draw a smaller crowd than a general election. */
+export const REFERENDUM_TURNOUT_PENALTY = 0.18;
+
+/** Approval cost of the first executive order in a term; later ones cost more. */
+export const EXECUTIVE_ORDER_APPROVAL_COST = -3.2;
+
+export const PC_COSTS_POLICY = {
+  /** Repeal a law already on the books. */
+  repealBill: 14,
+  /** Call a referendum. */
+  callReferendum: 26,
+  /** Govern by decree, without a vote. */
+  executiveOrder: 16,
+  /** Renew a law about to lapse under its sunset clause. */
+  renewSunset: 6,
+  /** Open a public consultation, which slows a policy and de-risks it. */
+  consultation: 5,
+} as const;
+
+/* ------------------------------------------------------------------ *
  * Events
  * ------------------------------------------------------------------ */
 

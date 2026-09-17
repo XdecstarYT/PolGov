@@ -41,6 +41,7 @@ import { EffectSummary } from './EventsPhase.tsx';
 import { RegionElectorate } from '../components/ElectoratePanel.tsx';
 import { PartyRoom } from '../components/PartyRoom.tsx';
 import { BillProcedure, ChamberPanel } from '../components/ChamberPanel.tsx';
+import { PolicyLifecycle, PolicyOpinionSummary } from '../components/PolicyPanel.tsx';
 
 export function Agenda() {
   const { game, dispatch } = useGame();
@@ -89,6 +90,7 @@ export function Agenda() {
 
       <PolicyDesk />
       <ChamberPanel />
+      <PolicyLifecycle />
       <PartyRoom />
       <CoalitionActions />
       <BoundaryReview />
@@ -277,6 +279,8 @@ function BillRow({
             <Kicker>Effects if enacted</Kicker>
             <EffectSummary effects={bill.effects} />
           </div>
+
+          <PolicyOpinionSummary bill={bill} />
 
           <div>
             <Kicker>How the {(breakdown.chance * 100).toFixed(0)}% is reached</Kicker>

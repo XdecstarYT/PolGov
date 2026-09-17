@@ -39,6 +39,9 @@ import {
   AMENDMENT_STRENGTH,
   AMENDMENT_DILUTION,
   CROSSBENCH_SENATE_BONUS,
+  PC_COSTS_POLICY,
+  MANIFESTO_SIZE,
+  SUNSET_DEFAULT_TURNS,
   FUNDRAISING_DRIVE_YIELD,
   HEADQUARTERS_COST,
   AD_BUY_PARTY_COST,
@@ -85,6 +88,17 @@ import {
 import { buildWeightContext, drawEvents } from './systems/eventEngine.ts';
 import { simulateElection } from './systems/election.ts';
 import { meanDistortion, redrawBoundaries } from './systems/districts.ts';
+import {
+  decreeEffects,
+  executiveOrderCost,
+  implementationDelay,
+  judgePromises,
+  reverseEffects,
+  runReferendum,
+  sunsetTurn,
+} from './systems/policy.ts';
+import { computeIssueScores } from './systems/electorate.ts';
+import { REFERENDUM_TEMPLATES } from './content/referendums.ts';
 import {
   committeeReport,
   isMoneyBill,
@@ -143,6 +157,11 @@ export type Intent =
   | { type: 'crossbench_deal'; billId: string }
   | { type: 'close_debate'; billId: string }
   | { type: 'question_time' }
+  | { type: 'repeal_bill'; billId: string }
+  | { type: 'renew_sunset'; billId: string }
+  | { type: 'executive_order'; billId: string }
+  | { type: 'call_referendum'; questionId: string }
+  | { type: 'set_manifesto'; billKeys: string[] }
   | { type: 'negotiation_accept'; partyId: string }
   | { type: 'negotiation_counter'; partyId: string }
   | { type: 'negotiation_remove'; partyId: string }
@@ -529,7 +548,24 @@ export function resolveTurn(state: GameState): GameState {
         delta: null,
         cause: `Division passed at ${(chance * 100).toFixed(0)}% projected — ${breakdown.supportingSeats} of ${breakdown.totalSeats} seats behind it.`,
       });
-      applyEffects(next, bill.effects, `${bill.title} enacted`, entries);
+      /*
+       * Nothing arrives the month it passes. The effects are scheduled, and
+       * land later — which is the quiet tragedy of a twelve-month term: the
+       * things worth doing take effect after the election that decides
+       * whether you were right to do them.
+       */
+      const delay = implementationDelay(bill);
+      bill.takesEffectOn = next.turnNumber + delay;
+      bill.inEffect = false;
+      bill.lapsesOn = sunsetTurn(bill, next.turnNumber);
+
+      log(entries, {
+        kind: 'legislature',
+        label: `${bill.title} — implementation`,
+        delta: delay,
+        cause: `Enacted. It will begin to be felt in ${delay} month${delay === 1 ? '' : 's'}.${bill.lapsesOn ? ` Lapses on month ${bill.lapsesOn} unless renewed.` : ''}`,
+        unit: 'months',
+      });
 
       /* Crossing a red line carries: the bill stands, the partner is furious. */
       for (const breach of breakdown.breaches) {
@@ -559,6 +595,37 @@ export function resolveTurn(state: GameState): GameState {
 
   /* ---------------- phase 6: resolution ---------------- */
   next.phase = 'resolution';
+
+  /* Laws passed earlier now begin to bite. */
+  for (const bill of next.bills) {
+    if (bill.status !== 'passed' || bill.inEffect) continue;
+    if (bill.takesEffectOn !== null && (bill.takesEffectOn ?? 0) > next.turnNumber) continue;
+    bill.inEffect = true;
+    applyEffects(
+      next,
+      bill.effects,
+      `${bill.title} takes effect${bill.turnResolved !== null ? ` (enacted month ${bill.turnResolved})` : ''}`,
+      entries,
+    );
+  }
+
+  /* Laws with a sunset clause lapse unless they were renewed. */
+  for (const bill of next.bills) {
+    if (bill.status !== 'passed' || !bill.inEffect) continue;
+    if (bill.lapsesOn === null || bill.lapsesOn === undefined) continue;
+    if (bill.lapsesOn > next.turnNumber) continue;
+
+    bill.status = 'available';
+    bill.inEffect = false;
+    bill.lapsesOn = null;
+    bill.takesEffectOn = null;
+    applyEffects(
+      next,
+      reverseEffects(bill.effects),
+      `${bill.title} lapsed under its sunset clause and was not renewed`,
+      entries,
+    );
+  }
 
   /* Sector drift toward the equilibrium implied by funding. */
   for (const sector of next.sectors) {
@@ -921,6 +988,20 @@ export function runElection(state: GameState): GameState {
    */
   next.senate = renewSenate(next.senate, result.voteShareByParty);
 
+  /* The manifesto falls due. */
+  const verdict = judgePromises(next.promises, next.bills, next.termNumber);
+  next.promises = verdict.updated;
+  if (verdict.kept + verdict.broken > 0) {
+    const entries = currentLog(next);
+    applyEffects(
+      next,
+      { approval: verdict.approvalDelta },
+      `Manifesto judged: ${verdict.kept} commitment${verdict.kept === 1 ? '' : 's'} kept, ${verdict.broken} broken`,
+      entries,
+    );
+  }
+  next.executiveOrdersThisTerm = 0;
+
   next.elections.push(result);
   next.career.termsServed += 1;
 
@@ -1048,6 +1129,16 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleCloseDebate(state, intent.billId);
     case 'question_time':
       return handleQuestionTime(state);
+    case 'repeal_bill':
+      return handleRepeal(state, intent.billId);
+    case 'renew_sunset':
+      return handleRenewSunset(state, intent.billId);
+    case 'executive_order':
+      return handleExecutiveOrder(state, intent.billId);
+    case 'call_referendum':
+      return handleReferendum(state, intent.questionId);
+    case 'set_manifesto':
+      return handleManifesto(state, intent.billKeys);
     case 'negotiation_accept':
       return handleNegotiationAccept(state, intent.partyId);
     case 'negotiation_counter':
@@ -1974,6 +2065,215 @@ function handleQuestionTime(state: GameState): IntentResult {
     delta: authoritySwing,
     cause: 'Your own benches watched how that went',
     unit: 'pts',
+  });
+  return ok(next);
+}
+
+
+/* ----------------------- the life of a law ------------------------ */
+
+/**
+ * Repeal a law already on the books.
+ *
+ * Unwinds the standing arrangements — funding lines and recurring revenue —
+ * but not the one-off money already spent or the improvement a service
+ * actually accumulated while it was funded. Repeal is cheaper than never
+ * having passed it, and more expensive than it looks.
+ */
+function handleRepeal(state: GameState, billId: string): IntentResult {
+  if (state.phase !== 'agenda') return reject(state, 'Repeals are moved during the agenda.');
+  const bill = state.bills.find((b) => b.id === billId);
+  if (!bill || bill.status !== 'passed') return reject(state, 'That law is not on the books.');
+  if (state.politicalCapital < PC_COSTS_POLICY.repealBill) {
+    return reject(state, 'Not enough political capital to move a repeal.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_POLICY.repealBill);
+
+  const target = next.bills.find((b) => b.id === billId)!;
+  if (target.inEffect) {
+    applyEffects(next, reverseEffects(target.effects), `${target.title} repealed`, entries);
+  }
+  target.status = 'available';
+  target.inEffect = false;
+  target.takesEffectOn = null;
+  target.lapsesOn = null;
+  target.amendments = 0;
+  target.committeeBonus = 0;
+
+  log(entries, {
+    kind: 'legislature',
+    label: `${target.title} repealed`,
+    delta: -PC_COSTS_POLICY.repealBill,
+    cause:
+      'The standing arrangements are unwound. The money already spent stays spent, and so does the goodwill.',
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+/** Renew a law about to lapse under its sunset clause. */
+function handleRenewSunset(state: GameState, billId: string): IntentResult {
+  if (state.phase !== 'agenda') return reject(state, 'Renewals are moved during the agenda.');
+  const bill = state.bills.find((b) => b.id === billId);
+  if (!bill || bill.status !== 'passed' || !bill.lapsesOn) {
+    return reject(state, 'That law has no sunset clause to renew.');
+  }
+  if (state.politicalCapital < PC_COSTS_POLICY.renewSunset) {
+    return reject(state, 'Not enough political capital to move the renewal.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_POLICY.renewSunset);
+
+  const target = next.bills.find((b) => b.id === billId)!;
+  target.lapsesOn = next.turnNumber + SUNSET_DEFAULT_TURNS;
+
+  log(entries, {
+    kind: 'legislature',
+    label: `${target.title} renewed`,
+    delta: -PC_COSTS_POLICY.renewSunset,
+    cause: `Extended to month ${target.lapsesOn}. It will need renewing again.`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+/**
+ * Govern by decree.
+ *
+ * Immediate, needs no vote, and cannot spend money — an order can direct, not
+ * appropriate. It costs standing precisely because it is an admission that the
+ * argument could not be won, and each one in a term costs more than the last.
+ */
+function handleExecutiveOrder(state: GameState, billId: string): IntentResult {
+  if (state.phase !== 'agenda') return reject(state, 'Orders are issued during the agenda.');
+  const bill = state.bills.find((b) => b.id === billId);
+  if (!bill || bill.status !== 'available') {
+    return reject(state, 'There is nothing to enact by order.');
+  }
+  if (state.politicalCapital < PC_COSTS_POLICY.executiveOrder) {
+    return reject(state, 'Not enough political capital to govern by decree.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_POLICY.executiveOrder);
+
+  const target = next.bills.find((b) => b.id === billId)!;
+  const cost = executiveOrderCost(next.executiveOrdersThisTerm);
+  next.executiveOrdersThisTerm += 1;
+
+  target.status = 'passed';
+  target.inEffect = true;
+  target.turnResolved = next.turnNumber;
+  target.takesEffectOn = next.turnNumber;
+  next.career.billsPassed += 1;
+
+  applyEffects(next, decreeEffects(target.effects), `${target.title} enacted by order`, entries);
+  applyEffects(
+    next,
+    { approval: cost },
+    `Governing by decree (${next.executiveOrdersThisTerm} order${next.executiveOrdersThisTerm === 1 ? '' : 's'} this term) — a government that legislates without a vote is telling the country it cannot win the argument`,
+    entries,
+  );
+  return ok(next);
+}
+
+/**
+ * Put a question to the country.
+ *
+ * The electorate decides it, not the government. Losing a referendum you
+ * called yourself is worse than never having asked.
+ */
+function handleReferendum(state: GameState, questionId: string): IntentResult {
+  if (state.phase !== 'agenda') return reject(state, 'Referendums are called during the agenda.');
+  const question = REFERENDUM_TEMPLATES.find((q) => q.id === questionId);
+  if (!question) return reject(state, 'No such question.');
+  if (state.referendums.some((r) => r.question === question.question)) {
+    return reject(state, 'That question has already been put to the country.');
+  }
+  if (state.politicalCapital < PC_COSTS_POLICY.callReferendum) {
+    return reject(state, 'Not enough political capital to call a referendum.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_POLICY.callReferendum);
+
+  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier);
+  const result = runReferendum(question, next.regions, scores);
+
+  next.referendums.push({
+    termNumber: next.termNumber,
+    question: result.question,
+    yesShare: result.yesShare,
+    turnout: result.turnout,
+    passed: result.passed,
+  });
+
+  log(entries, {
+    kind: 'note',
+    label: result.passed ? 'Referendum carried' : 'Referendum defeated',
+    delta: result.yesShare * 100,
+    cause: `"${result.question}" — Yes ${(result.yesShare * 100).toFixed(1)}% on a turnout of ${(result.turnout * 100).toFixed(0)}%.`,
+    unit: '% yes',
+  });
+
+  if (result.passed) {
+    applyEffects(next, question.effects, `Referendum carried: ${result.question}`, entries);
+    applyEffects(next, { approval: 2.5 }, 'Winning a referendum you called', entries);
+  } else {
+    applyEffects(
+      next,
+      { approval: -6 },
+      'Losing a referendum you called yourself — worse than never having asked',
+      entries,
+    );
+    next.partyInternals.authority = Math.max(0, next.partyInternals.authority - 10);
+  }
+
+  return ok(next);
+}
+
+/**
+ * Commit to a manifesto.
+ *
+ * A promise kept is worth something; a promise broken is worth more, in the
+ * wrong direction. Promising less is often the stronger play.
+ */
+function handleManifesto(state: GameState, billKeys: string[]): IntentResult {
+  if (state.promises.some((p) => p.status === 'outstanding' && p.termMade === state.termNumber)) {
+    return reject(state, 'This term’s manifesto is already published.');
+  }
+  if (billKeys.length === 0) return reject(state, 'A manifesto needs at least one commitment.');
+  if (billKeys.length > MANIFESTO_SIZE) {
+    return reject(state, `A manifesto may carry at most ${MANIFESTO_SIZE} commitments.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+
+  for (const key of billKeys) {
+    const bill = next.bills.find((b) => b.templateKey === key);
+    if (!bill) continue;
+    next.promises.push({
+      id: `promise-${next.termNumber}-${key}`,
+      billKey: key,
+      title: bill.title,
+      termMade: next.termNumber,
+      status: 'outstanding',
+    });
+  }
+
+  log(entries, {
+    kind: 'note',
+    label: 'Manifesto published',
+    delta: null,
+    cause: `${billKeys.length} commitment${billKeys.length === 1 ? '' : 's'} for this term. Keeping them is worth something; breaking them is worth more, the other way.`,
   });
   return ok(next);
 }
