@@ -25,7 +25,7 @@ prose for every piece of narrative text.
 ```bash
 npm run build     # production build into dist/
 npm run preview   # serve the production build
-npm test          # 123 unit tests over the game math
+npm test          # 364 unit tests over the game math
 npm run verify    # typecheck + tests + build + secret audit
 ```
 
@@ -92,15 +92,38 @@ non-zero on any match; `npm run verify` runs it as a gate.
 src/game/          The engine. Pure TypeScript — no DOM, no fetch, no Supabase.
   balance.ts         Every tunable number in the game, in one file.
   turn.ts            The 8-phase state machine and every player Intent.
-  systems/           Approval, budget, legislature, coalition, elections, events.
-  content/           48 bills, 30 event templates, 8 parties, 8 regions, 7 outlets.
+  systems/           approval, budget, legislature, coalition, elections,
+                     electorate, electoralSystems, districts, partyInternals,
+                     parliament, policy, media, events, legacy
+  content/           48 bills, 30 events, 8 parties, 8 regions, 20 voter
+                     segments, 4 factions, 6 referendums, 6 media channels
   serverGuards.ts    Snapshot invariants and the intent allowlist. Unit-tested.
 src/services/      Supabase client, storage adapters, AI narrator client.
 src/state/         Zustand store.
 src/ui/            Screens, phase panels, shared components.
 supabase/          Migrations and the two edge functions.
 scripts/           Engine sync, secret audit, headless playtest, browser smoke test.
+docs/ENGINE-1.md   Feature-by-feature coverage, including what is NOT built.
 ```
+
+### The five systems worth knowing about
+
+- **The electorate.** Twenty overlapping voter segments, each with its own
+  position, turnout habit and issue priorities. A region's politics are
+  emergent from who lives there. Nothing says "retirees like health spending";
+  it falls out of their priorities meeting the state of the health service.
+- **Electoral systems.** Five ways of counting the same votes — first past the
+  post, proportional, mixed-member, preferential, two-round — and they
+  genuinely disagree. Districts conserve their region's electorate exactly,
+  which is what makes redrawing boundaries meaningful rather than magical.
+- **Your own party.** Four factions holding shares of your MPs. A wing that
+  dislikes a bill withholds its seats, so a comfortable majority can still lose
+  a division to its own side. Parties have their own money, separate from the
+  treasury.
+- **Two chambers.** The Senate is renewed by halves, so half of it reflects a
+  previous electorate. Money bills bypass it. Divided government is normal.
+- **Campaigns and polling.** Six channels that reach different segments, and
+  polls that are *samples* — the player never sees the true figure.
 
 ### The turn
 
