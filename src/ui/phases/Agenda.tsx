@@ -18,6 +18,7 @@ import {
   PC_COSTS,
   PC_REDRAW_BOUNDARIES,
   PC_COSTS_PROCEDURE,
+  PC_COSTS_MEDIA,
   meanDistortion,
   WHIP_MAX_STEPS,
   billPcCost,
@@ -42,6 +43,7 @@ import { RegionElectorate } from '../components/ElectoratePanel.tsx';
 import { PartyRoom } from '../components/PartyRoom.tsx';
 import { BillProcedure, ChamberPanel } from '../components/ChamberPanel.tsx';
 import { PolicyLifecycle, PolicyOpinionSummary } from '../components/PolicyPanel.tsx';
+import { CampaignRoom } from '../components/CampaignRoom.tsx';
 
 export function Agenda() {
   const { game, dispatch } = useGame();
@@ -63,6 +65,13 @@ export function Agenda() {
             title="A direct appeal to the country"
           >
             Address the nation · {PC_COSTS.publicAddress} PC
+          </Button>
+          <Button
+            onClick={() => void dispatch({ type: 'press_conference' })}
+            disabled={game.politicalCapital < PC_COSTS_MEDIA.pressConference}
+            title="Fast, and you do not choose the questions"
+          >
+            Press conference · {PC_COSTS_MEDIA.pressConference} PC
           </Button>
           <Button
             onClick={() => void dispatch({ type: 'question_time' })}
@@ -87,6 +96,7 @@ export function Agenda() {
       </Panel>
 
       {campaign && <CampaignPanel />}
+      {campaign && <CampaignRoom />}
 
       <PolicyDesk />
       <ChamberPanel />

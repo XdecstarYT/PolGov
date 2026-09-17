@@ -125,6 +125,14 @@ export interface SupportContext {
   incumbentId: string;
   /** Extra national support for the incumbent, e.g. debate performance. */
   incumbentBonus?: number;
+  /**
+   * Extra support per segment, from campaigning that actually reached them.
+   * This is what makes advertising channels matter: television moves retirees
+   * and does nothing for students, because only one of them is watching.
+   */
+  segmentPersuasion?: Partial<Record<SegmentKey, number>>;
+  /** Extra turnout per segment, from campaigning that reached them. */
+  segmentTurnout?: Partial<Record<SegmentKey, number>>;
 }
 
 /**
@@ -140,6 +148,7 @@ export function segmentVoteShares(
   parties: readonly Party[],
   context: SupportContext,
 ): Record<string, number> {
+  const reached = context.segmentPersuasion?.[segment.key] ?? 0;
   const satisfaction = segmentSatisfaction(segment, context.scores);
   /* −1 (fully dissatisfied) … +1 (fully satisfied) */
   const verdict = (satisfaction - 0.5) * 2;
@@ -152,7 +161,7 @@ export function segmentVoteShares(
 
     if (party.id === context.incumbentId) {
       const swing = verdict * segment.volatility * INCUMBENT_PERFORMANCE_SWING;
-      weight *= Math.max(0.05, 1 + swing + (context.incumbentBonus ?? 0));
+      weight *= Math.max(0.05, 1 + swing + (context.incumbentBonus ?? 0) + reached);
     } else {
       const swing = -verdict * segment.volatility * OPPOSITION_PERFORMANCE_SWING;
       weight *= Math.max(0.05, 1 + swing);
@@ -268,7 +277,10 @@ export function compositionBreakdown(
   for (const [key, weight] of entries) {
     if (!weight) continue;
     const segment = segmentTemplate(key);
-    const turnout = segmentTurnout(segment, campaignInvestment);
+    const turnout = Math.min(
+      0.98,
+      segmentTurnout(segment, campaignInvestment) + (context.segmentTurnout?.[key] ?? 0),
+    );
     const shares = segmentVoteShares(segment, parties, localContext);
     const effective = weight * turnout;
 

@@ -473,6 +473,49 @@ export const PC_REDRAW_BOUNDARIES = 22;
 export const REDRAW_APPROVAL_PENALTY = 9;
 
 /* ------------------------------------------------------------------ *
+ * Campaigning and media
+ * ------------------------------------------------------------------ */
+
+/** Campaigning fades: a push in month nine is worth little by month twelve. */
+export const REACH_DECAY_PER_TURN = 0.22;
+/** Scales accumulated reach into a persuasion bonus. */
+export const REACH_PERSUASION_SCALE = 0.11;
+/** Scales accumulated reach into a turnout bonus. */
+export const REACH_TURNOUT_SCALE = 0.09;
+/** Door-knocking pushes available per thousand party members. */
+export const VOLUNTEERS_PER_MEMBER = 0.02;
+
+/**
+ * Poll sample sizes.
+ *
+ * The player never sees the true figure. A small poll's margin of error is
+ * wide enough to be actively misleading, which is the intended experience:
+ * a campaign run off polling is a campaign run off noise.
+ */
+export const POLL_SAMPLE_SMALL = 420;
+export const POLL_SAMPLE_STANDARD = 1100;
+export const POLL_SAMPLE_LARGE = 3200;
+
+export const PC_COSTS_MEDIA = {
+  /** Commission a poll. Bigger samples cost more. */
+  pollSmall: 2,
+  pollStandard: 4,
+  pollLarge: 7,
+  /** A rally: regional turnout and enthusiasm. */
+  rally: 6,
+  /** A town hall: smaller, more persuasive, better with the undecided. */
+  townHall: 5,
+  /** A set-piece interview. */
+  interview: 4,
+  /** A press conference: fast, and you do not control the questions. */
+  pressConference: 3,
+} as const;
+
+/** Party funds cost of a rally and a town hall, in ₡m. */
+export const RALLY_COST = 4;
+export const TOWN_HALL_COST = 1.5;
+
+/* ------------------------------------------------------------------ *
  * Difficulty
  * ------------------------------------------------------------------ */
 

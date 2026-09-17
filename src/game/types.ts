@@ -6,6 +6,7 @@
  */
 
 import type { SegmentKey } from './content/segments.ts';
+import type { ChannelKey } from './content/channels.ts';
 import type { ElectoralSystem } from './systems/electoralSystems.ts';
 import type { District } from './systems/districts.ts';
 import type { PartyInternals } from './systems/partyInternals.ts';
@@ -301,6 +302,15 @@ export interface ElectionResult {
   }[];
   /** Top-up seats awarded from the national list under mixed-member. */
   listSeats?: Record<string, number>;
+  /**
+   * Published before a single ballot is counted. Taken from real voters, so
+   * tighter than a campaign poll — and still a sample.
+   */
+  exitPoll?: { shares: Record<string, number>; marginOfError: number };
+  /** Districts close enough that the result could turn on a recount. */
+  recounts?: { districtId: string; districtName: string; margin: number }[];
+  /** Movement since the last election, in percentage points. */
+  swing?: Record<string, number>;
   /** partyId → total seats. */
   seatsByParty: Record<string, number>;
   /** partyId → national vote share 0..1. */
@@ -417,6 +427,21 @@ export interface CampaignState {
   debates: DebateExchange[];
   /** Cumulative national support swing from debate performance. */
   debateSwing: number;
+  /** Accumulated exposure per voter segment, from the channels bought. */
+  reach: Partial<Record<SegmentKey, number>>;
+  /** Pushes bought on each channel, for the campaign summary. */
+  channelPushes: Partial<Record<ChannelKey, number>>;
+  /** Door-knocking pushes spent. Limited by party membership. */
+  volunteerPushesUsed: number;
+  /** Polls commissioned this campaign, most recent last. */
+  polls: {
+    turnNumber: number;
+    quality: 'small' | 'standard' | 'large';
+    shares: Record<string, number>;
+    marginOfError: number;
+  }[];
+  rallies: number;
+  townHalls: number;
 }
 
 /* ------------------------------------------------------------------ *

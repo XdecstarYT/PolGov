@@ -109,6 +109,10 @@ export interface ElectionInput {
   sectors?: readonly Sector[];
   debt?: number;
   revenueModifier?: number;
+  /** Extra support per segment, from campaigning that reached them. */
+  segmentPersuasion?: SupportContext['segmentPersuasion'];
+  /** Extra turnout per segment, from campaigning that reached them. */
+  segmentTurnout?: SupportContext['segmentTurnout'];
 }
 
 const NEUTRAL_SCORES = {
@@ -150,6 +154,8 @@ export function simulateElection(input: ElectionInput): ElectionResult {
     incumbentId: player?.id ?? 'player',
     incumbentBonus:
       ((approval - 50) / 100) * NATIONAL_MOOD_WEIGHT + (campaign?.debateSwing ?? 0),
+    segmentPersuasion: input.segmentPersuasion,
+    segmentTurnout: input.segmentTurnout,
   };
 
   /** Seeded local variation, so identical runs still feel alive. */

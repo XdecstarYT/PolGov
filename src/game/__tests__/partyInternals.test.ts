@@ -338,7 +338,18 @@ describe('the party pays for its own campaigning', () => {
       negotiation: null,
       turnNumber: 11,
       politicalCapital: 100,
-      campaign: { stopsMade: 0, adBuys: 0, debates: [], debateSwing: 0 },
+      campaign: {
+      stopsMade: 0,
+      adBuys: 0,
+      debates: [],
+      debateSwing: 0,
+      reach: {},
+      channelPushes: {},
+      volunteerPushesUsed: 0,
+      polls: [],
+      rallies: 0,
+      townHalls: 0,
+    },
     };
   }
 

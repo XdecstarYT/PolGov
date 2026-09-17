@@ -40,6 +40,9 @@ import {
   AMENDMENT_DILUTION,
   CROSSBENCH_SENATE_BONUS,
   PC_COSTS_POLICY,
+  PC_COSTS_MEDIA,
+  RALLY_COST,
+  TOWN_HALL_COST,
   MANIFESTO_SIZE,
   SUNSET_DEFAULT_TURNS,
   FUNDRAISING_DRIVE_YIELD,
@@ -98,6 +101,20 @@ import {
   sunsetTurn,
 } from './systems/policy.ts';
 import { computeIssueScores } from './systems/electorate.ts';
+import {
+  applyChannelPush,
+  availableVolunteerPushes,
+  conductPoll,
+  decayReach,
+  persuasionBySegment,
+  trueNationalShares,
+  turnoutBySegment,
+  computeSwing,
+  exitPoll,
+  recountCandidates,
+  type PollQuality,
+} from './systems/media.ts';
+import { channelTemplate, type ChannelKey } from './content/channels.ts';
 import { REFERENDUM_TEMPLATES } from './content/referendums.ts';
 import {
   committeeReport,
@@ -162,6 +179,11 @@ export type Intent =
   | { type: 'executive_order'; billId: string }
   | { type: 'call_referendum'; questionId: string }
   | { type: 'set_manifesto'; billKeys: string[] }
+  | { type: 'campaign_push'; channel: ChannelKey }
+  | { type: 'commission_poll'; quality: PollQuality }
+  | { type: 'hold_rally'; regionId: string }
+  | { type: 'town_hall'; regionId: string }
+  | { type: 'press_conference' }
   | { type: 'negotiation_accept'; partyId: string }
   | { type: 'negotiation_counter'; partyId: string }
   | { type: 'negotiation_remove'; partyId: string }
@@ -346,6 +368,11 @@ export function beginTurn(state: GameState): GameState {
 
   next.budgetUnlocked = false;
 
+  /* Campaigning fades. A push in month nine is worth little by month twelve. */
+  if (next.campaign) {
+    next.campaign.reach = decayReach(next.campaign.reach);
+  }
+
   const recentKeys = next.logs
     .slice(-3)
     .flatMap((l) => l.entries.filter((e) => e.kind === 'event').map((e) => e.label));
@@ -361,7 +388,18 @@ export function beginTurn(state: GameState): GameState {
   next.events = drawEvents(rng, ctx, next.difficulty, next.turnNumber, recentKeys);
 
   if (isCampaignTurn(next.turnNumber) && !next.campaign) {
-    next.campaign = { stopsMade: 0, adBuys: 0, debates: [], debateSwing: 0 };
+    next.campaign = {
+      stopsMade: 0,
+      adBuys: 0,
+      debates: [],
+      debateSwing: 0,
+      reach: {},
+      channelPushes: {},
+      volunteerPushesUsed: 0,
+      polls: [],
+      rallies: 0,
+      townHalls: 0,
+    };
   }
   if (isCampaignTurn(next.turnNumber) && next.campaign) {
     next.campaign.debates.push(buildDebate(next, rng));
@@ -968,6 +1006,9 @@ export function runElection(state: GameState): GameState {
     campaign: next.campaign,
     termNumber: next.termNumber,
     rng,
+    /* Channels only move the people they actually reached. */
+    segmentPersuasion: next.campaign ? persuasionBySegment(next.campaign.reach) : undefined,
+    segmentTurnout: next.campaign ? turnoutBySegment(next.campaign.reach) : undefined,
     /* The electorate judges the record directly, so pass it the record. */
     sectors: next.sectors,
     debt: next.debt,
@@ -981,6 +1022,20 @@ export function runElection(state: GameState): GameState {
     party.cabinetPosts = 0;
     party.redLines = [];
   }
+
+  /*
+   * Election-night reporting: an exit poll published before counting begins,
+   * the seats close enough to turn on a recount, and the swing — the number
+   * that actually explains a result, because it says who moved rather than
+   * who won.
+   */
+  result.exitPoll = (() => {
+    const sample = exitPoll(result.voteShareByParty, rng);
+    return { shares: sample.shares, marginOfError: sample.marginOfError };
+  })();
+  result.recounts = recountCandidates(result.districtOutcomes ?? []);
+  const previous = next.elections[next.elections.length - 1];
+  if (previous) result.swing = computeSwing(previous.voteShareByParty, result.voteShareByParty);
 
   /*
    * Half the Senate faces the voters; the other half carries on. This is what
@@ -1139,6 +1194,16 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleReferendum(state, intent.questionId);
     case 'set_manifesto':
       return handleManifesto(state, intent.billKeys);
+    case 'campaign_push':
+      return handleChannelPush(state, intent.channel);
+    case 'commission_poll':
+      return handlePoll(state, intent.quality);
+    case 'hold_rally':
+      return handleRally(state, intent.regionId);
+    case 'town_hall':
+      return handleTownHall(state, intent.regionId);
+    case 'press_conference':
+      return handlePressConference(state);
     case 'negotiation_accept':
       return handleNegotiationAccept(state, intent.partyId);
     case 'negotiation_counter':
@@ -2275,6 +2340,226 @@ function handleManifesto(state: GameState, billKeys: string[]): IntentResult {
     delta: null,
     cause: `${billKeys.length} commitment${billKeys.length === 1 ? '' : 's'} for this term. Keeping them is worth something; breaking them is worth more, the other way.`,
   });
+  return ok(next);
+}
+
+
+/* ------------------------- campaign media -------------------------- */
+
+function requireCampaign(state: GameState): string | null {
+  if (state.phase !== 'agenda') return 'Campaigning happens during the agenda.';
+  if (!isCampaignTurn(state.turnNumber)) return 'The campaign has not begun yet.';
+  if (!state.campaign) return 'There is no campaign under way.';
+  return null;
+}
+
+/**
+ * Buy a push on one channel.
+ *
+ * Channels reach different people, which is the whole reason to model them
+ * separately: television lands with retirees and never reaches students,
+ * social platforms do the reverse, and door knocking reaches the people least
+ * likely to vote at all — but costs volunteers rather than money, so only a
+ * party with members can run one.
+ */
+function handleChannelPush(state: GameState, channel: ChannelKey): IntentResult {
+  const wrong = requireCampaign(state);
+  if (wrong) return reject(state, wrong);
+
+  const template = channelTemplate(channel);
+  if (state.politicalCapital < template.pcCost) {
+    return reject(state, 'Not enough political capital for that.');
+  }
+  if (state.partyInternals.funds < template.cost) {
+    return reject(state, `The party cannot afford ₡${template.cost}m for ${template.label}.`);
+  }
+
+  if (template.requiresVolunteers) {
+    const available = availableVolunteerPushes(
+      state.partyInternals.members,
+      state.campaign!.volunteerPushesUsed,
+    );
+    if (available <= 0) {
+      return reject(
+        state,
+        'Your members are already out as far as they will go. Door knocking needs volunteers, and you have run out.',
+      );
+    }
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, template.pcCost);
+  next.partyInternals.funds -= template.cost;
+
+  const campaign = next.campaign!;
+  campaign.reach = applyChannelPush(campaign.reach, channel);
+  campaign.channelPushes[channel] = (campaign.channelPushes[channel] ?? 0) + 1;
+  if (template.requiresVolunteers) campaign.volunteerPushesUsed += 1;
+
+  const reached = Object.entries(template.reach)
+    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+    .slice(0, 3)
+    .map(([key]) => key.replace(/_/g, ' '))
+    .join(', ');
+
+  log(entries, {
+    kind: 'note',
+    label: `${template.label} campaign`,
+    delta: -template.cost,
+    cause: `Reaches ${reached} most of all. ${template.persuasion >= 1 ? 'Changes minds' : 'Mobilises more than it persuades'}.`,
+    unit: '₡m',
+  });
+  return ok(next);
+}
+
+/**
+ * Commission a poll.
+ *
+ * The player never sees the true figure. Each poll is a sample with a real
+ * margin of error, so two polls the same week can disagree — which is what
+ * polls actually do, and why running a campaign off them is treacherous.
+ */
+function handlePoll(state: GameState, quality: PollQuality): IntentResult {
+  if (state.phase !== 'agenda') return reject(state, 'Polls are commissioned during the agenda.');
+  const cost =
+    quality === 'large'
+      ? PC_COSTS_MEDIA.pollLarge
+      : quality === 'standard'
+        ? PC_COSTS_MEDIA.pollStandard
+        : PC_COSTS_MEDIA.pollSmall;
+  if (state.politicalCapital < cost) return reject(state, 'Not enough political capital.');
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, cost);
+
+  const rng = new Rng(next.rngState);
+  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier);
+  const player = playerParty(next.parties);
+  const truth = trueNationalShares(next.regions, next.parties, {
+    scores,
+    incumbentId: player.id,
+    segmentPersuasion: next.campaign
+      ? persuasionBySegment(next.campaign.reach)
+      : undefined,
+  });
+  const poll = conductPoll(truth, quality, rng);
+  next.rngState = rng.state;
+
+  if (next.campaign) {
+    next.campaign.polls.push({
+      turnNumber: next.turnNumber,
+      quality,
+      shares: poll.shares,
+      marginOfError: poll.marginOfError,
+    });
+  }
+
+  log(entries, {
+    kind: 'note',
+    label: `Poll commissioned (${quality})`,
+    delta: (poll.shares[player.id] ?? 0) * 100,
+    cause: `Sample of ${poll.sampleSize}, margin of error ±${poll.marginOfError.toFixed(1)} points. Your share is within that band of the truth, not on it.`,
+    unit: '%',
+  });
+  return ok(next);
+}
+
+/** A rally: loud, regional, and better at turnout than at persuasion. */
+function handleRally(state: GameState, regionId: string): IntentResult {
+  const wrong = requireCampaign(state);
+  if (wrong) return reject(state, wrong);
+  const region = state.regions.find((r) => r.id === regionId);
+  if (!region) return reject(state, 'No such region.');
+  if (state.politicalCapital < PC_COSTS_MEDIA.rally) {
+    return reject(state, 'Not enough political capital for a rally.');
+  }
+  if (state.partyInternals.funds < RALLY_COST) {
+    return reject(state, `The party cannot afford ₡${RALLY_COST}m for a rally.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_MEDIA.rally);
+  next.partyInternals.funds -= RALLY_COST;
+
+  const target = next.regions.find((r) => r.id === regionId)!;
+  target.campaignInvestment += 1.6;
+  next.campaign!.rallies += 1;
+  /* Rallies fire up the people already with you. */
+  next.partyInternals.cohesion = Math.min(100, next.partyInternals.cohesion + 3);
+
+  log(entries, {
+    kind: 'note',
+    label: `Rally in ${target.name}`,
+    delta: -RALLY_COST,
+    cause: 'Turnout and enthusiasm among people already minded to vote for you. It persuades nobody new.',
+    unit: '₡m',
+  });
+  return ok(next);
+}
+
+/** A town hall: small, awkward, and unusually good at moving the undecided. */
+function handleTownHall(state: GameState, regionId: string): IntentResult {
+  const wrong = requireCampaign(state);
+  if (wrong) return reject(state, wrong);
+  const region = state.regions.find((r) => r.id === regionId);
+  if (!region) return reject(state, 'No such region.');
+  if (state.politicalCapital < PC_COSTS_MEDIA.townHall) {
+    return reject(state, 'Not enough political capital.');
+  }
+  if (state.partyInternals.funds < TOWN_HALL_COST) {
+    return reject(state, 'The party cannot afford that.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_MEDIA.townHall);
+  next.partyInternals.funds -= TOWN_HALL_COST;
+
+  const target = next.regions.find((r) => r.id === regionId)!;
+  target.campaignInvestment += 0.9;
+  next.campaign!.townHalls += 1;
+
+  /* Facing hostile questions in public is worth something, if it goes well. */
+  const performance = next.approval / 100 + next.partyInternals.authority / 200;
+  applyEffects(
+    next,
+    { approval: (performance - 0.55) * 3 },
+    `Town hall in ${target.name} — a small room, unscripted questions, and no way to avoid the difficult one`,
+    entries,
+  );
+  return ok(next);
+}
+
+/**
+ * A press conference. Cheap, immediate, and you do not choose the questions —
+ * so it rewards a government with answers and punishes one without.
+ */
+function handlePressConference(state: GameState): IntentResult {
+  if (state.phase !== 'agenda') return reject(state, 'Press conferences are held during the agenda.');
+  if (state.politicalCapital < PC_COSTS_MEDIA.pressConference) {
+    return reject(state, 'Not enough political capital.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PC_COSTS_MEDIA.pressConference);
+
+  /* What the room asks about is whatever is going worst. */
+  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier);
+  const worst = Object.entries(scores).sort((a, b) => a[1] - b[1])[0];
+  const defensible = (worst?.[1] ?? 50) > 42;
+
+  applyEffects(
+    next,
+    { approval: defensible ? 1.4 : -1.8 },
+    defensible
+      ? `Press conference — the room led on ${worst?.[0].replace(/_/g, ' ')}, and you had an answer`
+      : `Press conference — the room led on ${worst?.[0].replace(/_/g, ' ')}, and you did not have an answer`,
+    entries,
+  );
   return ok(next);
 }
 

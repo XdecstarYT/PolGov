@@ -16,7 +16,7 @@ import {
   MAJORITY_SEATS,
   playerParty,
 } from '../../game/index.ts';
-import { Button, Kicker, Panel, PartyMark, Stat, Tag, pct } from '../components/Primitives.tsx';
+import { Button, Delta, Kicker, Panel, PartyMark, Stat, Tag, pct } from '../components/Primitives.tsx';
 
 const REVEAL_INTERVAL_MS = 1100;
 
@@ -186,6 +186,68 @@ export function ElectionNight() {
         </Panel>
 
         <div className="space-y-5 lg:sticky lg:top-6 lg:self-start">
+          {election.exitPoll && (
+            <Panel title="Exit poll" aside={`±${election.exitPoll.marginOfError.toFixed(1)} pts`}>
+              <p className="mb-2 text-xs leading-relaxed text-ink-faint">
+                Taken from people who have actually voted, published before a single ballot is
+                counted. Tighter than a campaign poll, and still a sample.
+              </p>
+              <ul className="space-y-0.5">
+                {[...game.parties]
+                  .map((party) => ({ party, share: election.exitPoll!.shares[party.id] ?? 0 }))
+                  .sort((a, b) => b.share - a.share)
+                  .slice(0, 5)
+                  .map(({ party, share }) => (
+                    <li key={party.id} className="flex items-center gap-2 text-sm">
+                      <PartyMark color={party.color} glyph={party.glyph} />
+                      <span className="min-w-0 flex-1 truncate text-ink-soft">
+                        {party.shortName}
+                      </span>
+                      <span className="tnum text-ink">{pct(share * 100, 1)}</span>
+                    </li>
+                  ))}
+              </ul>
+            </Panel>
+          )}
+
+          {election.swing && Object.keys(election.swing).length > 0 && (
+            <Panel title="Swing since last time">
+              <ul className="space-y-0.5">
+                {[...game.parties]
+                  .map((party) => ({ party, swing: election.swing![party.id] ?? 0 }))
+                  .sort((a, b) => Math.abs(b.swing) - Math.abs(a.swing))
+                  .slice(0, 5)
+                  .map(({ party, swing }) => (
+                    <li key={party.id} className="flex items-center gap-2 text-sm">
+                      <PartyMark color={party.color} glyph={party.glyph} />
+                      <span className="min-w-0 flex-1 truncate text-ink-soft">
+                        {party.shortName}
+                      </span>
+                      <Delta value={swing} unit="pts" />
+                    </li>
+                  ))}
+              </ul>
+            </Panel>
+          )}
+
+          {election.recounts && election.recounts.length > 0 && (
+            <Panel title="Too close to call" aside={`${election.recounts.length} seats`}>
+              <p className="mb-2 text-xs leading-relaxed text-ink-faint">
+                Decided by under a point. Any of these could turn on a recount.
+              </p>
+              <ul className="space-y-0.5">
+                {election.recounts.slice(0, 6).map((row) => (
+                  <li key={row.districtId} className="flex items-baseline justify-between gap-2 text-sm">
+                    <span className="min-w-0 truncate text-ink-soft">{row.districtName}</span>
+                    <span className="tnum text-ink-faint">
+                      {(row.margin * 100).toFixed(2)} pts
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+
           <Panel title="Running total">
             <ul className="space-y-1.5">
               {standings.map(({ party, seats }) => (
