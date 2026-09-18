@@ -32,6 +32,7 @@ import {
   bandFor,
   money,
 } from '../components/Primitives.tsx';
+import { benchInk } from '../bench.ts';
 
 export function BudgetRoom() {
   const { game, dispatch, endTurn, resolvingRemotely } = useGame();
@@ -145,7 +146,7 @@ export function BudgetRoom() {
               return (
                 <li key={partner.id} className="flex flex-wrap items-center justify-between gap-2">
                   <span className="flex items-center gap-2 text-sm text-ink">
-                    <PartyMark color={partner.color} glyph={partner.glyph} />
+                    <PartyMark color={benchInk(partner)} glyph={partner.glyph} />
                     {partner.name}
                   </span>
                   <span className="flex items-center gap-2">

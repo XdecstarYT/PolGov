@@ -38,6 +38,7 @@ import { EventsPhase } from '../phases/EventsPhase.tsx';
 import { Agenda } from '../phases/Agenda.tsx';
 import { BudgetRoom } from '../phases/BudgetRoom.tsx';
 import { Report } from '../phases/Report.tsx';
+import { benchInk } from '../bench.ts';
 
 const PHASE_ORDER: { phase: Phase; label: string; player: boolean }[] = [
   { phase: 'briefing', label: 'Briefing', player: false },
@@ -66,7 +67,7 @@ export function Desk() {
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <PartyMark color={player.color} glyph={player.glyph} />
+                <PartyMark color={benchInk(player)} glyph={player.glyph} />
                 <span className="truncate font-serif text-base font-bold text-ink">
                   {player.name}
                 </span>
@@ -174,7 +175,7 @@ function CoalitionRail() {
   return (
     <Panel title="Government" aside={`${coalitionSeats(game.parties)} seats`}>
       <div className="flex items-center gap-2 border-b border-rule pb-2.5">
-        <PartyMark color={player.color} glyph={player.glyph} />
+        <PartyMark color={benchInk(player)} glyph={player.glyph} />
         <span className="min-w-0 flex-1 truncate text-sm text-ink">{player.name}</span>
         <span className="text-sm tnum text-ink-soft">{player.seats}</span>
       </div>
@@ -192,7 +193,7 @@ function CoalitionRail() {
                 <Meter
                   label={
                     <span className="flex items-center gap-1.5">
-                      <PartyMark color={partner.color} glyph={partner.glyph} />
+                      <PartyMark color={benchInk(partner)} glyph={partner.glyph} />
                       <span className="truncate">{partner.shortName}</span>
                       <span className="text-ink-faint tnum">({partner.seats})</span>
                     </span>

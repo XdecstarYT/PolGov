@@ -15,6 +15,7 @@ import {
   senateVerdict,
 } from '../../game/index.ts';
 import { Button, Kicker, Meter, Panel, PartyMark, Tag, pct } from './Primitives.tsx';
+import { benchInk } from '../bench.ts';
 
 export function ChamberPanel() {
   const { game } = useGame();
@@ -58,7 +59,7 @@ export function ChamberPanel() {
       <ul className="mt-3 space-y-1">
         {ranked.map(({ party, seats }) => (
           <li key={party.id} className="flex items-center gap-2 text-sm">
-            <PartyMark color={party.color} glyph={party.glyph} />
+            <PartyMark color={benchInk(party)} glyph={party.glyph} />
             <span className="min-w-0 flex-1 truncate text-ink-soft">{party.name}</span>
             {(party.isPlayer || party.inCoalition) && (
               <span className="text-[0.65rem] uppercase tracking-wide text-civic">government</span>

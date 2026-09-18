@@ -28,6 +28,7 @@ import {
   money,
   pct,
 } from '../components/Primitives.tsx';
+import { benchInk } from '../bench.ts';
 
 const GROUPS: { kind: LogKind; title: string; blurb: string }[] = [
   { kind: 'legislature', title: 'The chamber', blurb: 'Divisions held this month.' },
@@ -95,7 +96,7 @@ export function Report() {
             <ul className="space-y-1">
               {unhappy.map((partner) => (
                 <li key={partner.id} className="flex items-center gap-2 text-sm text-ink-soft">
-                  <PartyMark color={partner.color} glyph={partner.glyph} />
+                  <PartyMark color={benchInk(partner)} glyph={partner.glyph} />
                   <span className="text-ink">{partner.name}</span>
                   <span className="tnum">
                     mood {(partner.coalitionMood ?? 0).toFixed(0)} — {bandFor(partner.coalitionMood ?? 0)}

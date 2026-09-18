@@ -13,7 +13,8 @@ import {
   ELECTORAL_SYSTEM_BLURBS,
   ELECTORAL_SYSTEM_LABELS,
   PARTY_TEMPLATES,
-  PLAYER_COLORS,
+  PLAYER_EMBLEMS,
+  PLAYER_INK,
   affinity,
   affinityLabel,
   axisLabel,
@@ -22,6 +23,7 @@ import {
   type IdeologyAxis,
 } from '../../game/index.ts';
 import { Button, Kicker, Panel, PartyMark, Rule } from '../components/Primitives.tsx';
+import { benchInk } from '../bench.ts';
 
 const AXIS_META: { axis: IdeologyAxis; title: string; low: string; high: string }[] = [
   {
@@ -49,8 +51,8 @@ export function PartySetup() {
 
   const [form, setForm] = useState<NewGameForm>({
     partyName: '',
-    color: PLAYER_COLORS[0].color,
-    glyph: PLAYER_COLORS[0].glyph,
+    color: PLAYER_INK,
+    glyph: PLAYER_EMBLEMS[0].glyph,
     ideology: { economic: 0, social: 0, environmental: 0 },
     difficulty: 'standard',
     countryName: 'Verdana',
@@ -100,23 +102,30 @@ export function PartySetup() {
             />
 
             <fieldset className="mt-4">
-              <legend className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
-                Party colour
-              </legend>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {PLAYER_COLORS.map((option) => {
-                  const selected = form.color === option.color;
+              <legend className="label text-ink-faint">Emblem</legend>
+              <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">
+                Your party is printed in ink — the colour of the page itself. The seven
+                other parties have the printed colours between them, and an eighth that
+                stays legible beside all of them, in both themes and for colour-blind
+                readers, does not exist. Ink separates further than any of them. Pick the
+                emblem that goes beside it.
+              </p>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {PLAYER_EMBLEMS.map((option) => {
+                  const selected = form.glyph === option.glyph;
                   return (
                     <button
-                      key={option.color}
+                      key={option.glyph}
                       type="button"
-                      onClick={() => setForm({ ...form, color: option.color, glyph: option.glyph })}
+                      onClick={() => setForm({ ...form, glyph: option.glyph })}
                       aria-pressed={selected}
-                      className={`flex items-center gap-2 border px-2 py-1 text-xs ${
-                        selected ? 'border-ink text-ink' : 'border-rule text-ink-faint'
+                      className={`flex items-center gap-2 border px-2.5 py-1.5 text-xs transition-colors ${
+                        selected
+                          ? 'border-ink bg-sunk text-ink'
+                          : 'border-rule text-ink-faint hover:border-rule-strong hover:text-ink-soft'
                       }`}
                     >
-                      <PartyMark color={option.color} glyph={option.glyph} />
+                      <PartyMark color="var(--color-bench-you)" glyph={option.glyph} />
                       {option.name}
                       {selected && <span className="sr-only">(selected)</span>}
                     </button>
@@ -177,7 +186,7 @@ export function PartySetup() {
             <ul className="space-y-2.5">
               {compatibility.map(({ template, value }) => (
                 <li key={template.id} className="flex items-start gap-2.5">
-                  <PartyMark color={template.color} glyph={template.glyph} />
+                  <PartyMark color={benchInk(template)} glyph={template.glyph} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-sm text-ink">{template.name}</span>

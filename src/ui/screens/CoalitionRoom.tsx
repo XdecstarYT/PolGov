@@ -30,6 +30,7 @@ import {
   Tag,
   money,
 } from '../components/Primitives.tsx';
+import { benchInk } from '../bench.ts';
 
 export function CoalitionRoom() {
   const { game, dispatch } = useGame();
@@ -82,7 +83,7 @@ export function CoalitionRoom() {
                 key={party.id}
                 title={
                   <span className="flex items-center gap-2">
-                    <PartyMark color={party.color} glyph={party.glyph} />
+                    <PartyMark color={benchInk(party)} glyph={party.glyph} />
                     {party.name}
                   </span>
                 }

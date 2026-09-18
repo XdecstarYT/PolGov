@@ -44,6 +44,7 @@ import { PartyRoom } from '../components/PartyRoom.tsx';
 import { BillProcedure, ChamberPanel } from '../components/ChamberPanel.tsx';
 import { PolicyLifecycle, PolicyOpinionSummary } from '../components/PolicyPanel.tsx';
 import { CampaignRoom } from '../components/CampaignRoom.tsx';
+import { benchInk } from '../bench.ts';
 
 export function Agenda() {
   const { game, dispatch } = useGame();
@@ -335,7 +336,7 @@ function BillRow({
               {breakdown.breaches.map((breach) => (
                 <p key={breach.party.id} className="text-sm leading-relaxed text-ink-soft">
                   <span className="inline-flex items-center gap-1.5 align-middle">
-                    <PartyMark color={breach.party.color} glyph={breach.party.glyph} />
+                    <PartyMark color={benchInk(breach.party)} glyph={breach.party.glyph} />
                     <span className="text-ink">{breach.party.name}</span>
                   </span>{' '}
                   treats this as crossing a red line — {breach.redLine.description} Their{' '}
@@ -406,7 +407,7 @@ function CoalitionActions() {
             <li key={partner.id} className="border border-rule p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="flex items-center gap-2">
-                  <PartyMark color={partner.color} glyph={partner.glyph} />
+                  <PartyMark color={benchInk(partner)} glyph={partner.glyph} />
                   <span className="font-serif text-sm font-semibold text-ink">{partner.name}</span>
                 </span>
                 <span className="text-xs tnum text-ink-faint">

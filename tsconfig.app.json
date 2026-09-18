@@ -20,7 +20,10 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": false,
 
-    "types": ["vite/client"]
+    /* `node` is here for the build scripts under scripts/ and for the tests
+       that read files off disk; application code has no business using it, and
+       Vite would fail the build if it tried. */
+    "types": ["vite/client", "node"]
   },
   "include": ["src"]
 }

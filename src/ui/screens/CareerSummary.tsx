@@ -22,6 +22,7 @@ import {
   money,
   pct,
 } from '../components/Primitives.tsx';
+import { benchInk } from '../bench.ts';
 
 const OUTCOME_TITLE: Record<string, string> = {
   defeated: 'Out of office',
@@ -61,7 +62,7 @@ export function CareerSummary() {
           {player.name}
         </h1>
         <p className="mt-2 flex items-center gap-2 text-sm text-ink-soft">
-          <PartyMark color={player.color} glyph={player.glyph} />
+          <PartyMark color={benchInk(player)} glyph={player.glyph} />
           {game.countryName} · {game.career.termsServed} term
           {game.career.termsServed === 1 ? '' : 's'} served
         </p>

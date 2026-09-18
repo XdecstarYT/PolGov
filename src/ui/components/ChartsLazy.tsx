@@ -1,44 +1,12 @@
 /**
- * ChartsLazy.tsx — defer the charting library.
+ * ChartsLazy.tsx — kept as the import site for the charts.
  *
- * Recharts is by far the largest dependency and nothing on the title or setup
- * screens needs it. Loading it on demand keeps first paint small; the fallback
- * reserves the same height so nothing jumps when it arrives.
+ * It used to defer Recharts, which was the largest thing in the bundle by a
+ * wide margin. The charts are hand-built SVG now: a few kilobytes, no second
+ * chunk, and no "Drawing…" placeholder on the panel the player looks at most.
+ * The module stays so the call sites that import from here keep working, and
+ * so there is one obvious place to put a code split back if a chart ever
+ * needs a real dependency again.
  */
 
-import { Suspense, lazy } from 'react';
-import type { ApprovalPoint, Party } from '../../game/index.ts';
-
-const SeatChartImpl = lazy(() =>
-  import('./Charts.tsx').then((m) => ({ default: m.SeatChart })),
-);
-const ApprovalTrendImpl = lazy(() =>
-  import('./Charts.tsx').then((m) => ({ default: m.ApprovalTrend })),
-);
-
-function Placeholder({ height }: { height: number }) {
-  return (
-    <div
-      style={{ height }}
-      className="flex items-center justify-center text-xs text-ink-faint"
-    >
-      Drawing…
-    </div>
-  );
-}
-
-export function SeatChart({ parties }: { parties: Party[] }) {
-  return (
-    <Suspense fallback={<Placeholder height={176} />}>
-      <SeatChartImpl parties={parties} />
-    </Suspense>
-  );
-}
-
-export function ApprovalTrend({ history }: { history: ApprovalPoint[] }) {
-  return (
-    <Suspense fallback={<Placeholder height={144} />}>
-      <ApprovalTrendImpl history={history} />
-    </Suspense>
-  );
-}
+export { ApprovalTrend, SeatChart } from './Charts.tsx';

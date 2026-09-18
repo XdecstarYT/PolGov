@@ -14,6 +14,11 @@ export interface PartyTemplate {
   id: string;
   name: string;
   shortName: string;
+  /**
+   * The party's bench colour, light mode. This is the serialised value; the
+   * UI reads `--color-bench-<id>` instead so the chamber re-steps for dark
+   * mode rather than inverting. Keep the two in step.
+   */
   color: string;
   /** Non-colour identifier — the UI always pairs colour with this. */
   glyph: string;
@@ -36,7 +41,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     id: 'meridian',
     name: 'Meridian Alliance',
     shortName: 'Meridian',
-    color: '#6b7f9e',
+    color: '#0089a3',
     glyph: '◆',
     ideology: makeIdeology(0.15, 0.1, 0.0),
     baseStrength: 1.0,
@@ -68,7 +73,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     id: 'concord',
     name: 'Concord Union',
     shortName: 'Concord',
-    color: '#a8493f',
+    color: '#a62f2a',
     glyph: '●',
     ideology: makeIdeology(-0.65, 0.3, 0.2),
     baseStrength: 1.05,
@@ -100,7 +105,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     id: 'enterprise',
     name: 'Free Enterprise League',
     shortName: 'Enterprise',
-    color: '#3f7d8c',
+    color: '#2d5ea8',
     glyph: '▲',
     ideology: makeIdeology(0.75, -0.1, -0.35),
     baseStrength: 0.95,
@@ -132,7 +137,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     id: 'heritage',
     name: 'Heritage Assembly',
     shortName: 'Heritage',
-    color: '#8a6a3c',
+    color: '#932f63',
     glyph: '■',
     ideology: makeIdeology(0.3, -0.7, -0.2),
     baseStrength: 0.9,
@@ -164,7 +169,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     id: 'verdant',
     name: 'Verdant Compact',
     shortName: 'Verdant',
-    color: '#4f7a4a',
+    color: '#57964a',
     glyph: '✦',
     ideology: makeIdeology(-0.3, 0.45, 0.85),
     baseStrength: 0.72,
@@ -196,7 +201,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     id: 'civic',
     name: 'Civic Forum',
     shortName: 'Civic',
-    color: '#7a5a94',
+    color: '#6d4fa2',
     glyph: '◇',
     ideology: makeIdeology(-0.1, 0.75, 0.35),
     baseStrength: 0.8,
@@ -226,7 +231,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     id: 'landward',
     name: 'Landward Party',
     shortName: 'Landward',
-    color: '#9c7b3f',
+    color: '#8f6a16',
     glyph: '▼',
     ideology: makeIdeology(0.25, -0.35, 0.15),
     baseStrength: 0.68,
@@ -256,12 +261,27 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
   },
 ];
 
-/** Preset colours offered to the player at party setup. */
-export const PLAYER_COLORS = [
-  { color: '#8c2f27', glyph: '★', name: 'Seal red' },
-  { color: '#1f4e5f', glyph: '★', name: 'Civic blue' },
-  { color: '#5c5470', glyph: '★', name: 'Slate violet' },
-  { color: '#35654d', glyph: '★', name: 'Deep green' },
-  { color: '#a35c1e', glyph: '★', name: 'Amber' },
-  { color: '#2f3e46', glyph: '★', name: 'Ironstone' },
+/**
+ * Emblems offered to the player at party setup.
+ *
+ * The colour is not a choice. Seven printed colours are spoken for by the
+ * seven other parties, and an eighth hue that stays distinguishable from all
+ * seven — in both modes, for protanopes and deuteranopes as well as everyone
+ * else — does not exist inside the lightness band the chamber is drawn in.
+ * So your party is printed in ink, the colour of the page's own type: the
+ * highest-separation mark available, and the one nobody else can be given.
+ * What you pick is the emblem beside it, which is the identifier that
+ * survives being photocopied, projected, or read by someone who sees no
+ * colour at all.
+ */
+export const PLAYER_EMBLEMS = [
+  { glyph: '★', name: 'Star' },
+  { glyph: '❖', name: 'Lozenge' },
+  { glyph: '✥', name: 'Cross' },
+  { glyph: '⬟', name: 'Pentagon' },
+  { glyph: '❂', name: 'Sunburst' },
+  { glyph: '⬢', name: 'Hexagon' },
 ] as const;
+
+/** The reserved ink your party is printed in. See `--color-bench-you`. */
+export const PLAYER_INK = '#25231d';

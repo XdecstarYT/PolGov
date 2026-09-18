@@ -17,6 +17,7 @@ import {
   playerParty,
 } from '../../game/index.ts';
 import { Button, Delta, Kicker, Panel, PartyMark, Stat, Tag, pct } from '../components/Primitives.tsx';
+import { benchInk } from '../bench.ts';
 
 const REVEAL_INTERVAL_MS = 1100;
 
@@ -161,7 +162,7 @@ export function ElectionNight() {
                   {revealed && winner ? (
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                       <span className="flex items-center gap-1.5">
-                        <PartyMark color={winner.color} glyph={winner.glyph} />
+                        <PartyMark color={benchInk(winner)} glyph={winner.glyph} />
                         <span className="text-ink">{winner.shortName} leads</span>
                       </span>
                       <span className="tnum text-ink-faint">
@@ -199,7 +200,7 @@ export function ElectionNight() {
                   .slice(0, 5)
                   .map(({ party, share }) => (
                     <li key={party.id} className="flex items-center gap-2 text-sm">
-                      <PartyMark color={party.color} glyph={party.glyph} />
+                      <PartyMark color={benchInk(party)} glyph={party.glyph} />
                       <span className="min-w-0 flex-1 truncate text-ink-soft">
                         {party.shortName}
                       </span>
@@ -219,7 +220,7 @@ export function ElectionNight() {
                   .slice(0, 5)
                   .map(({ party, swing }) => (
                     <li key={party.id} className="flex items-center gap-2 text-sm">
-                      <PartyMark color={party.color} glyph={party.glyph} />
+                      <PartyMark color={benchInk(party)} glyph={party.glyph} />
                       <span className="min-w-0 flex-1 truncate text-ink-soft">
                         {party.shortName}
                       </span>
@@ -252,7 +253,7 @@ export function ElectionNight() {
             <ul className="space-y-1.5">
               {standings.map(({ party, seats }) => (
                 <li key={party.id} className="flex items-center gap-2 text-sm">
-                  <PartyMark color={party.color} glyph={party.glyph} />
+                  <PartyMark color={benchInk(party)} glyph={party.glyph} />
                   <span className="min-w-0 flex-1 truncate text-ink">{party.shortName}</span>
                   {party.isPlayer && (
                     <span className="text-[0.65rem] uppercase tracking-wide text-seal">you</span>

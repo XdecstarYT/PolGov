@@ -3,63 +3,159 @@
 /* Class-based dark mode: <html class="dark"> */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/*
-  Statecraft palette — "broadsheet and briefing folder".
-  Semantic tokens only. Dark mode overrides the same variables below, so every
-  utility built on these (bg-paper, text-ink, border-rule, ...) themes for free.
-*/
-@theme {
-  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+/* ------------------------------------------------------------------ *
+ * Typefaces — self-hosted, so the game has no runtime font dependency.
+ *
+ * Newsreader is a variable optical-size serif: at display sizes the optical
+ * axis thins the strokes and tightens the fit, and at body sizes it opens them
+ * back up. That is the difference between a headline that looks set and one
+ * that looks scaled.
+ * ------------------------------------------------------------------ */
 
-  /* surfaces */
-  --color-paper: #f4f1e9;
-  --color-panel: #fbfaf6;
-  --color-sunk: #e9e4d8;
+@font-face {
+  font-family: 'Newsreader';
+  src: url('/fonts/newsreader.woff2') format('woff2-variations');
+  font-weight: 200 800;
+  font-stretch: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Newsreader';
+  src: url('/fonts/newsreader-italic.woff2') format('woff2-variations');
+  font-weight: 200 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'InterVar';
+  src: url('/fonts/inter.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ------------------------------------------------------------------ *
+ * The palette — "the dispatch box".
+ *
+ * State documents and engraved certificates rather than dashboards: warm
+ * paper, dense ink, an oxblood seal, a civic teal, and brass for the things
+ * that matter most. Dark mode is the same room after everyone has gone home —
+ * not an inverted document but a darker one.
+ * ------------------------------------------------------------------ */
+
+@theme {
+  --font-serif: 'Newsreader', ui-serif, Georgia, Cambria, 'Times New Roman', serif;
+  --font-sans: 'InterVar', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* surfaces, back to front */
+  --color-paper: #f2efe7;
+  --color-panel: #fbf9f4;
+  --color-raised: #ffffff;
+  --color-sunk: #e7e2d5;
 
   /* ink */
-  --color-ink: #1b1a17;
-  --color-ink-soft: #56514a;
-  --color-ink-faint: #837c71;
+  --color-ink: #14130f;
+  --color-ink-soft: #4a453c;
+  --color-ink-faint: #7c7568;
 
   /* structure */
-  --color-rule: #d9d3c5;
-  --color-rule-strong: #b6ae9c;
+  --color-rule: #ddd7c9;
+  --color-rule-strong: #b3ab98;
 
-  /* accents — one warm seal, one civic blue */
-  --color-seal: #8c2f27;
-  --color-seal-soft: #b8544a;
-  --color-civic: #1f4e5f;
-  --color-civic-soft: #3d7d92;
+  /* accents */
+  --color-seal: #8a2b23;
+  --color-seal-soft: #b8564a;
+  --color-civic: #1b4d58;
+  --color-civic-soft: #3f7d8c;
+  --color-brass: #a0762b;
 
-  /* semantic status (always paired with a text label — never color alone) */
-  --color-gain: #2f6b46;
-  --color-loss: #96341f;
-  --color-warn: #8a6412;
+  /* status — always paired with a word, never colour alone */
+  --color-gain: #2d6a4a;
+  --color-loss: #97341e;
+  --color-warn: #856110;
+
+
+  /* ------------------------------------------------------------------
+   * The benches.
+   *
+   * Seven printed colours, one per party, fixed in the order the parties
+   * sit in the chamber (economic left to economic right) so that the only
+   * pairs that ever touch are neighbours in this list. Validated for the
+   * lightness band, the chroma floor, protan/deutan separation, the
+   * normal-vision floor and contrast against the paper — in this order,
+   * in both modes. Re-run before changing any of them:
+   *
+   *   node scripts/validate_palette.js "<the seven, in order>" --mode light
+   *   node scripts/validate_palette.js "<the seven, in order>" --mode dark --surface "#100f0d"
+   *
+   * Your own party is not one of the seven. It is printed in ink — the
+   * colour the page itself is set in — which no party can be given and
+   * which separates from all seven by a wider margin than any eighth hue
+   * could (ΔE 25.9 normal / 15.8 CVD light, 28.7 / 22.8 dark). Eight
+   * mutually distinguishable hues do not exist inside the band; ink is
+   * how the chamber stays readable with the government in it.
+   * ------------------------------------------------------------------ */
+  --color-bench-concord: #a62f2a;
+  --color-bench-verdant: #57964a;
+  --color-bench-civic: #6d4fa2;
+  --color-bench-meridian: #0089a3;
+  --color-bench-landward: #8f6a16;
+  --color-bench-heritage: #932f63;
+  --color-bench-enterprise: #2d5ea8;
+  --color-bench-you: #25231d;
+
+  /* elevation */
+  --shadow-sheet: 0 1px 2px rgb(20 19 15 / 0.05), 0 2px 8px rgb(20 19 15 / 0.04);
+  --shadow-lift: 0 2px 4px rgb(20 19 15 / 0.06), 0 12px 28px rgb(20 19 15 / 0.09);
+  --shadow-deep: 0 8px 16px rgb(20 19 15 / 0.1), 0 30px 60px rgb(20 19 15 / 0.16);
 }
 
 :root.dark {
-  --color-paper: #14130f;
-  --color-panel: #1d1b17;
-  --color-sunk: #26231e;
+  --color-paper: #100f0d;
+  --color-panel: #1a1815;
+  --color-raised: #232019;
+  --color-sunk: #0a0908;
 
-  --color-ink: #ece6d9;
-  --color-ink-soft: #b3aa9a;
-  --color-ink-faint: #8a8171;
+  --color-ink: #f1ebdd;
+  --color-ink-soft: #aea695;
+  --color-ink-faint: #7d7566;
 
-  --color-rule: #35312a;
-  --color-rule-strong: #4c463c;
+  --color-rule: #2d2922;
+  --color-rule-strong: #4a4237;
 
-  --color-seal: #d9796d;
+  --color-seal: #d9776a;
   --color-seal-soft: #a8463c;
-  --color-civic: #7fb6c9;
-  --color-civic-soft: #3d7d92;
+  --color-civic: #82bccb;
+  --color-civic-soft: #3f7d8c;
+  --color-brass: #d4a954;
 
-  --color-gain: #79c194;
+  --color-gain: #74c193;
   --color-loss: #e2836a;
   --color-warn: #d8ad4e;
+
+  /* Benches: the same seven hues re-stepped for the dark surface, not
+     flipped. Ink inverts with the page — your benches are the lit ones. */
+  --color-bench-concord: #a54840;
+  --color-bench-verdant: #5d9b50;
+  --color-bench-civic: #7a5cae;
+  --color-bench-meridian: #0a9fbd;
+  --color-bench-landward: #b18419;
+  --color-bench-heritage: #a04973;
+  --color-bench-enterprise: #5e90db;
+  --color-bench-you: #e4e0d4;
+
+  --shadow-sheet: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.45), 0 12px 28px rgb(0 0 0 / 0.45);
+  --shadow-deep: 0 8px 16px rgb(0 0 0 / 0.5), 0 30px 60px rgb(0 0 0 / 0.6);
 }
+
+/* ------------------------------------------------------------------ *
+ * Base
+ * ------------------------------------------------------------------ */
 
 html,
 body,
@@ -72,20 +168,217 @@ body {
   background-color: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-feature-settings: 'cv05' 1, 'cv11' 1, 'ss01' 1;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Tabular figures everywhere numbers change — stops the HUD jittering. */
+/*
+ * Paper grain. Fixed, non-interactive, and barely there — enough that large
+ * flat areas stop looking like a screen and start looking like stock.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='0.22'/%3E%3C/svg%3E");
+}
+
+:root.dark body::before {
+  mix-blend-mode: screen;
+  opacity: 0.22;
+}
+
+/* Content sits above the grain. */
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/* ------------------------------------------------------------------ *
+ * Typography utilities
+ * ------------------------------------------------------------------ */
+
+/*
+ * Optical sizing. Newsreader's opsz axis is what makes a 64px headline look
+ * drawn rather than enlarged, so it is set explicitly per tier rather than
+ * left to the browser's guess.
+ */
+.display {
+  font-family: var(--font-serif);
+  font-variation-settings: 'opsz' 60;
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  line-height: 0.98;
+}
+
+.headline {
+  font-family: var(--font-serif);
+  font-variation-settings: 'opsz' 32;
+  font-weight: 600;
+  letter-spacing: -0.014em;
+  line-height: 1.08;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-variation-settings: 'opsz' 18;
+  font-weight: 600;
+  letter-spacing: -0.006em;
+  line-height: 1.2;
+}
+
+.prose-serif {
+  font-family: var(--font-serif);
+  font-variation-settings: 'opsz' 12;
+  font-weight: 400;
+  line-height: 1.55;
+}
+
+/* Small caps label, the workhorse of an institutional interface. */
+.label {
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+/* Numbers that change must not reflow or jitter. */
 .tnum {
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
+  font-feature-settings: 'tnum' 1, 'cv05' 1;
+  letter-spacing: -0.01em;
 }
 
-/* Visible focus for the keyboard turn loop. */
+/* Big figures earn a little extra tightening. */
+.figure {
+  font-family: var(--font-serif);
+  font-variation-settings: 'opsz' 40;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------------ *
+ * Structure
+ * ------------------------------------------------------------------ */
+
+/*
+ * An engraved rule: the line plus a one-pixel highlight beneath it, the way a
+ * scored line looks on paper. Almost subliminal, and the thing that stops a
+ * dense layout reading as a spreadsheet.
+ */
+.rule-engraved {
+  border-bottom: 1px solid var(--color-rule);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.6);
+}
+
+:root.dark .rule-engraved {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.03);
+}
+
+/* A hairline that reads as printed rather than drawn. */
+.rule-hair {
+  border-color: color-mix(in oklab, var(--color-rule) 80%, transparent);
+}
+
+/* ------------------------------------------------------------------ *
+ * Interaction
+ * ------------------------------------------------------------------ */
+
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--color-civic);
   outline-offset: 2px;
+  border-radius: 1px;
+}
+
+/* Range inputs, restyled — the budget sliders are a primary control. */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  background: var(--color-rule-strong);
   border-radius: 2px;
+}
+
+input[type='range']::-moz-range-track {
+  height: 3px;
+  background: var(--color-rule-strong);
+  border-radius: 2px;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6.5px;
+  border-radius: 50%;
+  background: var(--color-panel);
+  border: 1.5px solid var(--color-ink);
+  box-shadow: var(--shadow-sheet);
+  transition: transform 120ms ease;
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--color-panel);
+  border: 1.5px solid var(--color-ink);
+}
+
+input[type='range']:hover::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+input[type='range']:disabled::-webkit-slider-thumb {
+  border-color: var(--color-rule-strong);
+  cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------------ *
+ * Motion
+ * ------------------------------------------------------------------ */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-rise {
+  animation: rise 420ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.animate-fade {
+  animation: fade 520ms ease both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -97,4 +390,17 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Screen-reader-only, used by the live region and chart descriptions. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }

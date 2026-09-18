@@ -20,6 +20,7 @@ import {
   persuasionBySegment,
 } from '../../game/index.ts';
 import { Button, Kicker, Panel, PartyMark, Tag, pct } from './Primitives.tsx';
+import { benchInk } from '../bench.ts';
 
 export function CampaignRoom() {
   const { game, dispatch } = useGame();
@@ -148,7 +149,7 @@ export function CampaignRoom() {
                     .slice(0, 5)
                     .map(({ party, share }) => (
                       <li key={party.id} className="flex items-center gap-2 text-sm">
-                        <PartyMark color={party.color} glyph={party.glyph} />
+                        <PartyMark color={benchInk(party)} glyph={party.glyph} />
                         <span className="min-w-0 flex-1 truncate text-ink-soft">
                           {party.shortName}
                         </span>
