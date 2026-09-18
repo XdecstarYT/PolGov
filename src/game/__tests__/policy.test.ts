@@ -23,14 +23,17 @@ import {
   SECTOR_KEYS,
 } from '../balance.ts';
 import { makeIdeology } from '../ideology.ts';
-import type { Bill, GameState, ManifestoPromise, Sector } from '../index.ts';
+import type { Bill, Economy, GameState, ManifestoPromise, Sector } from '../index.ts';
+import { buildEconomy } from '../systems/economy.ts';
+
+const econ = (overrides: Partial<Economy> = {}): Economy => ({ ...buildEconomy(), ...overrides });
 
 const sectors: Sector[] = SECTOR_KEYS.map((key) => ({
   key,
   health: 55,
   funding: SECTOR_BASELINE_FUNDING[key],
 }));
-const scores = computeIssueScores(sectors, 200, 0);
+const scores = computeIssueScores(sectors, 200, 0, econ());
 
 const makeBill = (overrides: Partial<Bill> = {}): Bill => ({
   id: 'b',
@@ -73,11 +76,13 @@ describe('policy popularity is computed, not written down', () => {
       SECTOR_KEYS.map((key) => ({ key, health: key === 'health' ? 10 : 55, funding: 20 })),
       0,
       0,
+      econ(),
     );
     const excellent = computeIssueScores(
       SECTOR_KEYS.map((key) => ({ key, health: key === 'health' ? 95 : 55, funding: 20 })),
       0,
       0,
+      econ(),
     );
     const bill = makeBill({ effects: { sectorDeltas: { health: 8 } } });
     expect(billAppealToSegment(bill, 'retirees', failing)).toBeGreaterThan(
@@ -193,15 +198,14 @@ describe('referendums', () => {
   it('is decided by the country, not the government', () => {
     /* The same question under two different national conditions. */
     const carbon = REFERENDUM_TEMPLATES.find((q) => q.id === 'carbon-mandate')!;
-    const strongEconomy = computeIssueScores(
-      SECTOR_KEYS.map((key) => ({ key, health: key === 'economy' ? 90 : 55, funding: 20 })),
-      0,
-      0,
-    );
+    const sectorsAt55 = SECTOR_KEYS.map((key) => ({ key, health: 55, funding: 20 }));
+    /* The same question put to a country in work and a country out of it. */
+    const strongEconomy = computeIssueScores(sectorsAt55, 0, 0, econ());
     const weakEconomy = computeIssueScores(
-      SECTOR_KEYS.map((key) => ({ key, health: key === 'economy' ? 15 : 55, funding: 20 })),
+      sectorsAt55,
       0,
       0,
+      econ({ unemployment: 12, growth: -3, wageGrowth: 0.5, inflation: 6 }),
     );
     const a = runReferendum(carbon, buildRegions(), strongEconomy).yesShare;
     const b = runReferendum(carbon, buildRegions(), weakEconomy).yesShare;

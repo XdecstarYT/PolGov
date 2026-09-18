@@ -15,6 +15,7 @@ export * from './turn.ts';
 
 export * from './systems/approval.ts';
 export * from './systems/budget.ts';
+export * from './systems/economy.ts';
 export * from './systems/coalition.ts';
 export * from './systems/election.ts';
 export * from './systems/electorate.ts';

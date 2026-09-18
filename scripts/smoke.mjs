@@ -114,6 +114,13 @@ await step('advance into the next month', async () => {
   await page.getByRole('heading', { name: 'The morning brief' }).waitFor({ timeout: 8000 });
 });
 
+/* The second briefing is the first one with any history on it, so it is the
+   one worth looking at: the economy traces and the trend line are empty on
+   turn one and tell you nothing about whether they render. */
+await page.getByRole('button', { name: 'Light' }).click();
+await page.waitForTimeout(300);
+await page.screenshot({ path: `${OUT}/10-briefing-turn2.png`, fullPage: true });
+
 await browser.close();
 
 if (errors.length) {

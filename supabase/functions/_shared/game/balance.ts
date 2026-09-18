@@ -582,3 +582,229 @@ export const LEGACY_WEIGHTS = {
   peakApproval: 4,
   perElectionWon: 90,
 } as const;
+
+/* ------------------------------------------------------------------ *
+ * Engine 2A — the macroeconomy
+ *
+ * One turn is one month, but every rate here is expressed the way a
+ * finance minister would read it: annualised, in percent. The monthly
+ * step divides by twelve where it needs to. Keeping the units the way
+ * the briefing states them is worth the division.
+ *
+ * The model is the standard undergraduate three-equation one — an IS
+ * curve, a Phillips curve and a Taylor rule — because it is the smallest
+ * thing that produces the behaviour the game needs: stimulus works and
+ * then costs you, inflation is punished late, and the central bank will
+ * undo what you do if you do too much of it.
+ * ------------------------------------------------------------------ */
+
+/** Real output at the start of a run, ₡bn per year. */
+export const GDP_START = 3_680;
+/** Trend growth the economy reverts to, % a year, before productivity. */
+export const POTENTIAL_GROWTH_BASE = 2.1;
+/**
+ * Speed the output gap closes at, per month.
+ *
+ * Applied to a slump. A boom is pulled back harder — see
+ * `OUTPUT_GAP_BOOM_DAMPING` — because an economy above capacity runs into
+ * shortages of people, parts and premises, while one below capacity just has
+ * idle people who stay idle. That asymmetry is why the cycle this produces
+ * has sharp, frightening downturns and unremarkable upswings, which is the
+ * shape real cycles have and the shape the game needs: a recession has to be
+ * the thing a government is afraid of.
+ */
+export const OUTPUT_GAP_CLOSE_RATE = 0.032;
+/** How much harder a boom is pulled back than a slump is pulled up. */
+export const OUTPUT_GAP_BOOM_DAMPING = 1.9;
+
+/** Productivity index at the start. 100 is "as productive as last decade". */
+export const PRODUCTIVITY_START = 100;
+/** Drift per month toward the level education and infrastructure imply. */
+export const PRODUCTIVITY_DRIFT_RATE = 0.012;
+/** A point of productivity above 100 is worth this much trend growth. */
+export const PRODUCTIVITY_TO_GROWTH = 0.055;
+
+/* --- the IS curve: what moves output away from trend --- */
+
+/** A point of real interest rate above neutral costs this much growth. */
+export const IS_REAL_RATE_WEIGHT = 0.38;
+/** The real rate the economy is indifferent to. */
+export const NEUTRAL_REAL_RATE = 1.6;
+/** A point of combined confidence above 50 adds this much growth. */
+export const IS_CONFIDENCE_WEIGHT = 0.021;
+/**
+ * Fiscal impulse: points of annual growth per percentage point of GDP run as
+ * a deficit.
+ *
+ * Expressed as a ratio rather than as ₡bn per point, because an absolute
+ * figure silently weakens as the economy grows — the same ₡20bn deficit
+ * should matter less to a country half again as large, and with an absolute
+ * constant it would matter exactly as much forever.
+ *
+ * 0.18 puts a deficit worth 10% of GDP at roughly +1.8 points of growth.
+ * Below the textbook multiplier, deliberately: this is a persistent impulse
+ * applied every month it continues, so it compounds, and a headline figure
+ * that matched the literature would make deficit spending a cheat code.
+ */
+export const IS_FISCAL_MULTIPLIER = 0.18;
+
+/* --- the cycle has weather --- */
+
+/**
+ * How hard an ordinary month's economic noise pushes growth and prices.
+ *
+ * Real economies cycle without anyone doing anything to them. Without this
+ * the model sits exactly on trend forever, the player's budget is the only
+ * thing that ever moves it, and the whole thing reads as a spreadsheet rather
+ * than as a country.
+ *
+ * The noise is drawn from the game's own seeded RNG, so a replayed turn
+ * produces the identical month — and it is passed in rather than drawn here,
+ * so that `forecastEconomy` can run the same function with the noise set to
+ * zero. That is what makes the Treasury forecast honest AND wrong: it is the
+ * model's true expectation, and reality will differ from it, every time, in
+ * the direction nobody could have told you in advance.
+ */
+export const CYCLE_DEMAND_NOISE = 1.9;
+export const CYCLE_SUPPLY_NOISE = 0.30;
+
+/**
+ * How much of last month's cycle carries into this one.
+ *
+ * Without this the noise is white and averages to nothing: every month is an
+ * independent nudge, the output-gap term pulls each one straight back, and
+ * the economy never has a bad YEAR — only a scattering of unrelated bad
+ * months. Carrying the deviation forward is what turns weather into a
+ * climate, and it is what makes a downturn something a government is living
+ * through rather than something that happened once in March.
+ *
+ * At 0.88 a run of bad draws compounds into a swing of a point or so of
+ * growth that takes a year and a half to unwind — long enough that the
+ * government which caused it is often not the one that wears it, which is
+ * the most honest thing the economic model does.
+ */
+export const CYCLE_PERSISTENCE = 0.88;
+/** How fast growth eases toward what the IS curve implies. */
+export const GROWTH_ADJUST_RATE = 0.22;
+
+/* --- Okun's law: output and jobs --- */
+
+/** Unemployment where inflation neither rises nor falls. */
+export const NATURAL_UNEMPLOYMENT = 4.8;
+/** Points of unemployment per point of output gap. Okun's coefficient. */
+export const OKUN_COEFFICIENT = 0.42;
+/** Unemployment is sticky: it eases toward its implied level at this rate. */
+export const UNEMPLOYMENT_ADJUST_RATE = 0.17;
+
+/* --- the Phillips curve: jobs and prices --- */
+
+export const INFLATION_TARGET = 2.5;
+/** A point of unemployment below natural adds this much inflation a year. */
+export const PHILLIPS_SLOPE = 0.55;
+/**
+ * How much of that slope survives on the slack side of the natural rate.
+ *
+ * Downward nominal rigidity: firms cut hiring long before they cut wages, and
+ * cut wages long before they cut prices. So slack pushes inflation down far
+ * more weakly than tightness pushes it up — the flat bottom of the Phillips
+ * curve that every real economy has.
+ *
+ * Without this the curve is symmetric, and a deep enough slump compounds
+ * through expectations into a deflationary spiral with no floor: a forty-year
+ * run with no government in it reached −32% inflation, an output gap of −24
+ * and a policy rate pinned at zero, which is a liquidity trap the model had
+ * no way out of because nothing stopped prices falling.
+ */
+export const PHILLIPS_SLACK_DAMPING = 0.3;
+/** How much of last month's inflation carries into expectations. */
+export const INFLATION_PERSISTENCE = 0.86;
+/** Wages chase prices plus productivity, at this speed. */
+export const WAGE_ADJUST_RATE = 0.25;
+/** Wage growth above prices that tight labour markets buy. */
+export const WAGE_TIGHTNESS_WEIGHT = 0.7;
+
+/* --- the Taylor rule: the central bank, which is not yours --- */
+
+/** The rate the bank would set with inflation on target and no output gap. */
+export const POLICY_RATE_NEUTRAL = 4.1;
+/** Response to a point of inflation above target. Above 1 by the Taylor principle. */
+export const TAYLOR_INFLATION_WEIGHT = 1.4;
+/** Response to a point of output gap. */
+export const TAYLOR_OUTPUT_WEIGHT = 0.5;
+/**
+ * The bank moves in steps, not jumps. Max change per month, in points.
+ *
+ * At 0.25 it took the bank four years to travel from neutral to its ceiling,
+ * which is slower than any real central bank and slow enough to be beaten:
+ * expectations ratcheted faster than the rate could climb, and a forty-year
+ * run with no government in it at all reached 32% inflation. Half a point a
+ * month is roughly what a committee meeting monthly actually does, and it is
+ * fast enough for the Taylor principle to hold.
+ */
+export const POLICY_RATE_MAX_STEP = 0.5;
+export const POLICY_RATE_FLOOR = 0;
+/**
+ * The ceiling has to sit above any inflation the model can reach, or the rule
+ * inverts: pinned at a rate below inflation, the real rate is negative, which
+ * is stimulus, which raises inflation further. A cap low enough to bind is
+ * not a safety limit — it is a hyperinflation trap with a friendly name.
+ */
+export const POLICY_RATE_CEILING = 30;
+
+/* --- confidence --- */
+
+export const CONFIDENCE_START = 55;
+export const CONFIDENCE_ADJUST_RATE = 0.2;
+/** A point of unemployment above natural costs consumers this much confidence. */
+export const CONFIDENCE_UNEMPLOYMENT_WEIGHT = 3.4;
+/** A point of inflation above target costs this much. */
+export const CONFIDENCE_INFLATION_WEIGHT = 2.6;
+/** A point of annual growth is worth this much to business. */
+export const CONFIDENCE_GROWTH_WEIGHT = 4.2;
+/** Business confidence also reads the political weather: approval − 50. */
+export const CONFIDENCE_APPROVAL_WEIGHT = 0.18;
+
+/* --- households and firms --- */
+
+/** Share of GDP that is household income. */
+export const HOUSEHOLD_INCOME_SHARE = 0.56;
+/** Savings rate with confidence at 50 and the real rate at neutral, %. */
+export const SAVINGS_RATE_BASE = 7.5;
+/** A point of confidence below 50 raises precautionary saving by this much. */
+export const SAVINGS_CONFIDENCE_WEIGHT = 0.09;
+/** A point of real rate above neutral raises saving by this much. */
+export const SAVINGS_RATE_WEIGHT = 0.55;
+export const SAVINGS_RATE_MIN = 0.5;
+export const SAVINGS_RATE_MAX = 22;
+
+/** Investment as a share of GDP at neutral confidence and neutral rates. */
+export const INVESTMENT_SHARE_BASE = 0.22;
+export const INVESTMENT_CONFIDENCE_WEIGHT = 0.0022;
+export const INVESTMENT_RATE_WEIGHT = 0.011;
+
+/* --- the cycle --- */
+
+/** Annualised growth below this counts as a contracting month. */
+export const CONTRACTION_THRESHOLD = 0;
+/** Consecutive contracting months before it is called a recession. */
+export const RECESSION_MONTHS = 3;
+/** Output gap above this is a boom. */
+export const BOOM_OUTPUT_GAP = 1.8;
+/** Output gap below this is a slump, whatever growth is doing. */
+export const SLUMP_OUTPUT_GAP = -1.8;
+
+/** Months of macro history kept for charts and forecasts. */
+export const ECONOMY_HISTORY_LIMIT = 120;
+/** How far ahead the Treasury forecast runs, in months. */
+export const FORECAST_HORIZON = 12;
+
+/**
+ * Revenue is a share of output now, not a flat base scaled by a health dial.
+ *
+ * 34% of GDP is where a mixed economy with this much public provision
+ * actually sits. At GDP_START that is ₡104bn a month, which is what
+ * `computeRevenue` returned at the old economy health of 60 — so every
+ * fiscal number the rest of the game was tuned against holds, and the
+ * tax system in Engine 2C moves this share rather than replacing it.
+ */
+export const REVENUE_GDP_SHARE = 0.34;

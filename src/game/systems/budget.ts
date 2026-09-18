@@ -9,13 +9,14 @@
 import {
   DEBT_INTEREST_RATE,
   DIFFICULTY,
-  REVENUE_BASE,
+  POLICY_RATE_NEUTRAL,
   SECTOR_BASELINE_FUNDING,
   SECTOR_DRIFT_RATE,
   SECTOR_KEYS,
   SURPLUS_TO_DEBT_RATIO,
 } from '../balance.ts';
-import type { Difficulty, Sector, SectorKey } from '../types.ts';
+import type { Difficulty, Economy, Sector, SectorKey } from '../types.ts';
+import { computeRevenueFromGdp } from './economy.ts';
 
 /**
  * The health a sector settles at for a given funding level.
@@ -55,14 +56,30 @@ export function clamp01to100(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
-/** Per-turn tax take. Scales with the economy, so a slump compounds fiscally. */
-export function computeRevenue(economyHealth: number, revenueModifier: number): number {
-  return REVENUE_BASE * (0.5 + economyHealth / 100) + revenueModifier;
+/**
+ * Per-turn tax take.
+ *
+ * A share of output, so a slump compounds fiscally on its own: the month
+ * unemployment rises is also the month revenue falls and the deficit widens
+ * before the government has decided anything at all.
+ */
+export function computeRevenue(gdp: number, revenueModifier: number): number {
+  return computeRevenueFromGdp(gdp, revenueModifier);
 }
 
-/** Interest charged this turn on outstanding debt. */
-export function computeDebtService(debt: number): number {
-  return Math.max(0, debt) * DEBT_INTEREST_RATE;
+/**
+ * Interest charged this turn on outstanding debt.
+ *
+ * It follows the central bank's policy rate, which the government does not
+ * set. This is the second half of the bill for stimulus: spend into a closed
+ * output gap, inflation rises, the bank raises rates, and the debt you took
+ * on to do it costs more to carry. At the neutral rate this is exactly the
+ * flat rate the game was previously tuned against, so nothing about the
+ * baseline difficulty moves — only its response to the cycle.
+ */
+export function computeDebtService(debt: number, policyRate = POLICY_RATE_NEUTRAL): number {
+  const relative = Math.max(0.35, policyRate / POLICY_RATE_NEUTRAL);
+  return Math.max(0, debt) * DEBT_INTEREST_RATE * relative;
 }
 
 export function totalFunding(sectors: readonly Sector[]): number {
@@ -82,6 +99,18 @@ export interface FiscalTick {
 }
 
 /**
+ * The fiscal impulse the economy feels, ₡bn.
+ *
+ * Positive when the government is injecting more than it takes out. This is
+ * what `stepEconomy` reads, and it is the only channel through which a budget
+ * decision reaches growth — deliberately one number, so the chain from a
+ * funding slider to an unemployment rate stays traceable.
+ */
+export function fiscalImpulse(tick: FiscalTick): number {
+  return -tick.balance;
+}
+
+/**
  * Resolve one turn of public finances.
  *
  * A deficit is financed by new debt. A surplus pays down debt first (at
@@ -90,13 +119,13 @@ export interface FiscalTick {
  */
 export function resolveFiscalTurn(
   sectors: readonly Sector[],
-  economyHealth: number,
+  economy: Economy,
   revenueModifier: number,
   debt: number,
 ): FiscalTick {
-  const revenue = computeRevenue(economyHealth, revenueModifier);
+  const revenue = computeRevenue(economy.gdp, revenueModifier);
   const spending = totalFunding(sectors);
-  const debtService = computeDebtService(debt);
+  const debtService = computeDebtService(debt, economy.policyRate);
   const balance = revenue - spending - debtService;
 
   if (balance < 0) {

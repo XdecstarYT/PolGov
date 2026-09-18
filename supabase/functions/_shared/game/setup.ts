@@ -24,6 +24,7 @@ import { PARTY_TEMPLATES } from './content/parties.ts';
 import { REGION_TEMPLATES } from './content/regions.ts';
 import { Rng, seedFromString } from './rng.ts';
 import { buildDistricts } from './systems/districts.ts';
+import { buildEconomy } from './systems/economy.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
 import { buildSenate } from './systems/parliament.ts';
 import { MMP_DISTRICT_SHARE } from './balance.ts';
@@ -211,6 +212,11 @@ export function createGame(options: NewGameOptions): GameState {
     treasury: 0,
     debt: profile.startingDebt,
     revenueModifier: 0,
+
+    /* On trend, on target, at the natural rate. Whatever goes wrong first
+       should be legible as something that happened, not as the starting
+       conditions catching up with the player. */
+    economy: buildEconomy(),
 
     partyInternals: {
       ...buildPartyInternals(options.playerIdeology),

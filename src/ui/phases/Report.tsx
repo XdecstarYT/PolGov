@@ -37,6 +37,11 @@ const GROUPS: { kind: LogKind; title: string; blurb: string }[] = [
   { kind: 'political_capital', title: 'Political capital', blurb: 'Earned and spent.' },
   { kind: 'treasury', title: 'Treasury', blurb: 'Money in and money out.' },
   { kind: 'debt', title: 'Debt', blurb: 'Borrowing, interest, and repayment.' },
+  {
+    kind: 'economy',
+    title: 'The economy',
+    blurb: 'What the country did, rather than what you decided.',
+  },
   { kind: 'sector', title: 'Public services', blurb: 'Health of each sector and its funding.' },
   { kind: 'coalition', title: 'Coalition', blurb: 'How your partners took the month.' },
   { kind: 'note', title: 'Notes', blurb: '' },

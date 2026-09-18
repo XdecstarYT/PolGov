@@ -94,6 +94,12 @@ const header = (s) =>
   `tre ${s.treasury.toFixed(0).padStart(5)} ` +
   `debt ${s.debt.toFixed(0).padStart(5)} ` +
   `avgH ${(s.sectors.reduce((a, x) => a + x.health, 0) / 5).toFixed(1)} ` +
+  `| g ${s.economy.growth.toFixed(2).padStart(5)} ` +
+  `u ${s.economy.unemployment.toFixed(1).padStart(4)} ` +
+  `cpi ${s.economy.inflation.toFixed(1).padStart(5)} ` +
+  `r ${s.economy.policyRate.toFixed(2)} ` +
+  `gap ${s.economy.outputGap.toFixed(1).padStart(5)} ` +
+  `${s.economy.phase.padEnd(9)} | ` +
   `seats ${s.parties.find((p) => p.isPlayer).seats} ` +
   `bills ${s.career.billsPassed}/${s.career.billsPassed + s.career.billsFailed} ` +
   `phase ${s.phase}`;

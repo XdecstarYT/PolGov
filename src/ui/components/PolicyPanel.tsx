@@ -25,7 +25,7 @@ export function PolicyOpinionSummary({ bill }: { bill: Bill }) {
   const { game } = useGame();
   const opinion = useMemo(() => {
     if (!game) return null;
-    const scores = computeIssueScores(game.sectors, game.debt, game.revenueModifier);
+    const scores = computeIssueScores(game.sectors, game.debt, game.revenueModifier, game.economy);
     return policyOpinion(bill, game.regions, scores);
   }, [game, bill]);
 

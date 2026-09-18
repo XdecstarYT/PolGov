@@ -16,7 +16,6 @@
 import {
   CAMPAIGN_EFFECT_PER_INVESTMENT,
   INCUMBENT_PERFORMANCE_SWING,
-  ISSUE_COST_ECONOMY_WEIGHT,
   ISSUE_COST_PER_REVENUE,
   ISSUE_DEBT_ZERO_AT,
   ISSUE_TAX_BASE,
@@ -34,8 +33,9 @@ import {
   type SegmentTemplate,
 } from '../content/segments.ts';
 import { affinity } from '../ideology.ts';
-import type { Party, Region, Sector } from '../types.ts';
+import type { Economy, Party, Region, Sector } from '../types.ts';
 import { findSector } from './budget.ts';
+import { costOfLivingScore, economyIssueScore } from './economy.ts';
 
 const clamp100 = (value: number) => Math.max(0, Math.min(100, value));
 
@@ -48,32 +48,36 @@ export type IssueScores = Record<IssueKey, number>;
 /**
  * Score the government's record on each issue, 0–100.
  *
- * Five of the eight are simply the health of the sector responsible. The other
- * three are composites, because voters experience them that way: the tax
- * burden is what the government has added to recurring revenue, the debt score
- * falls as borrowing climbs, and cost of living combines a weak economy with
- * the taxes layered on top of it.
+ * Four of the eight are simply the health of the sector responsible. The
+ * other four are composites, because voters experience them that way:
+ *
+ *   · "Jobs and the economy" is read off the macroeconomy — unemployment,
+ *     real wages and direction — not off what the economy line in the budget
+ *     is funded at. A government cannot buy this score; it has to produce it.
+ *   · The tax burden is what the government has added to recurring revenue.
+ *   · The debt score falls as borrowing climbs.
+ *   · Cost of living is the gap between what wages do and what prices do,
+ *     plus whatever tax has been layered on top. A country with 6% inflation
+ *     and 8% wage growth is not having a cost-of-living crisis; one with 2%
+ *     and 0% is.
  */
 export function computeIssueScores(
   sectors: readonly Sector[],
   debt: number,
   revenueModifier: number,
+  economy: Economy,
 ): IssueScores {
-  const economy = findSector(sectors, 'economy').health;
+  const taxBurden = Math.max(0, revenueModifier) * ISSUE_COST_PER_REVENUE;
 
   return {
-    economy,
+    economy: economyIssueScore(economy),
     health: findSector(sectors, 'health').health,
     education: findSector(sectors, 'education').health,
     infrastructure: findSector(sectors, 'infrastructure').health,
     environment: findSector(sectors, 'environment').health,
     tax: clamp100(ISSUE_TAX_BASE - revenueModifier * ISSUE_TAX_PER_REVENUE),
     debt: clamp100(100 * (1 - Math.max(0, debt) / ISSUE_DEBT_ZERO_AT)),
-    cost_of_living: clamp100(
-      50 +
-        (economy - 60) * ISSUE_COST_ECONOMY_WEIGHT -
-        Math.max(0, revenueModifier) * ISSUE_COST_PER_REVENUE,
-    ),
+    cost_of_living: costOfLivingScore(economy, taxBurden),
   };
 }
 

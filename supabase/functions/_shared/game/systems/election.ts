@@ -20,6 +20,7 @@ import type {
   Party,
   Region,
   RegionResult,
+  Economy,
   Sector,
 } from '../types.ts';
 import type { Rng } from '../rng.ts';
@@ -109,6 +110,12 @@ export interface ElectionInput {
   sectors?: readonly Sector[];
   debt?: number;
   revenueModifier?: number;
+  /**
+   * The macroeconomy the country votes in. Omitted only by tests that care
+   * about seat arithmetic rather than about why anyone voted; without it the
+   * electorate falls back to neutral scores on every issue.
+   */
+  economy?: Economy;
   /** Extra support per segment, from campaigning that reached them. */
   segmentPersuasion?: SupportContext['segmentPersuasion'];
   /** Extra turnout per segment, from campaigning that reached them. */
@@ -145,9 +152,15 @@ export function simulateElection(input: ElectionInput): ElectionResult {
   const { parties, regions, districts, system, approval, campaign, termNumber, rng } = input;
   const player = parties.find((p) => p.isPlayer);
 
-  const scores = input.sectors
-    ? computeIssueScores(input.sectors, input.debt ?? 0, input.revenueModifier ?? 0)
-    : NEUTRAL_SCORES;
+  const scores =
+    input.sectors && input.economy
+      ? computeIssueScores(
+          input.sectors,
+          input.debt ?? 0,
+          input.revenueModifier ?? 0,
+          input.economy,
+        )
+      : NEUTRAL_SCORES;
 
   const context: SupportContext = {
     scores,

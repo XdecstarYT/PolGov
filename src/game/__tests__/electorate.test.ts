@@ -18,7 +18,8 @@ import {
 import { SECTOR_BASELINE_FUNDING, SECTOR_KEYS, TURNOUT_BASELINE } from '../balance.ts';
 import { buildRegions } from '../setup.ts';
 import { makeIdeology } from '../ideology.ts';
-import type { Party, Sector } from '../types.ts';
+import type { Economy, Party, Sector } from '../types.ts';
+import { buildEconomy } from '../systems/economy.ts';
 
 const sectorsAt = (health: number, overrides: Partial<Record<string, number>> = {}): Sector[] =>
   SECTOR_KEYS.map((key) => ({
@@ -45,43 +46,80 @@ const makeParty = (id: string, ideology = makeIdeology(0, 0, 0), isPlayer = fals
   leaderTitle: 'Leader',
 });
 
+/**
+ * An economy at rest. The economy and cost-of-living issues are read off the
+ * macroeconomy now, not off a funding dial, so a test that wants to move them
+ * moves the economy.
+ */
+const econ = (overrides: Partial<Economy> = {}): Economy => ({ ...buildEconomy(), ...overrides });
+
 const ctx = (sectors: Sector[], debt = 0, revenue = 0): SupportContext => ({
-  scores: computeIssueScores(sectors, debt, revenue),
+  scores: computeIssueScores(sectors, debt, revenue, econ()),
   incumbentId: 'player',
 });
 
 describe('issue scores', () => {
-  it('reads the five service issues straight off sector health', () => {
-    const scores = computeIssueScores(sectorsAt(70), 0, 0);
-    for (const key of ['economy', 'health', 'education', 'infrastructure', 'environment'] as const) {
+  it('reads the four service issues straight off sector health', () => {
+    const scores = computeIssueScores(sectorsAt(70), 0, 0, econ());
+    for (const key of ['health', 'education', 'infrastructure', 'environment'] as const) {
       expect(scores[key]).toBe(70);
     }
   });
 
+  it('scores the economy off the macroeconomy, not off what it is funded at', () => {
+    const rest = sectorsAt(60);
+    /* Same budget in both. The only thing that differs is what the country
+       is actually doing, which is the whole point of the coupling. */
+    const good = computeIssueScores(rest, 0, 0, econ()).economy;
+    const bad = computeIssueScores(rest, 0, 0, econ({ unemployment: 11, growth: -2.5 })).economy;
+    expect(bad).toBeLessThan(good);
+
+    /* And pouring money into the economy line does not move the score. */
+    const funded = computeIssueScores(sectorsAt(60, { economy: 95 }), 0, 0, econ()).economy;
+    expect(funded).toBeCloseTo(good, 10);
+  });
+
   it('scores debt worse as borrowing climbs, and floors at zero', () => {
-    expect(computeIssueScores(sectorsAt(60), 0, 0).debt).toBe(100);
-    expect(computeIssueScores(sectorsAt(60), 300, 0).debt).toBeLessThan(60);
-    expect(computeIssueScores(sectorsAt(60), 100_000, 0).debt).toBe(0);
+    expect(computeIssueScores(sectorsAt(60), 0, 0, econ()).debt).toBe(100);
+    expect(computeIssueScores(sectorsAt(60), 300, 0, econ()).debt).toBeLessThan(60);
+    expect(computeIssueScores(sectorsAt(60), 100_000, 0, econ()).debt).toBe(0);
   });
 
   it('scores tax worse as recurring revenue is raised', () => {
-    const light = computeIssueScores(sectorsAt(60), 0, 0).tax;
-    const heavy = computeIssueScores(sectorsAt(60), 0, 12).tax;
+    const light = computeIssueScores(sectorsAt(60), 0, 0, econ()).tax;
+    const heavy = computeIssueScores(sectorsAt(60), 0, 12, econ()).tax;
     expect(heavy).toBeLessThan(light);
   });
 
-  it('ties cost of living to both the economy and the tax burden', () => {
-    const strong = computeIssueScores(sectorsAt(60, { economy: 85 }), 0, 0).cost_of_living;
-    const weak = computeIssueScores(sectorsAt(60, { economy: 30 }), 0, 0).cost_of_living;
-    const taxed = computeIssueScores(sectorsAt(60, { economy: 85 }), 0, 15).cost_of_living;
-    expect(strong).toBeGreaterThan(weak);
-    expect(taxed).toBeLessThan(strong);
+  it('ties cost of living to real wages and the tax burden, not to the CPI alone', () => {
+    const base = sectorsAt(60);
+    const comfortable = computeIssueScores(base, 0, 0, econ()).cost_of_living;
+    const squeezed = computeIssueScores(
+      base,
+      0,
+      0,
+      econ({ inflation: 7, wageGrowth: 1.5 }),
+    ).cost_of_living;
+    /* High inflation that wages are keeping up with is NOT a squeeze. This is
+       the distinction the old economy-health proxy could not make, and it is
+       the one voters actually make. */
+    const keepingUp = computeIssueScores(
+      base,
+      0,
+      0,
+      econ({ inflation: 7, wageGrowth: 9 }),
+    ).cost_of_living;
+    const taxed = computeIssueScores(base, 0, 15, econ()).cost_of_living;
+
+    expect(squeezed).toBeLessThan(comfortable);
+    expect(keepingUp).toBeGreaterThan(squeezed);
+    expect(taxed).toBeLessThan(comfortable);
   });
 
   it('keeps every score inside 0..100', () => {
     for (const scores of [
-      computeIssueScores(sectorsAt(0), 100_000, 200),
-      computeIssueScores(sectorsAt(100), 0, -200),
+      computeIssueScores(sectorsAt(0), 100_000, 200, econ({ unemployment: 30, inflation: 40, wageGrowth: -12, growth: -25 })),
+      computeIssueScores(sectorsAt(100), 0, -200, econ({ unemployment: 0.5, inflation: -9, wageGrowth: 30, growth: 14 })),
     ]) {
       for (const key of ISSUE_KEYS) {
         expect(scores[key]).toBeGreaterThanOrEqual(0);
@@ -95,30 +133,33 @@ describe('segment satisfaction', () => {
   const retirees = segmentTemplate('retirees');
 
   it('rises when the issues a segment cares about improve', () => {
-    const poor = segmentSatisfaction(retirees, computeIssueScores(sectorsAt(60, { health: 20 }), 0, 0));
-    const good = segmentSatisfaction(retirees, computeIssueScores(sectorsAt(60, { health: 95 }), 0, 0));
+    const poor = segmentSatisfaction(retirees, computeIssueScores(sectorsAt(60, { health: 20 }), 0, 0, econ()));
+    const good = segmentSatisfaction(retirees, computeIssueScores(sectorsAt(60, { health: 95 }), 0, 0, econ()));
     expect(good).toBeGreaterThan(poor);
   });
 
   it('ignores issues a segment does not weight', () => {
     const highIncome = segmentTemplate('high_income');
     /* They weight tax and debt, not the environment. */
-    const a = segmentSatisfaction(highIncome, computeIssueScores(sectorsAt(60, { environment: 5 }), 0, 0));
-    const b = segmentSatisfaction(highIncome, computeIssueScores(sectorsAt(60, { environment: 95 }), 0, 0));
+    const a = segmentSatisfaction(highIncome, computeIssueScores(sectorsAt(60, { environment: 5 }), 0, 0, econ()));
+    const b = segmentSatisfaction(highIncome, computeIssueScores(sectorsAt(60, { environment: 95 }), 0, 0, econ()));
     expect(a).toBeCloseTo(b, 10);
   });
 
   it('treats a negatively-weighted issue as a mark against the government', () => {
     const workers = segmentTemplate('industrial_workers');
     expect(workers.issueWeights.environment).toBeLessThan(0);
-    const low = segmentSatisfaction(workers, computeIssueScores(sectorsAt(60, { environment: 10 }), 0, 0));
-    const high = segmentSatisfaction(workers, computeIssueScores(sectorsAt(60, { environment: 95 }), 0, 0));
+    const low = segmentSatisfaction(workers, computeIssueScores(sectorsAt(60, { environment: 10 }), 0, 0, econ()));
+    const high = segmentSatisfaction(workers, computeIssueScores(sectorsAt(60, { environment: 95 }), 0, 0, econ()));
     expect(high).toBeLessThan(low);
   });
 
   it('stays within 0..1 for every segment at both extremes', () => {
     for (const segment of SEGMENT_TEMPLATES) {
-      for (const scores of [computeIssueScores(sectorsAt(0), 9000, 90), computeIssueScores(sectorsAt(100), 0, 0)]) {
+      for (const scores of [
+        computeIssueScores(sectorsAt(0), 9000, 90, econ({ unemployment: 28, inflation: 33, wageGrowth: -9 })),
+        computeIssueScores(sectorsAt(100), 0, 0, econ({ unemployment: 1, wageGrowth: 12 })),
+      ]) {
         const value = segmentSatisfaction(segment, scores);
         expect(value).toBeGreaterThanOrEqual(0);
         expect(value).toBeLessThanOrEqual(1);
@@ -289,7 +330,7 @@ describe('the model produces the right behaviour without being told to', () => {
      * Satisfy the low-turnout segments and neglect the high-turnout ones: more
      * people approve, fewer of the people who actually vote do.
      */
-    const scores = computeIssueScores(sectorsAt(60, { health: 20, education: 90 }), 0, 0);
+    const scores = computeIssueScores(sectorsAt(60, { health: 20, education: 90 }), 0, 0, econ());
     const retirees = segmentSatisfaction(segmentTemplate('retirees'), scores);
     const students = segmentSatisfaction(segmentTemplate('students'), scores);
     expect(students).toBeGreaterThan(retirees);

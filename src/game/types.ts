@@ -340,6 +340,7 @@ export type LogKind =
   | 'treasury'
   | 'debt'
   | 'sector'
+  | 'economy'
   | 'coalition'
   | 'legislature'
   | 'event'
@@ -467,6 +468,145 @@ export type RunStatus =
   /** Player stepped down voluntarily. */
   | 'retired';
 
+/* ------------------------------------------------------------------ *
+ * Engine 2A — the macroeconomy
+ * ------------------------------------------------------------------ */
+
+/** Where the economy is in its cycle. Classified, never set directly. */
+export type CyclePhase =
+  | 'expansion'
+  | 'peak'
+  | 'slowdown'
+  | 'recession'
+  | 'recovery';
+
+export type ShockKind =
+  | 'demand'
+  | 'supply'
+  | 'financial'
+  | 'external'
+  | 'confidence';
+
+/**
+ * Something that happened to the economy rather than something the
+ * government did.
+ *
+ * A shock is a decaying impulse, not a permanent setting: it lands with its
+ * full weight and fades over `months`, so the recovery from it is something
+ * the player lives through rather than something they toggle off.
+ */
+export interface EconomicShock {
+  id: string;
+  label: string;
+  kind: ShockKind;
+  /** Annualised growth added per month while active. Usually negative. */
+  growthImpulse: number;
+  /** Annualised inflation added per month while active. */
+  inflationImpulse: number;
+  /** Points added to both confidence measures. */
+  confidenceImpulse: number;
+  /** Months remaining. Decays to zero and is then removed. */
+  remaining: number;
+  /** Months it started with, so the decay curve can be computed. */
+  duration: number;
+  /** The turn it arrived, for the record. */
+  startedTurn: number;
+}
+
+/** One month of the macro record. */
+export interface EconomyPoint {
+  turn: number;
+  gdp: number;
+  growth: number;
+  inflation: number;
+  unemployment: number;
+  policyRate: number;
+  outputGap: number;
+}
+
+/**
+ * The macroeconomy.
+ *
+ * Rates are annualised percentages, the way a briefing states them. Levels
+ * are ₡bn a year. The player sets none of this directly — it is what their
+ * budget, their taxes and the world do to them, which is the point.
+ */
+export interface Economy {
+  /** Real output, ₡bn a year. */
+  gdp: number;
+  /** What output would be with the economy at full capacity. */
+  potentialGdp: number;
+  /** Annualised real growth, %. */
+  growth: number;
+  /** Trend growth, %. Set by productivity and the workforce. */
+  potentialGrowth: number;
+  /** (gdp − potentialGdp) / potentialGdp, as a percentage. */
+  outputGap: number;
+  /** Output per worker, index, 100 = the baseline decade. */
+  productivity: number;
+
+  /** Annual CPI change, %. Negative is deflation. */
+  inflation: number;
+  /** What people expect inflation to be, which is what makes it sticky. */
+  inflationExpectation: number;
+  /** Per cent of the workforce out of work. */
+  unemployment: number;
+  /** Per cent of the workforce in work. */
+  employment: number;
+  /** Annual nominal wage growth, %. */
+  wageGrowth: number;
+  /** The central bank's policy rate, %. Not the government's to set. */
+  policyRate: number;
+
+  consumerConfidence: number;
+  businessConfidence: number;
+
+  /** Household consumption, ₡bn a year. */
+  householdSpending: number;
+  /** Share of household income saved, %. */
+  householdSavingsRate: number;
+  /** Business investment, ₡bn a year. */
+  investment: number;
+
+  phase: CyclePhase;
+  /**
+   * The cycle the country is in, carried month to month.
+   *
+   * An AR(1) on the monthly economic weather: positive is a run of good
+   * months compounding into an upswing, negative the reverse. Held in state
+   * rather than redrawn, because a downturn is a season and not a series of
+   * unrelated bad days.
+   */
+  cycleMomentum: number;
+  /** The same, for the supply side — what keeps an inflation episode going. */
+  priceMomentum: number;
+  /** Consecutive months of contraction. Three is a recession. */
+  contractionRun: number;
+  /** Consecutive months above the boom threshold. */
+  expansionRun: number;
+
+  shocks: EconomicShock[];
+  history: EconomyPoint[];
+}
+
+/**
+ * A projection of where the economy goes if nothing new happens.
+ *
+ * Produced by running the same monthly step the resolution phase runs, so it
+ * cannot disagree with what actually occurs — it can only be wrong about the
+ * world, which is what forecasts are wrong about.
+ */
+export interface EconomyForecast {
+  months: EconomyPoint[];
+  /** Annualised growth over the horizon. */
+  averageGrowth: number;
+  averageInflation: number;
+  /** Unemployment at the end of the horizon. */
+  endUnemployment: number;
+  /** True if any month in the horizon contracts. */
+  recessionInHorizon: boolean;
+}
+
 export interface GameState {
   id: string;
   ownerId: string | null;
@@ -483,6 +623,9 @@ export interface GameState {
   debt: number;
   /** Recurring revenue modifier accumulated from passed bills. */
   revenueModifier: number;
+
+  /** The macroeconomy: output, prices, jobs, rates and the cycle. */
+  economy: Economy;
 
   /**
    * The player's own party: factions, discipline, members, and money that is

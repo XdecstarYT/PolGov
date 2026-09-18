@@ -7,8 +7,15 @@ import {
   resolveFiscalTurn,
   sectorEquilibrium,
 } from '../systems/budget.ts';
-import { SECTOR_BASELINE_FUNDING, SECTOR_KEYS } from '../balance.ts';
-import type { Sector } from '../types.ts';
+import { buildEconomy } from '../systems/economy.ts';
+import { GDP_START, SECTOR_BASELINE_FUNDING, SECTOR_KEYS } from '../balance.ts';
+import type { Economy, Sector } from '../types.ts';
+
+/** An economy at rest, with only the fields the fiscal maths reads moved. */
+const economy = (overrides: Partial<Economy> = {}): Economy => ({
+  ...buildEconomy(),
+  ...overrides,
+});
 
 const sectors = (overrides: Partial<Record<string, Partial<Sector>>> = {}): Sector[] =>
   SECTOR_KEYS.map((key) => ({
@@ -86,8 +93,8 @@ describe('sector drift', () => {
 });
 
 describe('public finances', () => {
-  it('scales revenue with the health of the economy', () => {
-    expect(computeRevenue(60, 0)).toBeGreaterThan(computeRevenue(40, 0));
+  it('scales revenue with the size of the economy', () => {
+    expect(computeRevenue(GDP_START, 0)).toBeGreaterThan(computeRevenue(GDP_START * 0.8, 0));
   });
 
   it('charges interest in proportion to debt, and nothing on zero', () => {
@@ -95,15 +102,24 @@ describe('public finances', () => {
     expect(computeDebtService(400)).toBeCloseTo(computeDebtService(200) * 2, 6);
   });
 
+  it('charges more interest when the central bank has tightened', () => {
+    const easy = computeDebtService(500, 2);
+    const tight = computeDebtService(500, 9);
+    expect(tight).toBeGreaterThan(easy);
+    /* The government does not set this rate, so the cost of carrying its own
+       debt is partly out of its hands — which is the point of the coupling. */
+    expect(tight / easy).toBeCloseTo(9 / 2, 6);
+  });
+
   it('finances a deficit entirely with new debt', () => {
-    const tick = resolveFiscalTurn(sectors({ economy: { funding: 80 } }), 40, 0, 200);
+    const tick = resolveFiscalTurn(sectors({ economy: { funding: 200 } }), economy(), 0, 200);
     expect(tick.balance).toBeLessThan(0);
     expect(tick.debtDelta).toBeCloseTo(-tick.balance, 6);
     expect(tick.treasuryDelta).toBe(0);
   });
 
   it('applies a surplus to debt first, then banks the remainder', () => {
-    const tick = resolveFiscalTurn(sectors({ health: { funding: 5 } }), 90, 0, 500);
+    const tick = resolveFiscalTurn(sectors({ health: { funding: 5 } }), economy(), 0, 500);
     expect(tick.balance).toBeGreaterThan(0);
     expect(tick.debtDelta).toBeLessThan(0);
     expect(tick.treasuryDelta).toBeGreaterThan(0);
@@ -111,8 +127,16 @@ describe('public finances', () => {
   });
 
   it('never pays down more debt than exists', () => {
-    const tick = resolveFiscalTurn(sectors({ health: { funding: 0 } }), 100, 0, 3);
+    const tick = resolveFiscalTurn(sectors({ health: { funding: 0 } }), economy(), 0, 3);
     expect(-tick.debtDelta).toBeLessThanOrEqual(3);
+  });
+
+  it('widens the deficit on its own when output falls', () => {
+    const healthy = resolveFiscalTurn(sectors(), economy(), 0, 200);
+    const slump = resolveFiscalTurn(sectors(), economy({ gdp: GDP_START * 0.92 }), 0, 200);
+    /* Nothing about the budget changed between these two. The government is
+       further into deficit purely because the economy shrank. */
+    expect(slump.balance).toBeLessThan(healthy.balance);
   });
 });
 

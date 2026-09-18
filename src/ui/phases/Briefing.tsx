@@ -29,6 +29,7 @@ import {
   pct,
 } from '../components/Primitives.tsx';
 import { ApprovalTrend, SeatChart } from '../components/ChartsLazy.tsx';
+import { EconomyPanel } from '../components/EconomyPanel.tsx';
 import { ElectoratePanel } from '../components/ElectoratePanel.tsx';
 
 export function Briefing() {
@@ -123,6 +124,8 @@ export function Briefing() {
           </Panel>
         </div>
       </div>
+
+      <EconomyPanel />
 
       <ElectoratePanel />
 

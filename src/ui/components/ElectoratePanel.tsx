@@ -26,7 +26,7 @@ export function ElectoratePanel() {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const scores = useMemo(
-    () => (game ? computeIssueScores(game.sectors, game.debt, game.revenueModifier) : null),
+    () => (game ? computeIssueScores(game.sectors, game.debt, game.revenueModifier, game.economy) : null),
     [game],
   );
 
@@ -172,7 +172,7 @@ export function RegionElectorate({ regionId }: { regionId: string }) {
   const region = game.regions.find((r) => r.id === regionId);
   if (!region) return null;
 
-  const scores = computeIssueScores(game.sectors, game.debt, game.revenueModifier);
+  const scores = computeIssueScores(game.sectors, game.debt, game.revenueModifier, game.economy);
   const player = game.parties.find((p) => p.isPlayer);
   const breakdown = regionBreakdown(region, game.parties, {
     scores,

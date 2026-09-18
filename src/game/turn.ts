@@ -72,6 +72,7 @@ import {
 import {
   clamp01to100,
   driftSectorHealth,
+  fiscalImpulse,
   findSector,
   resolveFiscalTurn,
 } from './systems/budget.ts';
@@ -101,6 +102,13 @@ import {
   sunsetTurn,
 } from './systems/policy.ts';
 import { computeIssueScores } from './systems/electorate.ts';
+import {
+  describeCycle,
+  economyIssueScore,
+  productivityTarget,
+  stepEconomy,
+} from './systems/economy.ts';
+import { INFLATION_TARGET } from './balance.ts';
 import {
   applyChannelPush,
   availableVolunteerPushes,
@@ -681,9 +689,8 @@ export function resolveTurn(state: GameState): GameState {
     }
   }
 
-  /* Public finances. */
-  const economyHealth = findSector(next.sectors, 'economy').health;
-  const fiscal = resolveFiscalTurn(next.sectors, economyHealth, next.revenueModifier, next.debt);
+  /* Public finances, priced off the economy as it stands this month. */
+  const fiscal = resolveFiscalTurn(next.sectors, next.economy, next.revenueModifier, next.debt);
   next.treasury += fiscal.treasuryDelta;
   next.debt = Math.max(0, next.debt + fiscal.debtDelta);
 
@@ -691,7 +698,7 @@ export function resolveTurn(state: GameState): GameState {
     kind: 'treasury',
     label: 'Revenue',
     delta: fiscal.revenue,
-    cause: `Tax take at economy health ${economyHealth.toFixed(0)}`,
+    cause: `Tax take on ₡${Math.round(next.economy.gdp)}bn of output`,
     unit: '₡bn',
     informational: true,
   });
@@ -707,7 +714,7 @@ export function resolveTurn(state: GameState): GameState {
     kind: 'debt',
     label: 'Debt service',
     delta: -fiscal.debtService,
-    cause: `Interest on ₡${Math.round(next.debt)}bn outstanding`,
+    cause: `Interest on ₡${Math.round(next.debt)}bn outstanding at a ${next.economy.policyRate.toFixed(2)}% policy rate`,
     unit: '₡bn',
     informational: true,
   });
@@ -770,6 +777,101 @@ export function resolveTurn(state: GameState): GameState {
       cause: 'Cash shortfall covered by borrowing, returning the balance to zero',
       unit: '₡bn',
     });
+  }
+
+  /*
+   * The economy.
+   *
+   * Stepped after the fiscal result, because the deficit the government just
+   * ran is the fiscal impulse the economy feels. Growth, jobs, prices and the
+   * policy rate all move here, and none of them are the government's to set
+   * — which is why the entries below are recorded as things that happened
+   * rather than as things that were decided.
+   */
+  const economyBefore = next.economy;
+  next.economy = stepEconomy(next.economy, {
+    fiscalImpulse: fiscalImpulse(fiscal),
+    approval: next.approval,
+    productivityTarget: productivityTarget(
+      findSector(next.sectors, 'education').health,
+      findSector(next.sectors, 'infrastructure').health,
+    ),
+    turn: next.turnNumber,
+    /*
+     * This month's weather, off the run's own seeded RNG, so a replayed turn
+     * produces the identical month and the server can check it. The Treasury
+     * forecast runs the same step with these set to zero, which is why the
+     * forecast is always a little wrong in a way nobody could have told the
+     * player in advance.
+     */
+    noise: { demand: rng.range(-1, 1), supply: rng.range(-1, 1) },
+  });
+
+  /*
+   * The economy sector's health is no longer a dial that its own funding
+   * settles: it is what the macroeconomy is actually doing. Economic
+   * programme spending still matters, but through the fiscal impulse above,
+   * which is a slower and more honest channel than a funding slider that
+   * moved its own score.
+   */
+  const economySector = findSector(next.sectors, 'economy');
+  economySector.health = economyIssueScore(next.economy);
+
+  {
+    const e = next.economy;
+    const b = economyBefore;
+    const move = (
+      label: string,
+      before: number,
+      after: number,
+      unit: string,
+      cause: string,
+      threshold = 0.05,
+    ) => {
+      if (Math.abs(after - before) < threshold) return;
+      log(entries, { kind: 'economy', label, delta: after - before, cause, unit });
+    };
+
+    move('Growth', b.growth, e.growth, '%', describeCycle(e), 0.02);
+    move(
+      'Unemployment',
+      b.unemployment,
+      e.unemployment,
+      'pts',
+      `${e.employment.toFixed(1)}% of the workforce in work`,
+      0.02,
+    );
+    move(
+      'Inflation',
+      b.inflation,
+      e.inflation,
+      '%',
+      e.inflation > INFLATION_TARGET + 1
+        ? 'Above target, and the bank will act on it'
+        : e.inflation < 0
+          ? 'Prices are falling'
+          : 'Near target',
+      0.02,
+    );
+    move(
+      'Policy rate',
+      b.policyRate,
+      e.policyRate,
+      '%',
+      e.policyRate > b.policyRate
+        ? 'The central bank tightened — your debt service rises with it'
+        : 'The central bank eased',
+      0.01,
+    );
+    if (b.phase !== e.phase && e.phase === 'recession') {
+      log(entries, {
+        kind: 'economy',
+        label: 'Recession',
+        delta: 0,
+        cause: `${e.contractionRun} consecutive months of contraction. It is now called what it is.`,
+        unit: '',
+      });
+    }
   }
 
   /* Approval eases toward the standing the country's condition implies. */
@@ -1013,6 +1115,7 @@ export function runElection(state: GameState): GameState {
     sectors: next.sectors,
     debt: next.debt,
     revenueModifier: next.revenueModifier,
+    economy: next.economy,
   });
 
   for (const party of next.parties) {
@@ -2269,7 +2372,7 @@ function handleReferendum(state: GameState, questionId: string): IntentResult {
   const entries = currentLog(next);
   spendPc(next, PC_COSTS_POLICY.callReferendum);
 
-  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier);
+  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier, next.economy);
   const result = runReferendum(question, next.regions, scores);
 
   next.referendums.push({
@@ -2435,7 +2538,7 @@ function handlePoll(state: GameState, quality: PollQuality): IntentResult {
   spendPc(next, cost);
 
   const rng = new Rng(next.rngState);
-  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier);
+  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier, next.economy);
   const player = playerParty(next.parties);
   const truth = trueNationalShares(next.regions, next.parties, {
     scores,
@@ -2548,7 +2651,7 @@ function handlePressConference(state: GameState): IntentResult {
   spendPc(next, PC_COSTS_MEDIA.pressConference);
 
   /* What the room asks about is whatever is going worst. */
-  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier);
+  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier, next.economy);
   const worst = Object.entries(scores).sort((a, b) => a[1] - b[1])[0];
   const defensible = (worst?.[1] ?? 50) > 42;
 
