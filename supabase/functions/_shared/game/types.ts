@@ -866,6 +866,54 @@ export interface DemographyForecast {
   endDependencyRatio: number;
 }
 
+/* ------------------------------------------------------------------ *
+ * Engine 2F — infrastructure
+ * ------------------------------------------------------------------ */
+
+/** One asset, as it currently stands. */
+export interface InfrastructureAsset {
+  key: import('./content/infrastructure.ts').InfrastructureKey;
+  /** 0–100. Falls without maintenance, and takes years to recover. */
+  condition: number;
+  /** Units of capacity currently in service. */
+  capacity: number;
+  /**
+   * Deferred maintenance, in ₡bn of work owed.
+   *
+   * Compounds at more than it was avoided for, because catching up is
+   * dearer than keeping up: a resurfacing deferred becomes a reconstruction.
+   */
+  backlog: number;
+}
+
+/** Something being built. Most of these outlast the government that starts them. */
+export interface InfrastructureProject {
+  id: string;
+  key: import('./content/infrastructure.ts').InfrastructureKey;
+  /** Units of capacity it will add when it opens. */
+  units: number;
+  /** ₡bn still to be paid. */
+  remainingCost: number;
+  /** Months until it opens. */
+  remainingMonths: number;
+  /** The turn it was commissioned, and by which term. */
+  startedTurn: number;
+  startedTerm: number;
+}
+
+/** Everything the country is built out of. */
+export interface Infrastructure {
+  assets: InfrastructureAsset[];
+  projects: InfrastructureProject[];
+  /**
+   * Maintenance spending as a multiple of full upkeep.
+   *
+   * The single most consequential dial in the game that nobody will ever
+   * thank a government for setting correctly.
+   */
+  maintenanceLevel: number;
+}
+
 export interface GameState {
   id: string;
   ownerId: string | null;
@@ -897,6 +945,9 @@ export interface GameState {
 
   /** The people: how many, how old, where, and how many of them work. */
   demography: Demography;
+
+  /** What the country is built out of, and what is being built. */
+  infrastructure: Infrastructure;
 
   /**
    * The player's own party: factions, discipline, members, and money that is

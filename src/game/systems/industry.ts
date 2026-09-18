@@ -86,6 +86,8 @@ export function industryPressure(
   sectors: readonly Sector[],
   /** Points of drag from the skills shortage. Zero when there is none. */
   skills?: number,
+  /** Points of drag from the infrastructure this industry runs on. */
+  assets?: number,
 ): IndustryPressure {
   const template = findIndustry(industry.key);
   const reasons: { label: string; value: number }[] = [];
@@ -143,6 +145,12 @@ export function industryPressure(
     }
   }
 
+  /* The roads, rails, ports and grid this industry cannot operate without.
+     Closing a railway is a logistics problem before it is anything else. */
+  if (assets !== undefined && Math.abs(assets) > 0.05) {
+    reasons.push({ label: 'Infrastructure', value: assets });
+  }
+
   const target = clamp(
     100 + reasons.reduce((sum, r) => sum + r.value, 0),
     10,
@@ -170,10 +178,18 @@ export function stepIndustries(
   taxes: TaxCode,
   sectors: readonly Sector[],
   skills?: number,
+  assets?: Partial<Record<IndustryKey, number>>,
 ): IndustryState[] {
   return industries.map((industry) => {
     const template = findIndustry(industry.key);
-    const { target } = industryPressure(industry, economy, taxes, sectors, skills);
+    const { target } = industryPressure(
+      industry,
+      economy,
+      taxes,
+      sectors,
+      skills,
+      assets?.[industry.key],
+    );
     const health = industry.health + (target - industry.health) * INDUSTRY_ADJUST_RATE;
 
     /* An industry's share of output and of jobs both follow its health, but

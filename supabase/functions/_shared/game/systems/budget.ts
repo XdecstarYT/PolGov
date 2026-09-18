@@ -145,9 +145,11 @@ export function resolveFiscalTurn(
   bonds?: readonly Bond[],
   /** The rates the government is charging. */
   taxes?: TaxCode,
+  /** Spending outside the five programme sectors — maintenance and building. */
+  otherSpending = 0,
 ): FiscalTick {
   const revenue = computeRevenue(economy.gdp, revenueModifier, taxes);
-  const spending = totalFunding(sectors);
+  const spending = totalFunding(sectors) + otherSpending;
   const debtService = bonds ? couponsDue(bonds) : computeDebtService(debt, economy.policyRate);
   const balance = revenue - spending - debtService;
 

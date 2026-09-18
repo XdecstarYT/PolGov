@@ -23,6 +23,8 @@ export * from './systems/industry.ts';
 export * from './content/industries.ts';
 export * from './systems/demography.ts';
 export * from './systems/coalition.ts';
+export * from './systems/infrastructure.ts';
+export * from './content/infrastructure.ts';
 export * from './systems/election.ts';
 export * from './systems/electorate.ts';
 export * from './systems/electoralSystems.ts';

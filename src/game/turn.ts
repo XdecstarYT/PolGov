@@ -118,9 +118,23 @@ import {
   RATING_REVIEW_MONTHS,
   RESERVE_CONTRIBUTION_MAX,
   RESERVE_CONTRIBUTION_PC_COST,
+  MAINTENANCE_LEVEL_MAX,
+  MAX_ACTIVE_PROJECTS,
+  PROJECT_PC_COST,
   REGIONAL_JOBS_WEIGHT,
   TAX_CHANGE_PC_COST,
 } from './balance.ts';
+import {
+  canStartProject,
+  commission,
+  findInfrastructure,
+  industryEffects,
+  infrastructureSpend,
+  sectorEffects,
+  stepInfrastructure,
+  totalBacklog,
+  type InfrastructureKey,
+} from './systems/infrastructure.ts';
 import {
   apportionSeats,
   isApportionmentDue,
@@ -207,6 +221,9 @@ export type Intent =
   | { type: 'reshuffle_cabinet'; partyId: string }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
+  | { type: 'set_maintenance'; level: number }
+  | { type: 'start_project'; asset: InfrastructureKey; units: number }
+  | { type: 'cancel_project'; projectId: string }
   | { type: 'set_tax_rate'; tax: TaxKey; rate: number }
   | { type: 'set_tax_dial'; dial: 'progressivity' | 'deductions' | 'credits'; value: number }
   | { type: 'adopt_fiscal_rule'; kind: FiscalRuleKind; threshold: number }
@@ -728,9 +745,10 @@ export function resolveTurn(state: GameState): GameState {
    * that worked, and this is where that shows up.
    */
   const fromTax = taxEffects(next.taxes).sectors;
+  const fromAssets = sectorEffects(next.infrastructure, next.demography.population);
   for (const sector of next.sectors) {
     const before = sector.health;
-    const nudge = fromTax[sector.key] ?? 0;
+    const nudge = (fromTax[sector.key] ?? 0) + (fromAssets[sector.key] ?? 0);
     sector.health = driftSectorHealth(
       sector.key,
       sector.health,
@@ -758,6 +776,9 @@ export function resolveTurn(state: GameState): GameState {
     next.debt,
     next.finance.bonds,
     next.taxes,
+    /* Keeping what exists, and building what does not. Both are spending,
+       and the first is the one nobody notices being cut. */
+    infrastructureSpend(next.infrastructure),
   );
   next.treasury += fiscal.treasuryDelta;
   next.debt = Math.max(0, next.debt + fiscal.debtDelta);
@@ -851,6 +872,52 @@ export function resolveTurn(state: GameState): GameState {
   }
 
   /*
+   * The infrastructure.
+   *
+   * Stepped first, because the condition of the hospitals is part of what
+   * the health sector's health MEANS, and the capacity of the roads is part
+   * of what the logistics industry can do. Everything downstream reads it.
+   */
+  const infraTick = stepInfrastructure(next.infrastructure);
+  next.infrastructure = infraTick.infrastructure;
+  for (const project of infraTick.opened) {
+    const template = findInfrastructure(project.key);
+    log(entries, {
+      kind: 'note',
+      label: `${template.name} — opened`,
+      delta: 0,
+      cause:
+        `Commissioned in term ${project.startedTerm}, ${Math.round(
+          (next.turnNumber - project.startedTurn) / 12,
+        )} years ago. ${project.units} units of capacity in service.`,
+      unit: '',
+    });
+  }
+  for (const key of infraTick.newlyFailing) {
+    log(entries, {
+      kind: 'note',
+      label: `${findInfrastructure(key).name} — failing`,
+      delta: 0,
+      cause:
+        'Condition has fallen past the point where people notice. The work owed on it ' +
+        'costs more now than it would have cost to keep up with.',
+      unit: '',
+    });
+  }
+  if (infraTick.backlogAdded > 0.05) {
+    log(entries, {
+      kind: 'treasury',
+      label: 'Maintenance deferred',
+      delta: 0,
+      cause:
+        `₡${infraTick.backlogAdded.toFixed(1)}bn of work not done, added to a backlog now at ` +
+        `₡${totalBacklog(next.infrastructure).toFixed(0)}bn. It compounds.`,
+      unit: '',
+      informational: true,
+    });
+  }
+
+  /*
    * The people.
    *
    * Stepped first, because the workforce it produces is the economy's speed
@@ -912,12 +979,14 @@ export function resolveTurn(state: GameState): GameState {
   {
     const before = next.industries;
     const drag = skillsDrag(next.demography);
+    const assets = industryEffects(next.infrastructure, next.demography.population);
     next.industries = stepIndustries(
       next.industries,
       next.economy,
       next.taxes,
       next.sectors,
       drag,
+      assets,
     );
 
     for (const industry of next.industries) {
@@ -927,7 +996,14 @@ export function resolveTurn(state: GameState): GameState {
       /* Only report a move worth a line. Twenty industries drifting by a
          tenth of a point each would bury everything else in the report. */
       if (Math.abs(delta) < 0.35) continue;
-      const pressure = industryPressure(was, next.economy, next.taxes, next.sectors, drag);
+      const pressure = industryPressure(
+        was,
+        next.economy,
+        next.taxes,
+        next.sectors,
+        drag,
+        assets[industry.key],
+      );
       const leading = pressure.reasons[0];
       log(entries, {
         kind: 'economy',
@@ -1571,6 +1647,12 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleEmergencyBudget(state);
     case 'set_funding':
       return handleSetFunding(state, intent.sector, intent.amount);
+    case 'set_maintenance':
+      return handleSetMaintenance(state, intent.level);
+    case 'start_project':
+      return handleStartProject(state, intent.asset, intent.units);
+    case 'cancel_project':
+      return handleCancelProject(state, intent.projectId);
     case 'set_tax_rate':
       return handleSetTaxRate(state, intent.tax, intent.rate);
     case 'set_tax_dial':
@@ -1946,6 +2028,73 @@ function handleSetFunding(
   const next = clone(state);
   const sector = findSector(next.sectors, sectorKey);
   sector.funding = Math.round(amount * 10) / 10;
+  return ok(next);
+}
+
+/**
+ * Set what share of full upkeep the country is paying.
+ *
+ * The most consequential dial in the game that nobody will ever thank a
+ * government for setting correctly. Below one, money is freed for things
+ * people can see, and the work not done is owed at more than it was avoided
+ * for. It costs nothing for about four years.
+ */
+function handleSetMaintenance(state: GameState, level: number): IntentResult {
+  if (state.phase !== 'budget') return reject(state, 'Maintenance is set at the budget.');
+  if (!Number.isFinite(level) || level < 0 || level > MAINTENANCE_LEVEL_MAX) {
+    return reject(state, `Maintenance runs from 0 to ${MAINTENANCE_LEVEL_MAX}× full upkeep.`);
+  }
+  const next = clone(state);
+  next.infrastructure.maintenanceLevel = Math.round(level * 100) / 100;
+  return ok(next);
+}
+
+/**
+ * Commission something.
+ *
+ * Costs political capital to start and years to finish. Most of these open
+ * under a government that did not commission them, which is the honest
+ * reason so little gets built: the credit goes to whoever cuts the ribbon.
+ */
+function handleStartProject(
+  state: GameState,
+  asset: InfrastructureKey,
+  units: number,
+): IntentResult {
+  if (state.phase !== 'budget') return reject(state, 'Projects are commissioned at the budget.');
+  if (!canStartProject(state.infrastructure)) {
+    return reject(state, `Only ${MAX_ACTIVE_PROJECTS} projects can be under way at once.`);
+  }
+  if (!Number.isFinite(units) || units < 1 || units > 40) {
+    return reject(state, 'A project builds between 1 and 40 units of capacity.');
+  }
+  if (state.politicalCapital < PROJECT_PC_COST) {
+    return reject(state, 'Not enough political capital to commission a project.');
+  }
+
+  const template = findInfrastructure(asset);
+  const next = clone(state);
+  spendPc(next, PROJECT_PC_COST);
+  next.infrastructure.projects = [
+    ...next.infrastructure.projects,
+    commission(template, Math.round(units), next.turnNumber, next.termNumber),
+  ];
+  return ok(next);
+}
+
+/**
+ * Stop building something.
+ *
+ * The money already spent is gone — that is what makes cancelling a capital
+ * project such a bad decision and such a common one. Nothing is refunded and
+ * no capacity arrives.
+ */
+function handleCancelProject(state: GameState, projectId: string): IntentResult {
+  const project = state.infrastructure.projects.find((p) => p.id === projectId);
+  if (!project) return reject(state, 'No such project.');
+
+  const next = clone(state);
+  next.infrastructure.projects = next.infrastructure.projects.filter((p) => p.id !== projectId);
   return ok(next);
 }
 

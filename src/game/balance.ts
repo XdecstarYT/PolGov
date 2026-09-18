@@ -1148,3 +1148,56 @@ export const MIN_REGION_SEATS = 4;
 
 /** Months of demographic history kept. */
 export const DEMOGRAPHY_HISTORY_LIMIT = 120;
+
+/* ------------------------------------------------------------------ *
+ * Engine 2F — infrastructure
+ *
+ * The most politically honest mechanic in the game. Maintaining a road
+ * costs money now and produces nothing anyone notices. Not maintaining it
+ * costs nothing now and produces nothing anyone notices either — for about
+ * four years. Deferred maintenance is free money for exactly one electoral
+ * cycle, and the bill lands on whoever is in office when the bridge shuts.
+ * ------------------------------------------------------------------ */
+
+/** Condition every asset starts at. Inherited, and not quite new. */
+export const CONDITION_START = 74;
+
+/**
+ * Maintenance spending as a multiple of what full upkeep costs.
+ *
+ * One holds every asset where it is. Below one, conditions fall and the
+ * backlog grows. Above one, the backlog is worked off — slowly, because
+ * catching up costs more than keeping up ever would have.
+ */
+export const MAINTENANCE_LEVEL_START = 1;
+export const MAINTENANCE_LEVEL_MAX = 1.8;
+
+/**
+ * What a point of deferred maintenance adds to the backlog.
+ *
+ * Above one, because catching up is dearer than keeping up: a resurfacing
+ * deferred becomes a reconstruction. This is the entire compounding, and it
+ * is why the trap is a trap rather than a loan.
+ */
+export const BACKLOG_COMPOUNDING = 1.45;
+/** Share of the backlog that above-full maintenance works off each month. */
+export const BACKLOG_REPAYMENT_RATE = 0.035;
+
+/** Condition below which an asset starts failing visibly. */
+export const CONDITION_FAILING = 45;
+/** Condition below which it is a scandal. */
+export const CONDITION_CRITICAL = 28;
+
+/** Points of the serving sector's health per point of condition above 60. */
+export const CONDITION_TO_SECTOR = 0.22;
+/** Points of industry health per point of enabling capacity shortfall. */
+export const CAPACITY_TO_INDUSTRY = 0.35;
+/** Utilisation above this is congestion, and people feel it. */
+export const CONGESTION_THRESHOLD = 1;
+
+/** Political capital to start a capital project. */
+export const PROJECT_PC_COST = 10;
+/** The most projects that can be under construction at once. */
+export const MAX_ACTIVE_PROJECTS = 6;
+/** Share of a project's cost paid each month it is under construction. */
+export const PROJECT_MONTHLY_SHARE = 1;
