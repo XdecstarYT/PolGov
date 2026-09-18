@@ -124,6 +124,7 @@ import {
   REGIONAL_JOBS_WEIGHT,
   TAX_CHANGE_PC_COST,
 } from './balance.ts';
+import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
 import {
   canStartProject,
   commission,
@@ -745,10 +746,20 @@ export function resolveTurn(state: GameState): GameState {
    * that worked, and this is where that shows up.
    */
   const fromTax = taxEffects(next.taxes).sectors;
+  /*
+   * Read off LAST month's assets and services, because both are stepped
+   * further down this function. A one-month lag between a hospital closing
+   * and the health service getting worse is not a compromise — it is about
+   * right, and making it zero would mean stepping everything twice.
+   */
   const fromAssets = sectorEffects(next.infrastructure, next.demography.population);
+  const fromServices = sectorHealthEffects(next.services);
   for (const sector of next.sectors) {
     const before = sector.health;
-    const nudge = (fromTax[sector.key] ?? 0) + (fromAssets[sector.key] ?? 0);
+    const nudge =
+      (fromTax[sector.key] ?? 0) +
+      (fromAssets[sector.key] ?? 0) +
+      (fromServices[sector.key] ?? 0);
     sector.health = driftSectorHealth(
       sector.key,
       sector.health,
@@ -965,6 +976,32 @@ export function resolveTurn(state: GameState): GameState {
         });
       }
     }
+  }
+
+  /*
+   * The services.
+   *
+   * Stepped after the population, because the population is what they are
+   * demanded by. Nobody sets demand: it is recomputed from the country every
+   * month, and the budget that met it last year does not meet it this one.
+   */
+  const servicesTick = stepServices(next.services, next.sectors, next.demography, next.economy);
+  next.services = servicesTick.services;
+  for (const key of servicesTick.newlyStrained) {
+    const template = findService(key);
+    const service = next.services.find((s) => s.key === key)!;
+    log(entries, {
+      kind: 'sector',
+      label: `${template.name} — under strain`,
+      delta: 0,
+      cause:
+        `Demand has grown to ₡${service.demand.toFixed(1)}bn a month against ` +
+        `₡${service.funding.toFixed(1)}bn allocated. Nobody cut it; it is being asked for more.` +
+        (service.waitMonths > 0
+          ? ` People are waiting ${service.waitMonths.toFixed(1)} months.`
+          : ''),
+      unit: '',
+    });
   }
 
   /*

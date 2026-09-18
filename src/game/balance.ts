@@ -1201,3 +1201,35 @@ export const PROJECT_PC_COST = 10;
 export const MAX_ACTIVE_PROJECTS = 6;
 /** Share of a project's cost paid each month it is under construction. */
 export const PROJECT_MONTHLY_SHARE = 1;
+
+/* ------------------------------------------------------------------ *
+ * Engine 2G — government services
+ *
+ * Demand is not something a government sets. Every service is driven by a
+ * population figure that moves on its own, so holding a budget flat is a
+ * cut — automatically, in real terms, invisibly, and it is the single most
+ * common way a real public service is degraded.
+ * ------------------------------------------------------------------ */
+
+/** Quality every service starts at, matching the sector health it reports to. */
+export const SERVICE_QUALITY_START = 60;
+/** How fast a service's quality follows the funding it is getting. */
+export const SERVICE_QUALITY_DRIFT = 0.12;
+/** How fast staffing follows funding. Hiring and firing both take time. */
+export const SERVICE_STAFFING_DRIFT = 0.08;
+
+/**
+ * Months of waiting at a service funded exactly to its demand.
+ *
+ * Not zero. Every real service has a queue at full funding; what
+ * underfunding does is lengthen it, and what a player is deciding is how
+ * long is acceptable rather than whether a queue exists.
+ */
+export const WAIT_AT_FULL_FUNDING = 1.2;
+/** Months added to the wait per point of funding shortfall, as a ratio. */
+export const WAIT_PER_SHORTFALL = 14;
+/** The longest wait the model will report. Past this it is simply broken. */
+export const WAIT_CEILING = 48;
+
+/** Points of sector health per point of the services in it being underfunded. */
+export const SERVICE_TO_SECTOR = 0.55;

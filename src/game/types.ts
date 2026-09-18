@@ -914,6 +914,25 @@ export interface Infrastructure {
   maintenanceLevel: number;
 }
 
+/* ------------------------------------------------------------------ *
+ * Engine 2G — government services
+ * ------------------------------------------------------------------ */
+
+/** One service, as it currently stands. */
+export interface ServiceState {
+  key: import('./content/services.ts').ServiceKey;
+  /** ₡bn a month it would take to meet demand in full. */
+  demand: number;
+  /** ₡bn a month it is actually getting. */
+  funding: number;
+  /** 0–100. What people experience. */
+  quality: number;
+  /** Relative to what meeting demand would need. 1 is fully staffed. */
+  staffing: number;
+  /** Months people wait, for the services where the failure is a queue. */
+  waitMonths: number;
+}
+
 export interface GameState {
   id: string;
   ownerId: string | null;
@@ -948,6 +967,9 @@ export interface GameState {
 
   /** What the country is built out of, and what is being built. */
   infrastructure: Infrastructure;
+
+  /** The twenty things the state actually does, and how well. */
+  services: ServiceState[];
 
   /**
    * The player's own party: factions, discipline, members, and money that is
