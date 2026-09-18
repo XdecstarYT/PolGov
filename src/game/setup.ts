@@ -31,6 +31,7 @@ import { buildIndustries } from './systems/industry.ts';
 import { buildDemography } from './systems/demography.ts';
 import { buildInfrastructure } from './systems/infrastructure.ts';
 import { buildServices } from './systems/services.ts';
+import { buildWorld } from './systems/diplomacy.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
 import { buildSenate } from './systems/parliament.ts';
 import { MMP_DISTRICT_SHARE } from './balance.ts';
@@ -243,6 +244,10 @@ export function createGame(options: NewGameOptions): GameState {
        it today. None of them will be, a decade from now, unless somebody
        decides otherwise — which is the entire mechanic. */
     services: buildServices(sectors, buildDemography(regions), buildEconomy()),
+
+    /* Alliances this government did not make and quarrels it did not start,
+       because every government inherits both. */
+    world: buildWorld(),
 
     /* The debt is issued as a real book with staggered maturities, so the
        refinancing problem exists from turn one and was left by somebody

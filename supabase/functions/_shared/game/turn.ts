@@ -54,6 +54,7 @@ import { Rng } from './rng.ts';
 import type {
   Bill,
   FiscalRuleKind,
+  TreatyKind,
   DebateExchange,
   Effects,
   GameEvent,
@@ -119,13 +120,28 @@ import {
   RATING_REVIEW_MONTHS,
   RESERVE_CONTRIBUTION_MAX,
   RESERVE_CONTRIBUTION_PC_COST,
+  DIPLOMACY_EFFECTS,
+  DIPLOMACY_PC_COSTS,
   MAINTENANCE_LEVEL_MAX,
+  MAX_TREATIES,
+  STATE_VISIT_APPROVAL,
+  SUMMIT_APPROVAL,
   MAX_ACTIVE_PROJECTS,
   PROJECT_PC_COST,
   REGIONAL_JOBS_WEIGHT,
   TAX_CHANGE_PC_COST,
 } from './balance.ts';
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
+import {
+  TREATY_LABELS,
+  applyDiplomaticAct,
+  breakAgreement,
+  canSummit,
+  findNation,
+  obligationOf,
+  stepWorld,
+  willSign,
+} from './systems/diplomacy.ts';
 import {
   canStartProject,
   commission,
@@ -137,6 +153,7 @@ import {
   totalBacklog,
   type InfrastructureKey,
 } from './systems/infrastructure.ts';
+import type { NationKey } from './content/nations.ts';
 import {
   apportionSeats,
   isApportionmentDue,
@@ -223,6 +240,9 @@ export type Intent =
   | { type: 'reshuffle_cabinet'; partyId: string }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
+  | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
+  | { type: 'propose_treaty'; nation: NationKey; kind: TreatyKind }
+  | { type: 'withdraw_treaty'; treatyId: string }
   | { type: 'set_maintenance'; level: number }
   | { type: 'start_project'; asset: InfrastructureKey; units: number }
   | { type: 'cancel_project'; projectId: string }
@@ -955,6 +975,39 @@ export function resolveTurn(state: GameState): GameState {
       cause: 'Cash shortfall covered by borrowing, returning the balance to zero',
       unit: '₡bn',
     });
+  }
+
+  /*
+   * The world.
+   *
+   * Stepped first among the Engine 3 systems, because every other thing out
+   * there — trade, alliances, whether somebody else's war is yours — reads
+   * off the relationships. Nothing here moves fast: a relationship is a
+   * decade-long object, and a government that wants one changed has to spend
+   * capital on it repeatedly rather than once.
+   */
+  {
+    const tick = stepWorld(next.world, {
+      playerIdeology: player.ideology,
+      industries: next.industries,
+      turn: next.turnNumber,
+    });
+    next.world = tick.world;
+    for (const shift of tick.shifted) {
+      const template = findNation(shift.key);
+      log(entries, {
+        kind: 'note',
+        label: `${template.name} — now ${shift.to}`,
+        delta: 0,
+        cause:
+          shift.to === 'hostile'
+            ? `A relationship that was merely strained is now a problem. ${template.blurb}`
+            : shift.to === 'allied' || shift.to === 'friendly'
+              ? `${template.name} is counted a friend again.`
+              : `The relationship with ${template.name} has moved.`,
+        unit: '',
+      });
+    }
   }
 
   /*
@@ -1759,6 +1812,12 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleEmergencyBudget(state);
     case 'set_funding':
       return handleSetFunding(state, intent.sector, intent.amount);
+    case 'diplomatic_act':
+      return handleDiplomaticAct(state, intent.nation, intent.act);
+    case 'propose_treaty':
+      return handleProposeTreaty(state, intent.nation, intent.kind);
+    case 'withdraw_treaty':
+      return handleWithdrawTreaty(state, intent.treatyId);
     case 'set_maintenance':
       return handleSetMaintenance(state, intent.level);
     case 'start_project':
@@ -2140,6 +2199,283 @@ function handleSetFunding(
   const next = clone(state);
   const sector = findSector(next.sectors, sectorKey);
   sector.funding = Math.round(amount * 10) / 10;
+  return ok(next);
+}
+
+/**
+ * The instruments of ordinary diplomacy.
+ *
+ * Every one of them is scaled by the other country's power, which is the
+ * whole asymmetry: a protest to Astrun is a diplomatic event and a protest
+ * to Holm is a letter. A government that wants to be heard by the powerful
+ * has to accept that being heard is expensive, and one that wants to be
+ * principled cheaply will find that only the small countries are cheap.
+ */
+export type DiplomaticAct =
+  | 'open_embassy'
+  | 'close_embassy'
+  | 'appoint_ambassador'
+  | 'meeting'
+  | 'state_visit'
+  | 'summit'
+  | 'protest'
+  | 'expel_diplomats'
+  | 'recognise'
+  | 'sanction'
+  | 'lift_sanction';
+
+function handleDiplomaticAct(
+  state: GameState,
+  key: NationKey,
+  act: DiplomaticAct,
+): IntentResult {
+  if (state.phase !== 'agenda' && state.phase !== 'briefing') {
+    return reject(state, 'Foreign business is conducted at the desk, not at the budget.');
+  }
+  const nation = state.world.nations.find((n) => n.key === key);
+  if (!nation) return reject(state, 'No such country.');
+  const template = findNation(key);
+
+  const cost = {
+    open_embassy: DIPLOMACY_PC_COSTS.openEmbassy,
+    close_embassy: DIPLOMACY_PC_COSTS.closeEmbassy,
+    appoint_ambassador: DIPLOMACY_PC_COSTS.appointAmbassador,
+    meeting: DIPLOMACY_PC_COSTS.meeting,
+    state_visit: DIPLOMACY_PC_COSTS.stateVisit,
+    summit: DIPLOMACY_PC_COSTS.summit,
+    protest: DIPLOMACY_PC_COSTS.protest,
+    expel_diplomats: DIPLOMACY_PC_COSTS.expelDiplomats,
+    recognise: DIPLOMACY_PC_COSTS.recogniseState,
+    sanction: DIPLOMACY_PC_COSTS.sanction,
+    lift_sanction: DIPLOMACY_PC_COSTS.liftSanction,
+  }[act];
+
+  if (state.politicalCapital < cost) {
+    return reject(state, 'Not enough political capital for that.');
+  }
+
+  /* Things that simply cannot be done. */
+  if (act === 'open_embassy' && nation.embassy) {
+    return reject(state, `There is already a mission in ${template.name}.`);
+  }
+  if (act === 'close_embassy' && !nation.embassy) {
+    return reject(state, `There is no mission in ${template.name} to close.`);
+  }
+  if (act === 'appoint_ambassador' && !nation.embassy) {
+    return reject(state, 'An ambassador needs an embassy to sit in.');
+  }
+  if (act === 'summit' && !canSummit(nation, state.turnNumber)) {
+    return reject(state, `${template.name} will not sit down again this soon.`);
+  }
+  if (act === 'sanction' && nation.sanctioned) {
+    return reject(state, `${template.name} is already under sanction.`);
+  }
+  if (act === 'lift_sanction' && !nation.sanctioned) {
+    return reject(state, `${template.name} is not under sanction.`);
+  }
+
+  const next = clone(state);
+  spendPc(next, cost);
+  const entries = currentLog(next);
+  const index = next.world.nations.findIndex((n) => n.key === key);
+  let updated = next.world.nations[index]!;
+
+  const effect = {
+    open_embassy: DIPLOMACY_EFFECTS.embassy,
+    close_embassy: -DIPLOMACY_EFFECTS.embassy,
+    appoint_ambassador: DIPLOMACY_EFFECTS.ambassador,
+    meeting: DIPLOMACY_EFFECTS.meeting,
+    state_visit: DIPLOMACY_EFFECTS.stateVisit,
+    summit: DIPLOMACY_EFFECTS.summit,
+    protest: DIPLOMACY_EFFECTS.protest,
+    expel_diplomats: DIPLOMACY_EFFECTS.expelDiplomats,
+    recognise: DIPLOMACY_EFFECTS.recognition,
+    sanction: DIPLOMACY_EFFECTS.sanction,
+    lift_sanction: DIPLOMACY_EFFECTS.sanctionLifted,
+  }[act];
+
+  updated = applyDiplomaticAct(updated, effect, template);
+
+  switch (act) {
+    case 'open_embassy':
+      updated = { ...updated, embassy: true };
+      break;
+    case 'close_embassy':
+      /* Cheap, popular, and it removes the only channel through which the
+         next crisis could have been defused. */
+      updated = { ...updated, embassy: false, ambassadorMonths: null };
+      break;
+    case 'appoint_ambassador':
+      updated = { ...updated, ambassadorMonths: 0 };
+      break;
+    case 'summit':
+      updated = { ...updated, lastSummitTurn: next.turnNumber };
+      next.approval = clampApproval(next.approval + SUMMIT_APPROVAL);
+      break;
+    case 'state_visit':
+      next.approval = clampApproval(
+        next.approval + (updated.relations > 0 ? STATE_VISIT_APPROVAL : -STATE_VISIT_APPROVAL),
+      );
+      break;
+    case 'expel_diplomats':
+      updated = { ...updated, ambassadorMonths: null };
+      break;
+    case 'recognise':
+      updated = { ...updated, recognised: true };
+      break;
+    case 'sanction':
+      updated = { ...updated, sanctioned: true };
+      break;
+    case 'lift_sanction':
+      updated = { ...updated, sanctioned: false };
+      break;
+    default:
+      break;
+  }
+
+  next.world = {
+    ...next.world,
+    nations: next.world.nations.map((n, i) => (i === index ? updated : n)),
+  };
+
+  log(entries, {
+    kind: 'note',
+    label: template.name,
+    delta: updated.relations - nation.relations,
+    cause: DIPLOMATIC_ACT_LABELS[act],
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+const DIPLOMATIC_ACT_LABELS: Record<DiplomaticAct, string> = {
+  open_embassy: 'A mission opened. It will not make them like you; it will stop things sliding.',
+  close_embassy: 'The mission closed. Cheap, popular, and one fewer way to talk.',
+  appoint_ambassador: 'An ambassador appointed. They will be worth something in a few months.',
+  meeting: 'A meeting held at official level.',
+  state_visit: 'A state visit. Photographs, a banquet, and a communiqué nobody will read.',
+  summit: 'A summit convened. Expensive, slow, and the only setting where anything large moves.',
+  protest: 'A formal protest lodged. Noted, and resented.',
+  expel_diplomats: 'Diplomats expelled. A serious step, and one that is hard to walk back.',
+  recognise: 'Formal recognition extended.',
+  sanction: 'Sanctions imposed. They will hurt whichever of you depends on the other more.',
+  lift_sanction: 'Sanctions lifted.',
+};
+
+/**
+ * Propose an agreement.
+ *
+ * A treaty is a commitment rather than a bonus: a defence pact means
+ * somebody else's security problem is on your agenda, and a mutual defence
+ * treaty means somebody else's war is potentially yours. The other side has
+ * to want it, which depends on relations AND on whether this government has
+ * a record of keeping its word.
+ */
+function handleProposeTreaty(
+  state: GameState,
+  key: NationKey,
+  kind: TreatyKind,
+): IntentResult {
+  if (state.phase !== 'agenda') return reject(state, 'Treaties are laid before the chamber.');
+  const nation = state.world.nations.find((n) => n.key === key);
+  if (!nation) return reject(state, 'No such country.');
+  const template = findNation(key);
+
+  if (state.world.treaties.length >= MAX_TREATIES) {
+    return reject(state, 'The country is party to as many agreements as it can honour.');
+  }
+  if (state.world.treaties.some((t) => t.kind === kind && t.parties.includes(key))) {
+    return reject(state, `Such an agreement with ${template.name} is already in force.`);
+  }
+  if (state.politicalCapital < DIPLOMACY_PC_COSTS.proposeTreaty) {
+    return reject(state, 'Not enough political capital to negotiate a treaty.');
+  }
+  if (!willSign(nation, kind, state.world.reputation)) {
+    return reject(
+      state,
+      `${template.name} will not sign that. Relations stand at ${nation.relations.toFixed(0)}` +
+        (state.world.reputation < 55
+          ? ', and this government\u2019s word is not what it was.'
+          : '.'),
+    );
+  }
+
+  const next = clone(state);
+  spendPc(next, DIPLOMACY_PC_COSTS.proposeTreaty);
+  const entries = currentLog(next);
+
+  next.world = {
+    ...next.world,
+    treaties: [
+      ...next.world.treaties,
+      {
+        id: `${kind}-${key}-${next.turnNumber}`,
+        kind,
+        parties: [key],
+        signedTurn: next.turnNumber,
+        signedTerm: next.termNumber,
+        obligation: obligationOf(kind, template.name),
+        dividend: kind === 'mutual_defence' ? 0.5 : 0.3,
+      },
+    ],
+    nations: next.world.nations.map((n) =>
+      n.key === key ? applyDiplomaticAct(n, DIPLOMACY_EFFECTS.treatySigned, template) : n,
+    ),
+  };
+
+  log(entries, {
+    kind: 'note',
+    label: `${TREATY_LABELS[kind]} with ${template.name}`,
+    delta: 0,
+    cause: obligationOf(kind, template.name),
+    unit: '',
+  });
+  return ok(next);
+}
+
+/**
+ * Walk away from an agreement.
+ *
+ * The cost is not paid to the other signatory. It is paid to every country
+ * watching, which is all of them, and it is paid in a reputation that takes
+ * years to rebuild. This is the only mechanic in the game where the
+ * punishment is administered by parties who were not involved.
+ */
+function handleWithdrawTreaty(state: GameState, treatyId: string): IntentResult {
+  const treaty = state.world.treaties.find((t) => t.id === treatyId);
+  if (!treaty) return reject(state, 'No such agreement.');
+  if (state.politicalCapital < DIPLOMACY_PC_COSTS.withdrawTreaty) {
+    return reject(state, 'Not enough political capital to withdraw from a treaty.');
+  }
+
+  const next = clone(state);
+  spendPc(next, DIPLOMACY_PC_COSTS.withdrawTreaty);
+  const entries = currentLog(next);
+
+  const penalty = treaty.kind === 'mutual_defence' ? 16 : treaty.kind === 'defence' ? 12 : 8;
+  next.world = breakAgreement(
+    { ...next.world, treaties: next.world.treaties.filter((t) => t.id !== treatyId) },
+    penalty,
+  );
+  /* And the other signatory takes it personally, on top. */
+  next.world = {
+    ...next.world,
+    nations: next.world.nations.map((n) =>
+      treaty.parties.includes(n.key)
+        ? applyDiplomaticAct(n, DIPLOMACY_EFFECTS.treatyWithdrawn, findNation(n.key))
+        : n,
+    ),
+  };
+
+  log(entries, {
+    kind: 'note',
+    label: `Withdrew from ${TREATY_LABELS[treaty.kind].toLowerCase()}`,
+    delta: -penalty,
+    cause:
+      'Every other government has noted it. Reputation is read by countries that were not ' +
+      'party to the agreement, and it takes years to rebuild.',
+    unit: 'pts',
+  });
   return ok(next);
 }
 

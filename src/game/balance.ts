@@ -1233,3 +1233,93 @@ export const WAIT_CEILING = 48;
 
 /** Points of sector health per point of the services in it being underfunded. */
 export const SERVICE_TO_SECTOR = 0.55;
+
+/* ------------------------------------------------------------------ *
+ * Engine 3A — the world, and diplomacy
+ *
+ * The asymmetry everything here depends on: a large country's opinion
+ * costs more to ignore than a small one's. Every diplomatic mechanic
+ * scales with the other side's power, which is why a government can
+ * afford to be principled with Holm and cannot afford to be principled
+ * with Astrun — and why that is an uncomfortable position rather than a
+ * puzzle with a solution.
+ * ------------------------------------------------------------------ */
+
+/** Relations run −100 (hostile) to +100 (allied). */
+export const RELATIONS_MIN = -100;
+export const RELATIONS_MAX = 100;
+/** Above this, a country is a friend. Below the negative, an adversary. */
+export const RELATIONS_FRIENDLY = 40;
+export const RELATIONS_HOSTILE = -40;
+
+/** Relations drift toward this each month, from ideology and trade alone. */
+export const RELATIONS_DRIFT_RATE = 0.04;
+/** Points of natural relations per point of ideological affinity. */
+export const RELATIONS_IDEOLOGY_WEIGHT = 55;
+/** Points of natural relations from sharing a border. Neighbours argue. */
+export const RELATIONS_NEIGHBOUR_PENALTY = -12;
+/** Points of natural relations per unit of trade dependence. */
+export const RELATIONS_TRADE_WEIGHT = 34;
+
+/** Political capital costs for the diplomatic instruments. */
+export const DIPLOMACY_PC_COSTS = {
+  openEmbassy: 6,
+  closeEmbassy: 4,
+  appointAmbassador: 3,
+  meeting: 4,
+  stateVisit: 12,
+  summit: 16,
+  protest: 3,
+  expelDiplomats: 8,
+  recogniseState: 10,
+  proposeTreaty: 14,
+  withdrawTreaty: 10,
+  sanction: 12,
+  liftSanction: 6,
+} as const;
+
+/** Relations moved by each instrument, before the other side's power scales it. */
+export const DIPLOMACY_EFFECTS = {
+  embassy: 6,
+  ambassador: 4,
+  meeting: 3,
+  stateVisit: 9,
+  summit: 7,
+  protest: -6,
+  expelDiplomats: -22,
+  recognition: 14,
+  treatySigned: 12,
+  treatyWithdrawn: -18,
+  sanction: -30,
+  sanctionLifted: 10,
+} as const;
+
+/**
+ * How much an embassy slows the decay of relations.
+ *
+ * The quiet argument for keeping missions open in countries nobody likes:
+ * they do not improve relations much, they stop them deteriorating. Closing
+ * one is cheap, popular, and removes the only channel through which the next
+ * crisis could have been defused.
+ */
+export const EMBASSY_STABILISER = 0.55;
+
+/** Months an ambassador takes to have any effect at all. */
+export const AMBASSADOR_SETTLING_MONTHS = 4;
+
+/** Months between summits a country will attend. */
+export const SUMMIT_COOLDOWN = 12;
+/** Approval a successful summit is worth at home. */
+export const SUMMIT_APPROVAL = 1.8;
+/** Approval a state visit is worth, and the cost if relations are hostile. */
+export const STATE_VISIT_APPROVAL = 1.2;
+
+/** Treaties in force at once. Each is a commitment, not a bonus. */
+export const MAX_TREATIES = 10;
+/** Relations below which a country will not sign anything. */
+export const TREATY_MINIMUM_RELATIONS = 15;
+/** Relations below which even a non-aggression pact is refused. */
+export const PACT_MINIMUM_RELATIONS = -25;
+
+/** Months of world history kept. */
+export const WORLD_HISTORY_LIMIT = 120;

@@ -959,6 +959,94 @@ export interface ServiceState {
   waitMonths: number;
 }
 
+
+/* ------------------------------------------------------------------ *
+ * Engine 3 — the world
+ * ------------------------------------------------------------------ */
+
+export type TreatyKind =
+  | 'bilateral'
+  | 'multilateral'
+  | 'trade'
+  | 'defence'
+  | 'peace'
+  | 'non_aggression'
+  | 'mutual_defence'
+  | 'partnership';
+
+/**
+ * An agreement in force.
+ *
+ * A treaty is a commitment rather than a bonus. Each one constrains what the
+ * government can do next — a defence pact means somebody else's war is
+ * potentially yours — and withdrawing costs relations with everybody
+ * watching, not just with the other signatory.
+ */
+export interface Treaty {
+  id: string;
+  kind: TreatyKind;
+  /** The other signatories. More than one for a multilateral treaty. */
+  parties: import('./content/nations.ts').NationKey[];
+  signedTurn: number;
+  signedTerm: number;
+  /** One line stating what it actually obliges. */
+  obligation: string;
+  /** Relations gained per month it holds, as a standing dividend. */
+  dividend: number;
+}
+
+/** The state of the relationship with one country. */
+export interface NationState {
+  key: import('./content/nations.ts').NationKey;
+  /** −100 hostile to +100 allied. */
+  relations: number;
+  /** Is there a mission in their capital? */
+  embassy: boolean;
+  /** Is there an ambassador in it, and how long have they been there? */
+  ambassadorMonths: number | null;
+  /** Do we recognise them as a state at all? */
+  recognised: boolean;
+  /** Turn of the last summit attended together. */
+  lastSummitTurn: number | null;
+  /** Are they under our sanctions? */
+  sanctioned: boolean;
+  /** How much of their trade is with us, 0–1. Leverage runs both ways. */
+  tradeDependence: number;
+  /** How much of OUR trade is with them. The other half of the leverage. */
+  ourDependence: number;
+}
+
+/** One month of the world record. */
+export interface WorldPoint {
+  turn: number;
+  /** Average relations across every recognised state. */
+  standing: number;
+  /** How much attention the world pays us, 0–100. */
+  influence: number;
+  /** How dangerous the world is, 0–100. */
+  tension: number;
+}
+
+/** Everything outside the borders. */
+export interface World {
+  nations: NationState[];
+  treaties: Treaty[];
+  /**
+   * Reputation: what other governments expect of this one.
+   *
+   * Earned by keeping agreements and lost by breaking them, and it is read
+   * by every country, not just the one that was let down. This is why
+   * withdrawing from a treaty is expensive in a way the other signatory
+   * never has to enforce.
+   */
+  reputation: number;
+  /** Diplomatic weight, 0–100. What the country can get done in a room. */
+  influence: number;
+  /** How dangerous the world currently is, 0–100. */
+  tension: number;
+  history: WorldPoint[];
+}
+
 export interface GameState {
   id: string;
   ownerId: string | null;
@@ -996,6 +1084,9 @@ export interface GameState {
 
   /** The twenty things the state actually does, and how well. */
   services: ServiceState[];
+
+  /** Everything outside the borders. */
+  world: World;
 
   /**
    * The player's own party: factions, discipline, members, and money that is
