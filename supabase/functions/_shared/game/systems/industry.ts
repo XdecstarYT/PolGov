@@ -84,6 +84,8 @@ export function industryPressure(
   economy: Economy,
   taxes: TaxCode,
   sectors: readonly Sector[],
+  /** Points of drag from the skills shortage. Zero when there is none. */
+  skills?: number,
 ): IndustryPressure {
   const template = findIndustry(industry.key);
   const reasons: { label: string; value: number }[] = [];
@@ -109,6 +111,19 @@ export function industryPressure(
     (taxes.rates.import_tariff - findTaxTemplate('import_tariff').defaultRate) * 100;
   const tariffTerm = tariffDelta * template.tariffSensitivity * 0.7;
   if (Math.abs(tariffTerm) > 0.05) reasons.push({ label: 'Import tariffs', value: tariffTerm });
+
+  /*
+   * The skills shortage, for the industries that need trained people. This
+   * is how a schools budget cut eight years ago becomes a technology problem
+   * today: the industry is short of people, and nothing the government can
+   * do this term will produce them.
+   */
+  if (skills !== undefined && template.supports === 'education') {
+    const skillsTerm = skills;
+    if (Math.abs(skillsTerm) > 0.05) {
+      reasons.push({ label: 'Skills shortage', value: skillsTerm });
+    }
+  }
 
   /* The public sector this industry stands on. */
   if (template.supports) {
@@ -154,10 +169,11 @@ export function stepIndustries(
   economy: Economy,
   taxes: TaxCode,
   sectors: readonly Sector[],
+  skills?: number,
 ): IndustryState[] {
   return industries.map((industry) => {
     const template = findIndustry(industry.key);
-    const { target } = industryPressure(industry, economy, taxes, sectors);
+    const { target } = industryPressure(industry, economy, taxes, sectors, skills);
     const health = industry.health + (target - industry.health) * INDUSTRY_ADJUST_RATE;
 
     /* An industry's share of output and of jobs both follow its health, but

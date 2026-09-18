@@ -779,6 +779,93 @@ export interface IndustryState {
   employmentShare: number;
 }
 
+/* ------------------------------------------------------------------ *
+ * Engine 2E — population
+ * ------------------------------------------------------------------ */
+
+/** One region's share of the people, and how it is changing. */
+export interface RegionalPopulation {
+  regionId: string;
+  /** People, in millions. */
+  population: number;
+  /** Net arrivals this month, in thousands. Negative is a region emptying. */
+  netFlow: number;
+  /** Share of this region's people living in towns and cities. */
+  urban: number;
+}
+
+/** One month of the demographic record. */
+export interface DemographyPoint {
+  turn: number;
+  population: number;
+  workforce: number;
+  retiredShare: number;
+  netMigration: number;
+  lifeExpectancy: number;
+}
+
+/**
+ * The people.
+ *
+ * The slowest system in the game and the one with the longest reach. Nothing
+ * here moves fast enough for a government to see the result of its own
+ * decisions about it, which is the point: this is the part of governing that
+ * is genuinely somebody else's problem, and the game lets a player choose
+ * whether to care.
+ */
+export interface Demography {
+  /** Total population, in millions. */
+  population: number;
+  /** Births and deaths per thousand people per year. */
+  birthRate: number;
+  deathRate: number;
+  lifeExpectancy: number;
+
+  /** The three age bands. They sum to one. */
+  youthShare: number;
+  workingShare: number;
+  retiredShare: number;
+
+  /** Net migration per thousand people per year. Negative is net departure. */
+  netMigration: number;
+  /** Arrivals and departures separately, because they are argued about separately. */
+  immigration: number;
+  emigration: number;
+
+  /** Share of the country living in towns and cities. */
+  urbanisation: number;
+  /** People per square unit. A presentation figure, derived from the above. */
+  density: number;
+  /** People per household. Falls slowly as the country ages. */
+  householdSize: number;
+
+  /** Share of working-age people in or seeking work. */
+  participation: number;
+  /** Working-age people actually in the labour force, in millions. */
+  workforce: number;
+  /**
+   * Share of the working-age population with the training the economy is
+   * asking for. Moved by education spending and by nothing else that is fast.
+   */
+  skills: number;
+
+  regional: RegionalPopulation[];
+  history: DemographyPoint[];
+  /** The turn the seats were last redistributed between regions. */
+  lastApportionment: number;
+}
+
+/** Where the population goes if nothing changes. */
+export interface DemographyForecast {
+  months: DemographyPoint[];
+  /** Population at the end of the horizon, in millions. */
+  endPopulation: number;
+  /** Retired share at the end. The number that decides the pension bill. */
+  endRetiredShare: number;
+  /** Working-age people per retired person at the end. */
+  endDependencyRatio: number;
+}
+
 export interface GameState {
   id: string;
   ownerId: string | null;
@@ -807,6 +894,9 @@ export interface GameState {
 
   /** What the economy is made of, and where each part of it is. */
   industries: IndustryState[];
+
+  /** The people: how many, how old, where, and how many of them work. */
+  demography: Demography;
 
   /**
    * The player's own party: factions, discipline, members, and money that is

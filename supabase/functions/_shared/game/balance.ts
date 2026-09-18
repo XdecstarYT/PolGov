@@ -1027,3 +1027,124 @@ export const INDUSTRY_PUBLIC_FUNDING_WEIGHT = 0.45;
 
 /** Points of regional support per point of regional employment gap. */
 export const REGIONAL_JOBS_WEIGHT = 0.0035;
+
+/* ------------------------------------------------------------------ *
+ * Engine 2E — population and demographics
+ *
+ * The slowest system in the game, and the one with the longest reach. A
+ * birth rate decided now changes the workforce in twenty years and the
+ * pension bill in sixty-five. No government in a four-year term will see
+ * the result of anything in this file, which is precisely why it is worth
+ * modelling: it is the part of governing that is genuinely about somebody
+ * else's problem, and the game should let a player choose to care.
+ * ------------------------------------------------------------------ */
+
+/** Starting population, in millions. */
+export const POPULATION_START = 42.6;
+
+/** Births per thousand people per year at the start. */
+export const BIRTH_RATE_START = 11.4;
+/**
+ * Deaths per thousand people per year at the start.
+ *
+ * This is a REPORTED figure, not a setting: the model derives deaths from
+ * the age structure — the retired die after however many years past
+ * retirement the health service has bought them — and this is what that
+ * arithmetic produces at the starting cohorts. Stating the death rate
+ * independently is how the first version of this file came to have a
+ * population whose deaths did not match its own age structure.
+ */
+export const IMPLIED_DEATH_RATE_START = 12.1;
+
+/** Years spent as a child before entering the workforce. */
+export const YEARS_AS_YOUTH = 18;
+/** Years spent in the workforce before retiring. */
+export const YEARS_AT_WORK = 47;
+/** Deaths per thousand per year among people who have not yet retired. */
+export const PREMATURE_DEATH_RATE = 1.15;
+
+/**
+ * How arrivals are distributed across the three cohorts.
+ *
+ * Migrants are overwhelmingly of working age. That is the entire reason
+ * migration is an answer to an ageing population, and the entire reason it
+ * is argued about.
+ */
+export const MIGRANT_YOUTH_SHARE = 0.2;
+export const MIGRANT_WORKING_SHARE = 0.74;
+export const MIGRANT_RETIRED_SHARE = 0.06;
+/** Years of life expectancy at birth. */
+export const LIFE_EXPECTANCY_START = 81.2;
+
+/**
+ * The shares of the population under working age, of working age, and past
+ * it. They sum to one and drift with births, deaths and migration.
+ */
+export const AGE_YOUTH_START = 0.203;
+export const AGE_WORKING_START = 0.622;
+export const AGE_RETIRED_START = 0.175;
+
+/** Net migration per thousand people per year, at neutral conditions. */
+export const MIGRATION_BASE = 3.2;
+/** Extra net migration per point of unemployment below the natural rate. */
+export const MIGRATION_JOBS_WEIGHT = 0.55;
+/** Extra net migration per point of average service quality above 60. */
+export const MIGRATION_SERVICES_WEIGHT = 0.06;
+/** How fast the actual flow eases toward what conditions imply. */
+export const MIGRATION_ADJUST_RATE = 0.12;
+
+/** Share of the working-age population in or seeking work. */
+export const PARTICIPATION_START = 0.647;
+/** Participation rises this much per point of unemployment below natural. */
+export const PARTICIPATION_JOBS_WEIGHT = 0.004;
+/** How fast participation follows conditions. People are slow to re-enter. */
+export const PARTICIPATION_ADJUST_RATE = 0.05;
+
+/** Share of the population in cities at the start. */
+export const URBANISATION_START = 0.71;
+/** Per year, how much of the rural share moves to cities on its own. */
+export const URBANISATION_DRIFT = 0.0022;
+
+/** People per household at the start. Falls slowly as the country ages. */
+export const HOUSEHOLD_SIZE_START = 2.41;
+
+/**
+ * Skills: the share of the working-age population with the training the
+ * economy is asking for.
+ *
+ * Moved by education spending, and by nothing else that is fast. A skills
+ * shortage is the most common way a government discovers that the schools
+ * budget it cut eight years ago was a technology policy.
+ */
+export const SKILLS_START = 0.62;
+/*
+ * Half a per cent of the gap a month. A full term of excellent schools
+ * closes about a sixth of it, which is the pace the story requires: the
+ * schools budget a government cuts is a technology policy its successor's
+ * successor discovers.
+ */
+export const SKILLS_ADJUST_RATE = 0.004;
+/** Points of industry health lost per point of skills shortage. */
+export const SKILLS_SHORTAGE_WEIGHT = 0.4;
+
+/** Life expectancy gained per point of health-sector health above 60, a year. */
+export const LIFE_EXPECTANCY_PER_HEALTH = 0.016;
+/** Births per thousand gained per point of average service quality above 60. */
+export const BIRTH_RATE_PER_SERVICE = 0.012;
+/** How fast the vital rates follow conditions. Generational, not annual. */
+export const VITAL_RATE_ADJUST = 0.006;
+
+/**
+ * How often the seats are redistributed between regions, in turns.
+ *
+ * Forty-eight months — once a term. Population moves, and when the boundary
+ * commission catches up, the electoral map the government won on is not the
+ * one it will defend. A player who lets a region empty out is handing seats
+ * to wherever those people went.
+ */
+export const APPORTIONMENT_INTERVAL = 48;
+/** The fewest seats any region can be reduced to. */
+export const MIN_REGION_SEATS = 4;
+
+/** Months of demographic history kept. */
+export const DEMOGRAPHY_HISTORY_LIMIT = 120;

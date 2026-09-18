@@ -72,6 +72,7 @@ import {
 } from './systems/approval.ts';
 import {
   clamp01to100,
+  averageSectorHealth,
   driftSectorHealth,
   fiscalImpulse,
   findSector,
@@ -120,6 +121,13 @@ import {
   REGIONAL_JOBS_WEIGHT,
   TAX_CHANGE_PC_COST,
 } from './balance.ts';
+import {
+  apportionSeats,
+  isApportionmentDue,
+  skillsDrag,
+  stepDemography,
+  workforceGrowth,
+} from './systems/demography.ts';
 import {
   employmentGap,
   findIndustry,
@@ -843,6 +851,56 @@ export function resolveTurn(state: GameState): GameState {
   }
 
   /*
+   * The people.
+   *
+   * Stepped first, because the workforce it produces is the economy's speed
+   * limit and the skills it produces are what several industries stand on.
+   * Nothing here moves fast enough for this government to see the result of
+   * its own decisions about it, which is the honest shape of the thing.
+   */
+  const demographyBefore = next.demography;
+  {
+    const services = averageSectorHealth(next.sectors);
+    next.demography = stepDemography(next.demography, {
+      unemployment: next.economy.unemployment,
+      healthQuality: findSector(next.sectors, 'health').health,
+      educationQuality: findSector(next.sectors, 'education').health,
+      serviceQuality: services,
+      regionalJobs: regionalEmployment(next.industries),
+      turn: next.turnNumber,
+    });
+
+    /*
+     * Apportionment. Once a term the seats follow the people, so a
+     * government that presided over Estmoor emptying into Ternhill fights
+     * the next election on a map it did not draw and may not like.
+     */
+    if (isApportionmentDue(next.demography, next.turnNumber)) {
+      const moves = apportionSeats(next.regions, next.demography.regional);
+      next.demography.lastApportionment = next.turnNumber;
+      const changed = moves.filter((m) => m.after !== m.before);
+      for (const move of moves) {
+        const region = next.regions.find((r) => r.id === move.regionId);
+        if (region) region.seats = move.after;
+      }
+      if (changed.length > 0) {
+        log(entries, {
+          kind: 'note',
+          label: 'Seats redistributed',
+          delta: 0,
+          cause: changed
+            .map((m) => {
+              const name = next.regions.find((r) => r.id === m.regionId)?.name ?? m.regionId;
+              return `${name} ${m.after > m.before ? '+' : '−'}${Math.abs(m.after - m.before)}`;
+            })
+            .join(', ') + '. The boundary commission has caught up with where people now live.',
+          unit: '',
+        });
+      }
+    }
+  }
+
+  /*
    * The industries.
    *
    * Stepped before the finances and the economy, because what the industries
@@ -853,7 +911,14 @@ export function resolveTurn(state: GameState): GameState {
    */
   {
     const before = next.industries;
-    next.industries = stepIndustries(next.industries, next.economy, next.taxes, next.sectors);
+    const drag = skillsDrag(next.demography);
+    next.industries = stepIndustries(
+      next.industries,
+      next.economy,
+      next.taxes,
+      next.sectors,
+      drag,
+    );
 
     for (const industry of next.industries) {
       const was = before.find((i) => i.key === industry.key);
@@ -862,7 +927,7 @@ export function resolveTurn(state: GameState): GameState {
       /* Only report a move worth a line. Twenty industries drifting by a
          tenth of a point each would bury everything else in the report. */
       if (Math.abs(delta) < 0.35) continue;
-      const pressure = industryPressure(was, next.economy, next.taxes, next.sectors);
+      const pressure = industryPressure(was, next.economy, next.taxes, next.sectors, drag);
       const leading = pressure.reasons[0];
       log(entries, {
         kind: 'economy',
@@ -1021,6 +1086,12 @@ export function resolveTurn(state: GameState): GameState {
      * sixtieth of them. This is that difference.
      */
     employmentGap: employmentGap(next.industries),
+    /*
+     * More people of working age is more the country can produce. This is
+     * the second half of the speed limit, alongside productivity, and it is
+     * the one no government can move inside a term.
+     */
+    workforceGrowth: workforceGrowth(demographyBefore, next.demography),
     /*
      * This month's weather, off the run's own seeded RNG, so a replayed turn
      * produces the identical month and the server can check it. The Treasury

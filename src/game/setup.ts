@@ -28,6 +28,7 @@ import { buildEconomy } from './systems/economy.ts';
 import { buildPublicFinance } from './systems/publicFinance.ts';
 import { buildTaxCode, monthlyReceipts } from './systems/taxation.ts';
 import { buildIndustries } from './systems/industry.ts';
+import { buildDemography } from './systems/demography.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
 import { buildSenate } from './systems/parliament.ts';
 import { MMP_DISTRICT_SHARE } from './balance.ts';
@@ -227,6 +228,10 @@ export function createGame(options: NewGameOptions): GameState {
     /* Every industry at its baseline. Whatever goes wrong first should be
        something that happened, not something inherited. */
     industries: buildIndustries(),
+
+    /* People are distributed as the seats are, because the seats were drawn
+       to match them. Apportionment is what keeps that true. */
+    demography: buildDemography(regions),
 
     /* The debt is issued as a real book with staggered maturities, so the
        refinancing problem exists from turn one and was left by somebody

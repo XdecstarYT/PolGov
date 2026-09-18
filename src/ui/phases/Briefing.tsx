@@ -32,6 +32,7 @@ import { ApprovalTrend, SeatChart } from '../components/ChartsLazy.tsx';
 import { EconomyPanel } from '../components/EconomyPanel.tsx';
 import { FinancePanel } from '../components/FinancePanel.tsx';
 import { IndustryPanel } from '../components/IndustryPanel.tsx';
+import { PopulationPanel } from '../components/PopulationPanel.tsx';
 import { ElectoratePanel } from '../components/ElectoratePanel.tsx';
 
 export function Briefing() {
@@ -131,6 +132,8 @@ export function Briefing() {
       <EconomyPanel />
 
       <IndustryPanel />
+
+      <PopulationPanel />
 
       <FinancePanel />
 
