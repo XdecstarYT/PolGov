@@ -33,10 +33,11 @@ import {
   type SegmentTemplate,
 } from '../content/segments.ts';
 import { affinity } from '../ideology.ts';
-import type { Economy, Party, Region, Sector } from '../types.ts';
+import type { Economy, Party, Region, Sector, TaxCode } from '../types.ts';
 import { findSector } from './budget.ts';
 import { costOfLivingScore, economyIssueScore } from './economy.ts';
 import { debtRatio } from './publicFinance.ts';
+import { taxBurdenScore } from './taxation.ts';
 
 const clamp100 = (value: number) => Math.max(0, Math.min(100, value));
 
@@ -67,6 +68,8 @@ export function computeIssueScores(
   debt: number,
   revenueModifier: number,
   economy: Economy,
+  /** The tax code, when there is one. Without it the old proxy stands in. */
+  taxes?: TaxCode,
 ): IssueScores {
   const taxBurden = Math.max(0, revenueModifier) * ISSUE_COST_PER_REVENUE;
 
@@ -76,7 +79,12 @@ export function computeIssueScores(
     education: findSector(sectors, 'education').health,
     infrastructure: findSector(sectors, 'infrastructure').health,
     environment: findSector(sectors, 'environment').health,
-    tax: clamp100(ISSUE_TAX_BASE - revenueModifier * ISSUE_TAX_PER_REVENUE),
+    /* What the government is charging, against what it inherited. Voters
+       judge a tax system against what they were paying before, not against
+       an abstract optimum. */
+    tax: taxes
+      ? taxBurdenScore(taxes, economy.gdp)
+      : clamp100(ISSUE_TAX_BASE - revenueModifier * ISSUE_TAX_PER_REVENUE),
     debt: clamp100(
       100 * (1 - debtRatio(debt, economy.gdp) / ISSUE_DEBT_ZERO_AT_RATIO),
     ),

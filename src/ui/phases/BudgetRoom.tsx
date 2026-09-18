@@ -34,6 +34,7 @@ import {
 } from '../components/Primitives.tsx';
 import { benchInk } from '../bench.ts';
 import { FiscalRulesRoom } from '../components/FiscalRulesRoom.tsx';
+import { TaxPanel } from '../components/TaxPanel.tsx';
 
 export function BudgetRoom() {
   const { game, dispatch, endTurn, resolvingRemotely } = useGame();
@@ -166,6 +167,8 @@ export function BudgetRoom() {
           </ul>
         </Panel>
       )}
+
+      <TaxPanel />
 
       <FiscalRulesRoom />
 

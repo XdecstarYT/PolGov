@@ -731,6 +731,34 @@ export interface FiscalForecast {
   downgradeInHorizon: boolean;
 }
 
+/* ------------------------------------------------------------------ *
+ * Engine 2C — the tax code
+ * ------------------------------------------------------------------ */
+
+/**
+ * Every rate the government sets, plus the three dials that decide who the
+ * income tax falls on.
+ *
+ * `recentChanges` exists so the political cost of a rise can decay while the
+ * revenue does not. Voters stop being angry about a rate long before the
+ * treasury stops collecting it.
+ */
+export interface TaxCode {
+  rates: Record<import('./content/taxes.ts').TaxKey, number>;
+  /** 0 flat, 1 steeply progressive. Moves who pays, not how much. */
+  progressivity: number;
+  /** 0–1. Narrows the income tax base; worth most to whoever has most to deduct. */
+  deductions: number;
+  /** 0–1. Paid straight back out, mostly to people with the least. */
+  credits: number;
+  recentChanges: {
+    key: import('./content/taxes.ts').TaxKey;
+    from: number;
+    to: number;
+    turn: number;
+  }[];
+}
+
 export interface GameState {
   id: string;
   ownerId: string | null;
@@ -753,6 +781,9 @@ export interface GameState {
 
   /** The public finances: what the debt is made of, and who is lending. */
   finance: PublicFinance;
+
+  /** Every rate the government sets, and who each one falls on. */
+  taxes: TaxCode;
 
   /**
    * The player's own party: factions, discipline, members, and money that is

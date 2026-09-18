@@ -117,7 +117,15 @@ import {
   RATING_REVIEW_MONTHS,
   RESERVE_CONTRIBUTION_MAX,
   RESERVE_CONTRIBUTION_PC_COST,
+  TAX_CHANGE_PC_COST,
 } from './balance.ts';
+import {
+  findTaxTemplate,
+  forgetOldChanges,
+  recordChange,
+  taxEffects,
+  type TaxKey,
+} from './systems/taxation.ts';
 import {
   FISCAL_RULE_LABELS,
   averageCoupon,
@@ -183,6 +191,8 @@ export type Intent =
   | { type: 'reshuffle_cabinet'; partyId: string }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
+  | { type: 'set_tax_rate'; tax: TaxKey; rate: number }
+  | { type: 'set_tax_dial'; dial: 'progressivity' | 'deductions' | 'credits'; value: number }
   | { type: 'adopt_fiscal_rule'; kind: FiscalRuleKind; threshold: number }
   | { type: 'repeal_fiscal_rule'; kind: FiscalRuleKind }
   | { type: 'set_reserve_contribution'; amount: number }
@@ -695,10 +705,23 @@ export function resolveTurn(state: GameState): GameState {
     );
   }
 
-  /* Sector drift toward the equilibrium implied by funding. */
+  /*
+   * Sector drift toward the equilibrium implied by funding — plus whatever
+   * the tax code is doing to it. A carbon price that raises almost no money
+   * because nobody is emitting any more is not a failed tax; it is a tax
+   * that worked, and this is where that shows up.
+   */
+  const fromTax = taxEffects(next.taxes).sectors;
   for (const sector of next.sectors) {
     const before = sector.health;
-    sector.health = driftSectorHealth(sector.key, sector.health, sector.funding, next.difficulty);
+    const nudge = fromTax[sector.key] ?? 0;
+    sector.health = driftSectorHealth(
+      sector.key,
+      sector.health,
+      sector.funding,
+      next.difficulty,
+      nudge,
+    );
     const delta = sector.health - before;
     if (Math.abs(delta) >= 0.05) {
       log(entries, {
@@ -718,6 +741,7 @@ export function resolveTurn(state: GameState): GameState {
     next.revenueModifier,
     next.debt,
     next.finance.bonds,
+    next.taxes,
   );
   next.treasury += fiscal.treasuryDelta;
   next.debt = Math.max(0, next.debt + fiscal.debtDelta);
@@ -726,7 +750,8 @@ export function resolveTurn(state: GameState): GameState {
     kind: 'treasury',
     label: 'Revenue',
     delta: fiscal.revenue,
-    cause: `Tax take on ₡${Math.round(next.economy.gdp)}bn of output`,
+    cause:
+      `Every instrument at its current rate, on ₡${Math.round(next.economy.gdp)}bn of output`,
     unit: '₡bn',
     informational: true,
   });
@@ -932,6 +957,10 @@ export function resolveTurn(state: GameState): GameState {
    * — which is why the entries below are recorded as things that happened
    * rather than as things that were decided.
    */
+  /* Voters stop being angry about a rate long before the treasury stops
+     collecting it, so the memory of a change is aged out each month. */
+  next.taxes = forgetOldChanges(next.taxes, next.turnNumber);
+
   const economyBefore = next.economy;
   next.economy = stepEconomy(next.economy, {
     fiscalImpulse: fiscalImpulse(fiscal),
@@ -941,6 +970,8 @@ export function resolveTurn(state: GameState): GameState {
       findSector(next.sectors, 'infrastructure').health,
     ),
     turn: next.turnNumber,
+    /* What the shape of the tax code does, as distinct from its size. */
+    taxEffects: taxEffects(next.taxes),
     /*
      * This month's weather, off the run's own seeded RNG, so a replayed turn
      * produces the identical month and the server can check it. The Treasury
@@ -1407,6 +1438,10 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleEmergencyBudget(state);
     case 'set_funding':
       return handleSetFunding(state, intent.sector, intent.amount);
+    case 'set_tax_rate':
+      return handleSetTaxRate(state, intent.tax, intent.rate);
+    case 'set_tax_dial':
+      return handleSetTaxDial(state, intent.dial, intent.value);
     case 'adopt_fiscal_rule':
       return handleAdoptFiscalRule(state, intent.kind, intent.threshold);
     case 'repeal_fiscal_rule':
@@ -1778,6 +1813,76 @@ function handleSetFunding(
   const next = clone(state);
   const sector = findSector(next.sectors, sectorKey);
   sector.funding = Math.round(amount * 10) / 10;
+  return ok(next);
+}
+
+/**
+ * Change a rate.
+ *
+ * Costs political capital, because a rate change is legislation. The revenue
+ * arrives immediately and the resentment decays over eighteen months, which
+ * makes raising something unpopular at the start of a term and letting it
+ * cool before the election a genuine strategy — a cynical one, and the game
+ * permits it rather than pretending it does not work.
+ */
+function handleSetTaxRate(state: GameState, tax: TaxKey, rate: number): IntentResult {
+  if (state.phase !== 'budget' && state.phase !== 'agenda') {
+    return reject(state, 'Rates are set at the budget or legislated on the floor.');
+  }
+  const template = findTaxTemplate(tax);
+  if (!Number.isFinite(rate) || rate < 0 || rate > template.maxRate) {
+    return reject(
+      state,
+      `${template.name} must be between 0% and ${(template.maxRate * 100).toFixed(0)}%.`,
+    );
+  }
+
+  const current = state.taxes.rates[tax];
+  const next = clone(state);
+  const rounded = Math.round(rate * 10000) / 10000;
+  if (Math.abs(rounded - current) < 1e-9) return ok(next);
+
+  if (next.politicalCapital < TAX_CHANGE_PC_COST) {
+    return reject(state, 'Not enough political capital to legislate a rate change.');
+  }
+  spendPc(next, TAX_CHANGE_PC_COST);
+  next.taxes = recordChange(
+    { ...next.taxes, rates: { ...next.taxes.rates, [tax]: rounded } },
+    tax,
+    current,
+    rounded,
+    next.turnNumber,
+  );
+  return ok(next);
+}
+
+/**
+ * Change who the income tax falls on, without changing how much it raises.
+ *
+ * Progressivity moves burden between the top and the bottom and collects the
+ * same total either way. Deductions and credits do cost money — the first is
+ * worth most to whoever has the most to deduct, the second is paid straight
+ * back out to the people with the least. Keeping the three separate means a
+ * government has to say which one it is doing.
+ */
+function handleSetTaxDial(
+  state: GameState,
+  dial: 'progressivity' | 'deductions' | 'credits',
+  value: number,
+): IntentResult {
+  if (state.phase !== 'budget') return reject(state, 'The income tax is shaped at the budget.');
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    return reject(state, 'That dial runs from 0 to 1.');
+  }
+  const rounded = Math.round(value * 100) / 100;
+  if (Math.abs(rounded - state.taxes[dial]) < 1e-9) return ok(clone(state));
+  if (state.politicalCapital < TAX_CHANGE_PC_COST) {
+    return reject(state, 'Not enough political capital to reshape the income tax.');
+  }
+
+  const next = clone(state);
+  spendPc(next, TAX_CHANGE_PC_COST);
+  next.taxes = { ...next.taxes, [dial]: rounded };
   return ok(next);
 }
 
@@ -2648,7 +2753,7 @@ function handleReferendum(state: GameState, questionId: string): IntentResult {
   const entries = currentLog(next);
   spendPc(next, PC_COSTS_POLICY.callReferendum);
 
-  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier, next.economy);
+  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier, next.economy, next.taxes);
   const result = runReferendum(question, next.regions, scores);
 
   next.referendums.push({
@@ -2814,7 +2919,7 @@ function handlePoll(state: GameState, quality: PollQuality): IntentResult {
   spendPc(next, cost);
 
   const rng = new Rng(next.rngState);
-  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier, next.economy);
+  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier, next.economy, next.taxes);
   const player = playerParty(next.parties);
   const truth = trueNationalShares(next.regions, next.parties, {
     scores,
@@ -2927,7 +3032,7 @@ function handlePressConference(state: GameState): IntentResult {
   spendPc(next, PC_COSTS_MEDIA.pressConference);
 
   /* What the room asks about is whatever is going worst. */
-  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier, next.economy);
+  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier, next.economy, next.taxes);
   const worst = Object.entries(scores).sort((a, b) => a[1] - b[1])[0];
   const defensible = (worst?.[1] ?? 50) > 42;
 

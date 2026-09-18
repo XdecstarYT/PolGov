@@ -340,6 +340,16 @@ export interface EconomyInputs {
   productivityTarget: number;
   /** Annual growth in the workforce, %. Engine 2E supplies this. */
   workforceGrowth?: number;
+  /**
+   * What the tax code does beyond raising money.
+   *
+   * Separate from the fiscal impulse on purpose: the impulse is about how
+   * much the government is injecting, and this is about what the shape of
+   * the code does to the people it falls on. A revenue-neutral shift from
+   * corporate tax to land tax has no impulse at all and still moves
+   * investment, which is exactly the kind of decision worth making.
+   */
+  taxEffects?: { investment: number; consumption: number; prices: number };
   /** The turn being resolved, for the history record. */
   turn: number;
   /**
@@ -408,7 +418,10 @@ export function stepEconomy(economy: Economy, inputs: EconomyInputs): Economy {
 
   /* 4. Prices. Computed against the labour market we just produced. */
   const priced: Economy = { ...economy, unemployment, outputGap };
-  const wantedInflation = targetInflation(priced, priceMomentum);
+  const wantedInflation = targetInflation(
+    priced,
+    priceMomentum + (inputs.taxEffects?.prices ?? 0),
+  );
   const inflation = economy.inflation + (wantedInflation - economy.inflation) * 0.45;
   /* Expectations follow realised inflation, which is why it is sticky. */
   const inflationExpectation =
@@ -468,11 +481,13 @@ export function stepEconomy(economy: Economy, inputs: EconomyInputs): Economy {
     SAVINGS_RATE_MAX,
   );
   const householdIncome = gdp * HOUSEHOLD_INCOME_SHARE;
-  const householdSpending = householdIncome * (1 - householdSavingsRate / 100);
+  const householdSpending =
+    householdIncome * (1 - householdSavingsRate / 100) * (1 + (inputs.taxEffects?.consumption ?? 0) / 100);
   const investmentShare = clamp(
     INVESTMENT_SHARE_BASE +
       (businessConfidence - 50) * INVESTMENT_CONFIDENCE_WEIGHT -
-      (policyRate - inflationExpectation - NEUTRAL_REAL_RATE) * INVESTMENT_RATE_WEIGHT,
+      (policyRate - inflationExpectation - NEUTRAL_REAL_RATE) * INVESTMENT_RATE_WEIGHT +
+      (inputs.taxEffects?.investment ?? 0) / 100,
     0.08,
     0.38,
   );

@@ -21,6 +21,8 @@ export const ALLOWED_INTENT_TYPES: ReadonlySet<Intent['type']> = new Set([
   'reshuffle_cabinet',
   'emergency_budget',
   'set_funding',
+  'set_tax_rate',
+  'set_tax_dial',
   'adopt_fiscal_rule',
   'repeal_fiscal_rule',
   'set_reserve_contribution',

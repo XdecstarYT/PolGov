@@ -15,9 +15,10 @@ import {
   SECTOR_KEYS,
   SURPLUS_TO_DEBT_RATIO,
 } from '../balance.ts';
-import type { Bond, Difficulty, Economy, Sector, SectorKey } from '../types.ts';
+import type { Bond, Difficulty, Economy, Sector, SectorKey, TaxCode } from '../types.ts';
 import { computeRevenueFromGdp } from './economy.ts';
 import { couponsDue } from './publicFinance.ts';
+import { monthlyReceipts } from './taxation.ts';
 
 /**
  * The health a sector settles at for a given funding level.
@@ -45,9 +46,12 @@ export function driftSectorHealth(
   health: number,
   funding: number,
   difficulty: Difficulty,
+  /** Points added to the equilibrium by things other than money — a carbon
+      price on the environment, an excise on health. */
+  externalNudge = 0,
 ): number {
   const profile = DIFFICULTY[difficulty];
-  const target = sectorEquilibrium(key, funding);
+  const target = clamp01to100(sectorEquilibrium(key, funding) + externalNudge);
   const gap = target - health;
   const rate = gap < 0 ? SECTOR_DRIFT_RATE * profile.decayPressure : SECTOR_DRIFT_RATE;
   return clamp01to100(health + gap * rate);
@@ -64,8 +68,13 @@ export function clamp01to100(value: number): number {
  * unemployment rises is also the month revenue falls and the deficit widens
  * before the government has decided anything at all.
  */
-export function computeRevenue(gdp: number, revenueModifier: number): number {
-  return computeRevenueFromGdp(gdp, revenueModifier);
+export function computeRevenue(gdp: number, revenueModifier: number, taxes?: TaxCode): number {
+  /* With a tax code, receipts are the sum of what each instrument actually
+     raises at its rate. Without one — a handful of tests care only about
+     seat arithmetic — fall back to the flat share it is calibrated to. */
+  return taxes
+    ? monthlyReceipts(taxes, gdp) + revenueModifier
+    : computeRevenueFromGdp(gdp, revenueModifier);
 }
 
 /**
@@ -134,8 +143,10 @@ export function resolveFiscalTurn(
    * are stronger now, and this one is honest.
    */
   bonds?: readonly Bond[],
+  /** The rates the government is charging. */
+  taxes?: TaxCode,
 ): FiscalTick {
-  const revenue = computeRevenue(economy.gdp, revenueModifier);
+  const revenue = computeRevenue(economy.gdp, revenueModifier, taxes);
   const spending = totalFunding(sectors);
   const debtService = bonds ? couponsDue(bonds) : computeDebtService(debt, economy.policyRate);
   const balance = revenue - spending - debtService;

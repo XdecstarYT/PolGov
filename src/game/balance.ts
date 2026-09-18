@@ -969,3 +969,31 @@ export const REGIONAL_SERVICE_WEIGHT = 0.0022;
 
 /** Months between statements of the public accounts. */
 export const BUDGET_UPDATE_INTERVAL = 6;
+
+/* ------------------------------------------------------------------ *
+ * Engine 2C — taxation
+ * ------------------------------------------------------------------ */
+
+/** The most of the income tax base that deductions can carve away. */
+export const INCOME_TAX_DEDUCTION_MAX = 0.28;
+/** The most of the income tax yield that credits can pay back out. */
+export const INCOME_TAX_CREDIT_MAX = 0.22;
+/**
+ * How much burden a full swing of progressivity moves between top and bottom.
+ *
+ * Progressivity raises no extra money — it collects the same total from
+ * different people — so this figure never appears in the yield. It appears
+ * only in who resents you for it.
+ */
+export const TAX_PROGRESSIVITY_SHIFT = 7;
+/**
+ * How long a tax change stays raw, in months.
+ *
+ * A rise is resented sharply and then it becomes the rate. Eighteen months
+ * means a government can raise something unpopular at the start of a term
+ * and have it stop costing votes before the election — a cynical strategy,
+ * and one the game should permit rather than pretend does not work.
+ */
+export const TAX_CHANGE_MEMORY_MONTHS = 18;
+/** Political capital to legislate a rate change. */
+export const TAX_CHANGE_PC_COST = 12;

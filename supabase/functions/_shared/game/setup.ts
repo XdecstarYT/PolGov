@@ -24,8 +24,9 @@ import { PARTY_TEMPLATES } from './content/parties.ts';
 import { REGION_TEMPLATES } from './content/regions.ts';
 import { Rng, seedFromString } from './rng.ts';
 import { buildDistricts } from './systems/districts.ts';
-import { buildEconomy, computeRevenueFromGdp } from './systems/economy.ts';
+import { buildEconomy } from './systems/economy.ts';
 import { buildPublicFinance } from './systems/publicFinance.ts';
+import { buildTaxCode, monthlyReceipts } from './systems/taxation.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
 import { buildSenate } from './systems/parliament.ts';
 import { MMP_DISTRICT_SHARE } from './balance.ts';
@@ -219,6 +220,9 @@ export function createGame(options: NewGameOptions): GameState {
        conditions catching up with the player. */
     economy: buildEconomy(),
 
+    /* The rates the previous government left behind. */
+    taxes: buildTaxCode(),
+
     /* The debt is issued as a real book with staggered maturities, so the
        refinancing problem exists from turn one and was left by somebody
        else — which is the position a new government is actually in. */
@@ -227,7 +231,7 @@ export function createGame(options: NewGameOptions): GameState {
       buildEconomy().gdp,
       buildEconomy().policyRate,
       regions,
-      computeRevenueFromGdp(buildEconomy().gdp, 0),
+      monthlyReceipts(buildTaxCode(), buildEconomy().gdp),
     ),
 
     partyInternals: {
