@@ -119,6 +119,32 @@ export interface Effects {
   coalitionMood?: number;
   /** Recurring per-turn revenue modifier, in ₡bn. */
   revenueDelta?: number;
+
+  /**
+   * A macroeconomic shock to apply, or soften.
+   *
+   * This is what lets a choice at the desk be a decision about the ECONOMY
+   * rather than about the treasury balance. A bank rescue does not mainly
+   * cost money — it costs money and prevents six months of contraction, and
+   * the second half is the part worth arguing about.
+   */
+  economicShock?: {
+    id: string;
+    label: string;
+    kind: ShockKind;
+    growthImpulse: number;
+    inflationImpulse: number;
+    confidenceImpulse: number;
+    months: number;
+  };
+  /** Multiplier applied to any shock this event would otherwise deliver. */
+  shockRelief?: number;
+  /** One-off nudges to named industries, in points of health. */
+  industryDeltas?: Partial<Record<import('./content/industries.ts').IndustryKey, number>>;
+  /** One-off nudges to named infrastructure assets, in points of condition. */
+  assetDamage?: Partial<
+    Record<import('./content/infrastructure.ts').InfrastructureKey, number>
+  >;
 }
 
 /* ------------------------------------------------------------------ *

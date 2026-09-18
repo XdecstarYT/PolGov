@@ -20,6 +20,38 @@ export interface EventWeightContext {
   treasury: number;
   turnNumber: number;
   averageMood: number;
+
+  /*
+   * The state of the country as Engine 2 models it.
+   *
+   * Optional because a handful of tests build a context by hand and care
+   * only about sector health. Every template that reads these guards for
+   * absence, so a partial context produces a plausible world rather than a
+   * crash — but the real game always passes all of it, and crises that fire
+   * out of nowhere are exactly what this exists to prevent.
+   */
+  /** Debt as a share of a year's output. */
+  debtRatio?: number;
+  /** The central bank's policy rate, %. */
+  policyRate?: number;
+  /** Annualised real growth, %. */
+  growth?: number;
+  /** Output against capacity, %. */
+  outputGap?: number;
+  /** Annual inflation, %. */
+  inflation?: number;
+  /** Per cent out of work. */
+  unemployment?: number;
+  /** True when the country is formally in recession. */
+  inRecession?: boolean;
+  /** Health of named industries, 100 = normal. */
+  industryHealth?: Partial<Record<string, number>>;
+  /** Worst infrastructure condition in the country, 0–100. */
+  worstAssetCondition?: number;
+  /** Total deferred maintenance, ₡bn. */
+  maintenanceBacklog?: number;
+  /** Share of the population past retiring age. */
+  retiredShare?: number;
 }
 
 export interface EventTemplate {
@@ -993,3 +1025,11 @@ export const EVENT_CATEGORY_LABELS: Record<EventCategory, string> = {
   opportunity: 'Opportunity',
   routine: 'Routine',
 };
+
+/*
+ * The ten economic crises live in their own file because they are a
+ * different kind of content: each delivers a real macroeconomic shock into
+ * the model rather than a one-off nudge, and each fires in proportion to how
+ * likely the government has made it. They join the same pool.
+ */
+export { ECONOMIC_EVENT_TEMPLATES } from './economicEvents.ts';

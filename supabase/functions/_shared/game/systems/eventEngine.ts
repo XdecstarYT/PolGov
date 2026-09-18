@@ -15,8 +15,25 @@ import {
   SECTOR_KEYS,
 } from '../balance.ts';
 import { EVENT_TEMPLATES, type EventTemplate, type EventWeightContext } from '../content/events.ts';
-import type { Difficulty, GameEvent, Party, Sector, SectorKey } from '../types.ts';
+import { ECONOMIC_EVENT_TEMPLATES } from '../content/economicEvents.ts';
+import type {
+  Demography,
+  Difficulty,
+  Economy,
+  GameEvent,
+  IndustryState,
+  Infrastructure,
+  Party,
+  Sector,
+  SectorKey,
+} from '../types.ts';
 import type { Rng } from '../rng.ts';
+
+/**
+ * Everything that can happen: the original pool plus the ten economic
+ * crises, which weight themselves off the state Engine 2 tracks.
+ */
+const ALL_TEMPLATES: EventTemplate[] = [...EVENT_TEMPLATES, ...ECONOMIC_EVENT_TEMPLATES];
 
 export function buildWeightContext(
   sectors: readonly Sector[],
@@ -25,6 +42,20 @@ export function buildWeightContext(
   treasury: number,
   turnNumber: number,
   parties: readonly Party[],
+  /**
+   * The state of the country as Engine 2 models it.
+   *
+   * Optional so the handful of tests that build a context by hand keep
+   * working, but the real game always supplies it — and without it a
+   * banking crisis is a die roll rather than something the government spent
+   * four years making more likely.
+   */
+  world?: {
+    economy: Economy;
+    industries: readonly IndustryState[];
+    infrastructure: Infrastructure;
+    demography: Demography;
+  },
 ): EventWeightContext {
   const sectorHealth = {} as Record<SectorKey, number>;
   for (const key of SECTOR_KEYS) {
@@ -36,7 +67,27 @@ export function buildWeightContext(
       ? partners.reduce((sum, p) => sum + (p.coalitionMood ?? 50), 0) / partners.length
       : 100;
 
-  return { sectorHealth, approval, debt, treasury, turnNumber, averageMood };
+  const base = { sectorHealth, approval, debt, treasury, turnNumber, averageMood };
+  if (!world) return base;
+
+  const { economy, industries, infrastructure, demography } = world;
+  return {
+    ...base,
+    debtRatio: economy.gdp > 0 ? debt / economy.gdp : 0,
+    policyRate: economy.policyRate,
+    growth: economy.growth,
+    outputGap: economy.outputGap,
+    inflation: economy.inflation,
+    unemployment: economy.unemployment,
+    inRecession: economy.phase === 'recession',
+    industryHealth: Object.fromEntries(industries.map((i) => [i.key, i.health])),
+    worstAssetCondition: infrastructure.assets.reduce(
+      (worst, a) => Math.min(worst, a.condition),
+      100,
+    ),
+    maintenanceBacklog: infrastructure.assets.reduce((sum, a) => sum + a.backlog, 0),
+    retiredShare: demography.retiredShare,
+  };
 }
 
 /** Categories that read as bad news, for difficulty weighting. */
@@ -75,7 +126,7 @@ export function drawEvents(
   const used = new Set<string>(recentTemplateKeys);
 
   for (let i = 0; i < count; i += 1) {
-    const pool = EVENT_TEMPLATES.filter((t) => !used.has(t.key));
+    const pool = ALL_TEMPLATES.filter((t) => !used.has(t.key));
     if (pool.length === 0) break;
 
     const template = rng.pickWeighted(pool, (t) => weightFor(t, ctx, difficulty));
@@ -106,5 +157,5 @@ export function drawEvents(
 }
 
 export function findEventTemplate(key: string): EventTemplate | undefined {
-  return EVENT_TEMPLATES.find((t) => t.key === key);
+  return ALL_TEMPLATES.find((t) => t.key === key);
 }

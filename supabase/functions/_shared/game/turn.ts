@@ -104,6 +104,7 @@ import {
   sunsetTurn,
 } from './systems/policy.ts';
 import { computeIssueScores } from './systems/electorate.ts';
+import { applyShock } from './systems/economy.ts';
 import {
   describeCycle,
   economyIssueScore,
@@ -335,6 +336,72 @@ export function applyEffects(
     });
   }
 
+  /*
+   * A macroeconomic shock, and any relief the chosen course bought.
+   *
+   * This is what makes a choice at the desk a decision about the economy
+   * rather than about the treasury balance. A bank rescue does not mainly
+   * cost money — it costs money AND prevents six months of contraction, and
+   * the second half is the part worth arguing about.
+   */
+  if (effects.economicShock) {
+    const spec = effects.economicShock;
+    const relief = effects.shockRelief ?? 1;
+    state.economy = applyShock(state.economy, {
+      id: spec.id,
+      label: spec.label,
+      kind: spec.kind,
+      growthImpulse: spec.growthImpulse * relief,
+      inflationImpulse: spec.inflationImpulse * relief,
+      confidenceImpulse: spec.confidenceImpulse * relief,
+      remaining: spec.months,
+      duration: spec.months,
+      startedTurn: state.turnNumber,
+    });
+    log(entries, {
+      kind: 'economy',
+      label: spec.label,
+      delta: 0,
+      cause:
+        `${cause}. ` +
+        (relief < 1
+          ? `Softened to ${(relief * 100).toFixed(0)}% of what it would have been, `
+          : '') +
+        `${spec.months} months of it, worst in the first.`,
+      unit: '',
+    });
+  }
+
+  if (effects.industryDeltas) {
+    for (const [key, delta] of Object.entries(effects.industryDeltas)) {
+      const industry = state.industries.find((i) => i.key === key);
+      if (!industry || !delta) continue;
+      industry.health = Math.max(10, Math.min(190, industry.health + delta));
+      log(entries, {
+        kind: 'economy',
+        label: findIndustry(industry.key).name,
+        delta,
+        cause,
+        unit: 'pts',
+      });
+    }
+  }
+
+  if (effects.assetDamage) {
+    for (const [key, delta] of Object.entries(effects.assetDamage)) {
+      const asset = state.infrastructure.assets.find((a) => a.key === key);
+      if (!asset || !delta) continue;
+      asset.condition = Math.max(0, Math.min(100, asset.condition + delta));
+      log(entries, {
+        kind: 'note',
+        label: findInfrastructure(asset.key).name,
+        delta,
+        cause,
+        unit: 'pts',
+      });
+    }
+  }
+
   if (effects.politicalCapital) {
     state.politicalCapital = clampPc(state.politicalCapital + effects.politicalCapital);
     log(entries, {
@@ -458,6 +525,14 @@ export function beginTurn(state: GameState): GameState {
     next.treasury,
     next.turnNumber,
     next.parties,
+    /* So a banking crisis is something the government spent four years
+       making more likely, rather than a die roll against it. */
+    {
+      economy: next.economy,
+      industries: next.industries,
+      infrastructure: next.infrastructure,
+      demography: next.demography,
+    },
   );
   next.events = drawEvents(rng, ctx, next.difficulty, next.turnNumber, recentKeys);
 
