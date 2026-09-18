@@ -27,6 +27,7 @@ import { buildDistricts } from './systems/districts.ts';
 import { buildEconomy } from './systems/economy.ts';
 import { buildPublicFinance } from './systems/publicFinance.ts';
 import { buildTaxCode, monthlyReceipts } from './systems/taxation.ts';
+import { buildIndustries } from './systems/industry.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
 import { buildSenate } from './systems/parliament.ts';
 import { MMP_DISTRICT_SHARE } from './balance.ts';
@@ -222,6 +223,10 @@ export function createGame(options: NewGameOptions): GameState {
 
     /* The rates the previous government left behind. */
     taxes: buildTaxCode(),
+
+    /* Every industry at its baseline. Whatever goes wrong first should be
+       something that happened, not something inherited. */
+    industries: buildIndustries(),
 
     /* The debt is issued as a real book with staggered maturities, so the
        refinancing problem exists from turn one and was left by somebody

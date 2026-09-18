@@ -19,6 +19,8 @@ export * from './systems/economy.ts';
 export * from './systems/publicFinance.ts';
 export * from './systems/taxation.ts';
 export * from './content/taxes.ts';
+export * from './systems/industry.ts';
+export * from './content/industries.ts';
 export * from './systems/coalition.ts';
 export * from './systems/election.ts';
 export * from './systems/electorate.ts';

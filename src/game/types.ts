@@ -759,6 +759,26 @@ export interface TaxCode {
   }[];
 }
 
+
+/* ------------------------------------------------------------------ *
+ * Engine 2D — industries
+ * ------------------------------------------------------------------ */
+
+/**
+ * One industry, as it currently stands.
+ *
+ * `health` is an index where 100 means "performing exactly as its share of
+ * the economy implies". The two shares move with it, and they move at
+ * different speeds: firms cut hours and hoard skilled staff long before they
+ * cut headcount, and rehire later than they recover.
+ */
+export interface IndustryState {
+  key: import('./content/industries.ts').IndustryKey;
+  health: number;
+  outputShare: number;
+  employmentShare: number;
+}
+
 export interface GameState {
   id: string;
   ownerId: string | null;
@@ -784,6 +804,9 @@ export interface GameState {
 
   /** Every rate the government sets, and who each one falls on. */
   taxes: TaxCode;
+
+  /** What the economy is made of, and where each part of it is. */
+  industries: IndustryState[];
 
   /**
    * The player's own party: factions, discipline, members, and money that is

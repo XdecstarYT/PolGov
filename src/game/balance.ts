@@ -997,3 +997,33 @@ export const TAX_PROGRESSIVITY_SHIFT = 7;
 export const TAX_CHANGE_MEMORY_MONTHS = 18;
 /** Political capital to legislate a rate change. */
 export const TAX_CHANGE_PC_COST = 12;
+
+/* ------------------------------------------------------------------ *
+ * Engine 2D — industries
+ * ------------------------------------------------------------------ */
+
+/**
+ * How fast an industry moves toward the health its conditions imply.
+ *
+ * Low on purpose. A factory does not close because rates went up last
+ * Tuesday, and it does not reopen the month they come back down. The
+ * practical effect is that a government usually inherits the industrial
+ * consequences of the previous one's decisions and hands its own to the
+ * next, which is both true and the most interesting thing about the lag.
+ */
+export const INDUSTRY_ADJUST_RATE = 0.055;
+
+/**
+ * The share of employment that is not in any of the twenty industries.
+ *
+ * Public administration, self-employment, and everything uncounted. It is
+ * here rather than being distributed among the twenty because pretending it
+ * belongs somewhere would put people in industries they do not work in.
+ */
+export const INDUSTRY_UNCOUNTED_EMPLOYMENT = 0.065;
+
+/** Points of industry health per ₡bn of funding for the sector it lives on. */
+export const INDUSTRY_PUBLIC_FUNDING_WEIGHT = 0.45;
+
+/** Points of regional support per point of regional employment gap. */
+export const REGIONAL_JOBS_WEIGHT = 0.0035;

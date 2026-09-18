@@ -117,8 +117,16 @@ import {
   RATING_REVIEW_MONTHS,
   RESERVE_CONTRIBUTION_MAX,
   RESERVE_CONTRIBUTION_PC_COST,
+  REGIONAL_JOBS_WEIGHT,
   TAX_CHANGE_PC_COST,
 } from './balance.ts';
+import {
+  employmentGap,
+  findIndustry,
+  industryPressure,
+  regionalEmployment,
+  stepIndustries,
+} from './systems/industry.ts';
 import {
   findTaxTemplate,
   forgetOldChanges,
@@ -835,6 +843,40 @@ export function resolveTurn(state: GameState): GameState {
   }
 
   /*
+   * The industries.
+   *
+   * Stepped before the finances and the economy, because what the industries
+   * are doing is what the economy is: the aggregate below is a correction to
+   * output, not a second opinion about it. They move slowly, so most of what
+   * happens here is the consequence of a decision taken several months ago —
+   * often by somebody else.
+   */
+  {
+    const before = next.industries;
+    next.industries = stepIndustries(next.industries, next.economy, next.taxes, next.sectors);
+
+    for (const industry of next.industries) {
+      const was = before.find((i) => i.key === industry.key);
+      if (!was) continue;
+      const delta = industry.health - was.health;
+      /* Only report a move worth a line. Twenty industries drifting by a
+         tenth of a point each would bury everything else in the report. */
+      if (Math.abs(delta) < 0.35) continue;
+      const pressure = industryPressure(was, next.economy, next.taxes, next.sectors);
+      const leading = pressure.reasons[0];
+      log(entries, {
+        kind: 'economy',
+        label: findIndustry(industry.key).name,
+        delta,
+        cause: leading
+          ? `${leading.label} ${leading.value >= 0 ? 'helping' : 'hurting'} it most`
+          : 'Drifting toward its normal level',
+        unit: 'pts',
+      });
+    }
+  }
+
+  /*
    * The public finances.
    *
    * Stepped before the economy, because the market prices this government's
@@ -972,6 +1014,13 @@ export function resolveTurn(state: GameState): GameState {
     turn: next.turnNumber,
     /* What the shape of the tax code does, as distinct from its size. */
     taxEffects: taxEffects(next.taxes),
+    /*
+     * What the industries are doing to the jobs. Okun's law works off the
+     * output gap alone, which cannot tell a downturn concentrated in retail
+     * — a ninth of the jobs — from the same downturn in mining, which is a
+     * sixtieth of them. This is that difference.
+     */
+    employmentGap: employmentGap(next.industries),
     /*
      * This month's weather, off the run's own seeded RNG, so a replayed turn
      * produces the identical month and the server can check it. The Treasury
@@ -1297,9 +1346,22 @@ export function runElection(state: GameState): GameState {
     debt: next.debt,
     revenueModifier: next.revenueModifier,
     economy: next.economy,
-    /* Regional services reach the ballot in the regions they failed in. */
+    /*
+     * Regional services AND regional jobs reach the ballot in the regions
+     * they failed in — not as a national issue score, where they would be
+     * averaged away, but as a swing in exactly those places. This is the
+     * end of the chain that starts at a rate the central bank set: rates →
+     * construction → Estmoor → seats.
+     */
     regionalSwing: Object.fromEntries(
-      next.finance.regional.map((budget) => [budget.regionId, regionalSwing(budget)]),
+      next.regions.map((region) => {
+        const budget = next.finance.regional.find((b) => b.regionId === region.id);
+        const jobs = regionalEmployment(next.industries)[region.id] ?? 0;
+        return [
+          region.id,
+          (budget ? regionalSwing(budget) : 0) + jobs * REGIONAL_JOBS_WEIGHT,
+        ];
+      }),
     ),
   });
 

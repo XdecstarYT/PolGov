@@ -350,6 +350,15 @@ export interface EconomyInputs {
    * investment, which is exactly the kind of decision worth making.
    */
   taxEffects?: { investment: number; consumption: number; prices: number };
+  /**
+   * What the industry mix is doing to jobs, in points, beyond what the
+   * output gap alone implies.
+   *
+   * Okun's law cannot tell a downturn concentrated in retail — a ninth of
+   * the workforce — from the same downturn in mining, which is a sixtieth of
+   * it. Engine 2D can, and this is how it says so.
+   */
+  employmentGap?: number;
   /** The turn being resolved, for the history record. */
   turn: number;
   /**
@@ -408,7 +417,8 @@ export function stepEconomy(economy: Economy, inputs: EconomyInputs): Economy {
   const outputGap = ((gdp - potentialGdp) / potentialGdp) * 100;
 
   /* 3. Jobs. Okun's law, with stickiness — hiring and firing both lag. */
-  const impliedUnemployment = NATURAL_UNEMPLOYMENT - outputGap * OKUN_COEFFICIENT;
+  const impliedUnemployment =
+    NATURAL_UNEMPLOYMENT - outputGap * OKUN_COEFFICIENT - (inputs.employmentGap ?? 0) * 0.55;
   const unemployment = clamp(
     economy.unemployment +
       (impliedUnemployment - economy.unemployment) * UNEMPLOYMENT_ADJUST_RATE,
