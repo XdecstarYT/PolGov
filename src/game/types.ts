@@ -607,6 +607,130 @@ export interface EconomyForecast {
   recessionInHorizon: boolean;
 }
 
+/* ------------------------------------------------------------------ *
+ * Engine 2B — government finance
+ * ------------------------------------------------------------------ */
+
+/** One tranche of borrowing, with a date it has to be paid back. */
+export interface Bond {
+  id: string;
+  /** Face value, ₡bn. */
+  principal: number;
+  /** Annual coupon, %, fixed at issue. This is why timing matters. */
+  coupon: number;
+  /** Original tenor in months. */
+  tenor: number;
+  /** Months until it matures and the principal falls due. */
+  remaining: number;
+  issuedTurn: number;
+}
+
+export type CreditGrade = 'AAA' | 'AA' | 'A' | 'BBB' | 'BB' | 'B' | 'CCC';
+
+export interface CreditRating {
+  grade: CreditGrade;
+  /** What the grade adds to the government's borrowing cost, in points. */
+  spread: number;
+  /**
+   * The grade the numbers currently justify. Agencies take time to act, so
+   * this can sit below `grade` for months — which is the warning a player
+   * gets, and the one they are free to ignore.
+   */
+  pending: CreditGrade;
+  /** Months the pending grade has been worse than the actual one. */
+  reviewMonths: number;
+  /** Plain-language reasons, shown verbatim. Never a hidden judgement. */
+  reasons: string[];
+}
+
+export type FiscalRuleKind =
+  | 'deficit_cap'
+  | 'debt_ceiling'
+  | 'spending_cap'
+  | 'balanced_budget';
+
+/**
+ * A constraint the government wrote for itself.
+ *
+ * Adopting one costs political capital and buys credibility with lenders.
+ * Breaching one costs approval every month it lasts, and costs it with the
+ * partners who made it a condition. Repealing one is cheaper than adopting
+ * it, which is the trap: the cheap way out of a rule is to abolish it, and
+ * the market has been watching.
+ */
+export interface FiscalRule {
+  kind: FiscalRuleKind;
+  /** Meaning depends on the kind: a ratio for caps, ₡bn for a ceiling. */
+  threshold: number;
+  adoptedTurn: number;
+  /** Consecutive months in breach. Zero when compliant. */
+  breachMonths: number;
+  /** Consecutive months compliant. Credibility is earned slowly. */
+  complianceMonths: number;
+}
+
+/** A region's own accounts, which the centre funds and the region spends. */
+export interface RegionalBudget {
+  regionId: string;
+  /** Transferred from the centre this month, ₡bn. */
+  grant: number;
+  /** Raised locally, ₡bn. */
+  ownRevenue: number;
+  /** Spent on regional services, ₡bn. */
+  spending: number;
+  /** 0–100. What people in this region actually experience. */
+  serviceQuality: number;
+  /** Region-level accumulated deficit, ₡bn. */
+  debt: number;
+}
+
+/**
+ * The public finances, beyond the single treasury and debt figures.
+ *
+ * The point of this structure is that a debt total tells a player nothing
+ * they can act on. What they can act on is: how much falls due and when,
+ * who is willing to lend and at what price, what the government has promised
+ * about it, and what has been set aside.
+ */
+export interface PublicFinance {
+  bonds: Bond[];
+  rating: CreditRating;
+  /** Points over the policy rate the market currently charges. */
+  spread: number;
+  rules: FiscalRule[];
+  /** Cash that may only be released against a declared emergency, ₡bn. */
+  emergencyFund: number;
+  /** The sovereign fund. Compounds, and belongs to whoever governs next. */
+  reserveFund: number;
+  /** Standing monthly contribution to the reserve fund, ₡bn. */
+  reserveContribution: number;
+  regional: RegionalBudget[];
+  /** Rolling record of the headline fiscal ratios. */
+  history: FiscalPoint[];
+}
+
+export interface FiscalPoint {
+  turn: number;
+  /** Debt as a share of annual GDP. */
+  debtRatio: number;
+  /** Deficit as a share of annual GDP. Positive is a deficit. */
+  deficitRatio: number;
+  /** All-in cost of new borrowing, %. */
+  borrowingCost: number;
+  grade: CreditGrade;
+}
+
+/** The whole fiscal picture, projected forward. */
+export interface FiscalForecast {
+  months: FiscalPoint[];
+  /** Debt-to-GDP at the end of the horizon. */
+  endDebtRatio: number;
+  /** True if any rule currently held would be breached inside the horizon. */
+  breachInHorizon: FiscalRuleKind[];
+  /** True if the rating would fall inside the horizon. */
+  downgradeInHorizon: boolean;
+}
+
 export interface GameState {
   id: string;
   ownerId: string | null;
@@ -626,6 +750,9 @@ export interface GameState {
 
   /** The macroeconomy: output, prices, jobs, rates and the cycle. */
   economy: Economy;
+
+  /** The public finances: what the debt is made of, and who is lending. */
+  finance: PublicFinance;
 
   /**
    * The player's own party: factions, discipline, members, and money that is

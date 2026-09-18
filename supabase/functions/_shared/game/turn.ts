@@ -53,6 +53,7 @@ import { generateNews, fallbackDebateAttack } from './content/news.ts';
 import { Rng } from './rng.ts';
 import type {
   Bill,
+  FiscalRuleKind,
   DebateExchange,
   Effects,
   GameEvent,
@@ -108,7 +109,24 @@ import {
   productivityTarget,
   stepEconomy,
 } from './systems/economy.ts';
-import { INFLATION_TARGET } from './balance.ts';
+import {
+  CREDIT_RATINGS,
+  FISCAL_RULE_PC_COST,
+  FISCAL_RULE_REPEAL_PC_COST,
+  INFLATION_TARGET,
+  RATING_REVIEW_MONTHS,
+  RESERVE_CONTRIBUTION_MAX,
+  RESERVE_CONTRIBUTION_PC_COST,
+} from './balance.ts';
+import {
+  FISCAL_RULE_LABELS,
+  averageCoupon,
+  borrowingCost,
+  breachApprovalCost,
+  regionalSwing,
+  rulesInBreach,
+  stepPublicFinance,
+} from './systems/publicFinance.ts';
 import {
   applyChannelPush,
   availableVolunteerPushes,
@@ -165,6 +183,10 @@ export type Intent =
   | { type: 'reshuffle_cabinet'; partyId: string }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
+  | { type: 'adopt_fiscal_rule'; kind: FiscalRuleKind; threshold: number }
+  | { type: 'repeal_fiscal_rule'; kind: FiscalRuleKind }
+  | { type: 'set_reserve_contribution'; amount: number }
+  | { type: 'draw_emergency_fund'; amount: number }
   | { type: 'call_early_election' }
   | { type: 'retire' }
   | { type: 'campaign_stop'; regionId: string }
@@ -690,7 +712,13 @@ export function resolveTurn(state: GameState): GameState {
   }
 
   /* Public finances, priced off the economy as it stands this month. */
-  const fiscal = resolveFiscalTurn(next.sectors, next.economy, next.revenueModifier, next.debt);
+  const fiscal = resolveFiscalTurn(
+    next.sectors,
+    next.economy,
+    next.revenueModifier,
+    next.debt,
+    next.finance.bonds,
+  );
   next.treasury += fiscal.treasuryDelta;
   next.debt = Math.max(0, next.debt + fiscal.debtDelta);
 
@@ -714,7 +742,9 @@ export function resolveTurn(state: GameState): GameState {
     kind: 'debt',
     label: 'Debt service',
     delta: -fiscal.debtService,
-    cause: `Interest on ₡${Math.round(next.debt)}bn outstanding at a ${next.economy.policyRate.toFixed(2)}% policy rate`,
+    cause:
+      `Coupons on ₡${Math.round(next.debt)}bn of paper, averaging ` +
+      `${averageCoupon(next.finance.bonds).toFixed(2)}%`,
     unit: '₡bn',
     informational: true,
   });
@@ -777,6 +807,120 @@ export function resolveTurn(state: GameState): GameState {
       cause: 'Cash shortfall covered by borrowing, returning the balance to zero',
       unit: '₡bn',
     });
+  }
+
+  /*
+   * The public finances.
+   *
+   * Stepped before the economy, because the market prices this government's
+   * paper off the month it has just had, and the rating it lands on is what
+   * the next tranche is issued at. What falls due this month is refinanced
+   * at today's price, whether or not today's price is one anybody planned
+   * for — which is the entire reason maturities are tracked rather than
+   * collapsed into a single debt figure.
+   */
+  {
+    const tick = stepPublicFinance(next.finance, {
+      debt: next.debt,
+      economy: next.economy,
+      monthlyBalance: fiscal.balance,
+      spending: fiscal.spending,
+      regions: next.regions,
+      nationalRevenue: fiscal.revenue,
+      newBorrowing: Math.max(0, fiscal.debtDelta),
+      /* The treasury funds at five years by default: dearer than short
+         paper, and it does not hand the next crisis a refinancing cliff. */
+      tenor: 60,
+      turn: next.turnNumber,
+    });
+    const beforeRating = next.finance.rating.grade;
+    next.finance = tick.finance;
+
+    if (tick.ratingMoved) {
+      const worse =
+        CREDIT_RATINGS.findIndex((r) => r.grade === tick.finance.rating.grade) >
+        CREDIT_RATINGS.findIndex((r) => r.grade === beforeRating);
+      log(entries, {
+        kind: 'debt',
+        label: worse ? 'Downgraded' : 'Upgraded',
+        delta: 0,
+        cause:
+          `${beforeRating} → ${tick.finance.rating.grade}. ` +
+          `${tick.finance.rating.reasons.join('. ')}. ` +
+          `Every tranche issued from here carries ${tick.finance.spread.toFixed(2)} points more.`,
+        unit: '',
+      });
+    } else if (
+      next.finance.rating.pending !== next.finance.rating.grade &&
+      next.finance.rating.reviewMonths > 0
+    ) {
+      log(entries, {
+        kind: 'debt',
+        label: 'On review',
+        delta: 0,
+        cause:
+          `The agencies are ${next.finance.rating.reviewMonths} of ` +
+          `${RATING_REVIEW_MONTHS} months into a review that would take you to ` +
+          `${next.finance.rating.pending}. ${next.finance.rating.reasons.join('. ')}.`,
+        unit: '',
+      });
+    }
+
+    if (tick.matured > 0) {
+      log(entries, {
+        kind: 'debt',
+        label: 'Refinanced',
+        delta: 0,
+        cause:
+          `₡${Math.round(tick.matured)}bn of paper matured and was reissued at ` +
+          `${borrowingCost(next.economy.policyRate, next.finance.spread, 60).toFixed(2)}%`,
+        unit: '',
+        informational: true,
+      });
+    }
+
+    for (const kind of tick.newBreaches) {
+      log(entries, {
+        kind: 'note',
+        label: `${FISCAL_RULE_LABELS[kind]} breached`,
+        delta: 0,
+        cause:
+          'Your own rule, broken by your own budget. It costs approval every month it stands, ' +
+          'and the credibility it bought with lenders is gone until it is kept again.',
+        unit: '',
+      });
+    }
+
+    /* Breaking your own fiscal rule is a political cost, not a fiscal one. */
+    const breachCost = breachApprovalCost(next.finance.rules);
+    if (breachCost > 0) {
+      next.approval = Math.max(0, next.approval - breachCost);
+      log(entries, {
+        kind: 'approval',
+        label: 'Fiscal rules',
+        delta: -breachCost,
+        cause: rulesInBreach(next.finance.rules)
+          .map((r) => `${FISCAL_RULE_LABELS[r.kind]} in breach for ${r.breachMonths} months`)
+          .join('; '),
+        unit: 'pts',
+      });
+    }
+
+    if (tick.reserveContributed > 0 || tick.reserveReturn > 0.05) {
+      log(entries, {
+        kind: 'treasury',
+        label: 'Reserve fund',
+        delta: 0,
+        cause:
+          `₡${Math.round(next.finance.reserveFund)}bn held` +
+          (tick.reserveReturn > 0.05 ? `, earning ₡${tick.reserveReturn.toFixed(1)}bn` : '') +
+          (tick.reserveContributed > 0
+            ? `, paid ₡${tick.reserveContributed.toFixed(0)}bn in`
+            : ''),
+        unit: '',
+        informational: true,
+      });
+    }
   }
 
   /*
@@ -876,7 +1020,13 @@ export function resolveTurn(state: GameState): GameState {
 
   /* Approval eases toward the standing the country's condition implies. */
   const served = turnsServed(next.termNumber, next.turnNumber);
-  const target = computeApprovalTarget(next.sectors, next.debt, served, next.difficulty);
+  const target = computeApprovalTarget(
+    next.sectors,
+    next.debt,
+    served,
+    next.difficulty,
+    next.economy.gdp,
+  );
   const beforeApproval = next.approval;
   next.approval = driftApproval(next.approval, target.target);
   const approvalDelta = next.approval - beforeApproval;
@@ -1116,6 +1266,10 @@ export function runElection(state: GameState): GameState {
     debt: next.debt,
     revenueModifier: next.revenueModifier,
     economy: next.economy,
+    /* Regional services reach the ballot in the regions they failed in. */
+    regionalSwing: Object.fromEntries(
+      next.finance.regional.map((budget) => [budget.regionId, regionalSwing(budget)]),
+    ),
   });
 
   for (const party of next.parties) {
@@ -1253,6 +1407,14 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleEmergencyBudget(state);
     case 'set_funding':
       return handleSetFunding(state, intent.sector, intent.amount);
+    case 'adopt_fiscal_rule':
+      return handleAdoptFiscalRule(state, intent.kind, intent.threshold);
+    case 'repeal_fiscal_rule':
+      return handleRepealFiscalRule(state, intent.kind);
+    case 'set_reserve_contribution':
+      return handleReserveContribution(state, intent.amount);
+    case 'draw_emergency_fund':
+      return handleDrawEmergencyFund(state, intent.amount);
     case 'call_early_election':
       return handleEarlyElection(state);
     case 'retire':
@@ -1616,6 +1778,120 @@ function handleSetFunding(
   const next = clone(state);
   const sector = findSector(next.sectors, sectorKey);
   sector.funding = Math.round(amount * 10) / 10;
+  return ok(next);
+}
+
+/**
+ * Bind your own hands.
+ *
+ * A fiscal rule costs political capital to adopt and buys a cheaper cost of
+ * borrowing — but only after a year of actually keeping it, because the
+ * market prices behaviour rather than announcements. It is the one lever in
+ * the game whose entire payoff arrives after the election that could remove
+ * the government that pulled it.
+ */
+function handleAdoptFiscalRule(
+  state: GameState,
+  kind: FiscalRuleKind,
+  threshold: number,
+): IntentResult {
+  if (state.phase !== 'budget' && state.phase !== 'agenda') {
+    return reject(state, 'A fiscal rule is adopted at the budget or on the floor.');
+  }
+  if (state.finance.rules.some((r) => r.kind === kind)) {
+    return reject(state, `A ${FISCAL_RULE_LABELS[kind].toLowerCase()} is already in force.`);
+  }
+  if (state.politicalCapital < FISCAL_RULE_PC_COST) {
+    return reject(state, 'Not enough political capital to legislate a fiscal rule.');
+  }
+  if (!Number.isFinite(threshold) || threshold <= 0) {
+    return reject(state, 'A rule needs a number in it.');
+  }
+
+  const next = clone(state);
+  spendPc(next, FISCAL_RULE_PC_COST);
+  next.finance.rules = [
+    ...next.finance.rules,
+    { kind, threshold, adoptedTurn: next.turnNumber, breachMonths: 0, complianceMonths: 0 },
+  ];
+  return ok(next);
+}
+
+/**
+ * Untie them again.
+ *
+ * Cheaper than adopting the rule was, which is the trap: the cheap way out
+ * of a binding constraint is always to abolish it rather than to meet it.
+ * What it costs instead is credibility — every month of compliance the rule
+ * had banked with lenders goes with it, and the next rule starts from zero.
+ */
+function handleRepealFiscalRule(state: GameState, kind: FiscalRuleKind): IntentResult {
+  if (state.phase !== 'budget' && state.phase !== 'agenda') {
+    return reject(state, 'A fiscal rule is repealed at the budget or on the floor.');
+  }
+  if (!state.finance.rules.some((r) => r.kind === kind)) {
+    return reject(state, 'No such rule is in force.');
+  }
+  if (state.politicalCapital < FISCAL_RULE_REPEAL_PC_COST) {
+    return reject(state, 'Not enough political capital to repeal a fiscal rule.');
+  }
+
+  const next = clone(state);
+  spendPc(next, FISCAL_RULE_REPEAL_PC_COST);
+  next.finance.rules = next.finance.rules.filter((r) => r.kind !== kind);
+  return ok(next);
+}
+
+/**
+ * Set the standing payment into the sovereign fund.
+ *
+ * The fund returns more than the debt costs, so paying into it is correct on
+ * a long horizon and wrong on a short one. A government that funds it is
+ * handing a stronger position to whoever wins the election it may well lose
+ * for having funded it.
+ */
+function handleReserveContribution(state: GameState, amount: number): IntentResult {
+  if (state.phase !== 'budget') {
+    return reject(state, 'The reserve contribution is set at the budget.');
+  }
+  if (!Number.isFinite(amount) || amount < 0 || amount > RESERVE_CONTRIBUTION_MAX) {
+    return reject(state, `The contribution must be between ₡0bn and ₡${RESERVE_CONTRIBUTION_MAX}bn.`);
+  }
+  if (
+    amount !== state.finance.reserveContribution &&
+    state.politicalCapital < RESERVE_CONTRIBUTION_PC_COST
+  ) {
+    return reject(state, 'Not enough political capital to change the contribution.');
+  }
+
+  const next = clone(state);
+  if (amount !== next.finance.reserveContribution) spendPc(next, RESERVE_CONTRIBUTION_PC_COST);
+  next.finance.reserveContribution = Math.round(amount * 10) / 10;
+  return ok(next);
+}
+
+/**
+ * Release money from the emergency fund.
+ *
+ * Free to draw and slow to refill — it tops up only out of surplus, and only
+ * a sixth of one. The honest failure mode this is built around is arriving at
+ * the second crisis with the fund emptied by the first.
+ */
+function handleDrawEmergencyFund(state: GameState, amount: number): IntentResult {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return reject(state, 'Nothing to draw.');
+  }
+  if (amount > state.finance.emergencyFund) {
+    return reject(
+      state,
+      `The emergency fund holds ₡${state.finance.emergencyFund.toFixed(0)}bn.`,
+    );
+  }
+
+  const next = clone(state);
+  const drawn = Math.round(amount * 10) / 10;
+  next.finance.emergencyFund -= drawn;
+  next.treasury += drawn;
   return ok(next);
 }
 

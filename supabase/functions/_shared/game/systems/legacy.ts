@@ -10,6 +10,7 @@
 import { LEGACY_WEIGHTS } from '../balance.ts';
 import type { GameState } from '../types.ts';
 import { averageSectorHealth } from './budget.ts';
+import { debtRatio } from './publicFinance.ts';
 
 export interface LegacyLine {
   label: string;
@@ -51,7 +52,7 @@ export function computeLegacy(state: GameState): LegacyScore {
     {
       label: 'Public debt',
       detail: `₡${Math.round(state.debt)}bn outstanding`,
-      points: state.debt * LEGACY_WEIGHTS.finalDebt,
+      points: debtRatio(state.debt, state.economy.gdp) * 100 * LEGACY_WEIGHTS.finalDebtRatio,
     },
     {
       label: 'Peak standing',

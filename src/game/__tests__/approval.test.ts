@@ -14,15 +14,21 @@ import {
   SECTOR_BASELINE_FUNDING,
   SECTOR_KEYS,
 } from '../balance.ts';
+import { GDP_START } from '../balance.ts';
 import type { Sector } from '../types.ts';
+
+/** Debt is judged against output now, so every call needs an economy. */
+const GDP = GDP_START;
+/** The ₡bn figure that is `ratio` of a year's output. */
+const atRatio = (ratio: number) => GDP * ratio;
 
 const sectorsAt = (health: number): Sector[] =>
   SECTOR_KEYS.map((key) => ({ key, health, funding: SECTOR_BASELINE_FUNDING[key] }));
 
 describe('approval target', () => {
   it('rises with the condition of public services', () => {
-    const poor = computeApprovalTarget(sectorsAt(30), 0, 0, 'standard').target;
-    const good = computeApprovalTarget(sectorsAt(80), 0, 0, 'standard').target;
+    const poor = computeApprovalTarget(sectorsAt(30), 0, 0, 'standard', GDP).target;
+    const good = computeApprovalTarget(sectorsAt(80), 0, 0, 'standard', GDP).target;
     expect(good).toBeGreaterThan(poor);
   });
 
@@ -34,50 +40,59 @@ describe('approval target', () => {
     const economyWeak = sectorsAt(60).map((s) =>
       s.key === 'economy' ? { ...s, health: 30 } : s,
     );
-    const base = computeApprovalTarget(evenly, 0, 0, 'standard').target;
-    expect(computeApprovalTarget(economyStrong, 0, 0, 'standard').target).toBeGreaterThan(base);
-    expect(computeApprovalTarget(economyWeak, 0, 0, 'standard').target).toBeLessThan(base);
+    const base = computeApprovalTarget(evenly, 0, 0, 'standard', GDP).target;
+    expect(computeApprovalTarget(economyStrong, 0, 0, 'standard', GDP).target).toBeGreaterThan(base);
+    expect(computeApprovalTarget(economyWeak, 0, 0, 'standard', GDP).target).toBeLessThan(base);
   });
 
-  it('ignores debt below the free allowance, then penalises it', () => {
-    const none = computeApprovalTarget(sectorsAt(60), 0, 0, 'standard');
-    const allowance = computeApprovalTarget(sectorsAt(60), 150, 0, 'standard');
-    const heavy = computeApprovalTarget(sectorsAt(60), 400, 0, 'standard');
+  it('ignores debt below the free ratio, then penalises it', () => {
+    const none = computeApprovalTarget(sectorsAt(60), 0, 0, 'standard', GDP);
+    const allowance = computeApprovalTarget(sectorsAt(60), atRatio(0.45), 0, 'standard', GDP);
+    const heavy = computeApprovalTarget(sectorsAt(60), atRatio(1.1), 0, 'standard', GDP);
     expect(allowance.target).toBeCloseTo(none.target, 6);
     expect(heavy.target).toBeLessThan(none.target);
   });
 
+  it('judges debt against output, not as an absolute figure', () => {
+    /* The same debt in a country half the size is twice the problem — which
+       an absolute allowance could not express, and which is why this is a
+       ratio now. */
+    const large = computeApprovalTarget(sectorsAt(60), atRatio(0.9), 0, 'standard', GDP);
+    const small = computeApprovalTarget(sectorsAt(60), atRatio(0.9), 0, 'standard', GDP / 2);
+    expect(small.target).toBeLessThan(large.target);
+  });
+
   it('caps the debt penalty so debt alone cannot zero out approval', () => {
-    const penalty = computeApprovalTarget(sectorsAt(60), 100_000, 0, 'standard').components.find(
+    const penalty = computeApprovalTarget(sectorsAt(60), 100_000, 0, 'standard', GDP).components.find(
       (c) => c.label === 'Debt burden',
     );
     expect(penalty?.value).toBe(-APPROVAL_DEBT_MAX_PENALTY);
   });
 
   it('caps time-in-office fatigue', () => {
-    const fatigue = computeApprovalTarget(sectorsAt(60), 0, 10_000, 'standard').components.find(
+    const fatigue = computeApprovalTarget(sectorsAt(60), 0, 10_000, 'standard', GDP).components.find(
       (c) => c.label === 'Time in office',
     );
     expect(fatigue?.value).toBe(-APPROVAL_FATIGUE_CAP);
   });
 
   it('orders the difficulty bias stable > standard > fractured', () => {
-    const stable = computeApprovalTarget(sectorsAt(60), 0, 0, 'stable').target;
-    const standard = computeApprovalTarget(sectorsAt(60), 0, 0, 'standard').target;
-    const fractured = computeApprovalTarget(sectorsAt(60), 0, 0, 'fractured').target;
+    const stable = computeApprovalTarget(sectorsAt(60), 0, 0, 'stable', GDP).target;
+    const standard = computeApprovalTarget(sectorsAt(60), 0, 0, 'standard', GDP).target;
+    const fractured = computeApprovalTarget(sectorsAt(60), 0, 0, 'fractured', GDP).target;
     expect(stable).toBeGreaterThan(standard);
     expect(standard).toBeGreaterThan(fractured);
   });
 
   it('components sum to the target, so the report can show the whole derivation', () => {
-    const result = computeApprovalTarget(sectorsAt(72), 220, 14, 'standard');
+    const result = computeApprovalTarget(sectorsAt(72), 220, 14, 'standard', GDP);
     const sum = result.components.reduce((total, c) => total + c.value, 0);
     expect(sum).toBeCloseTo(result.target, 6);
   });
 
   it('never leaves the 0..100 range', () => {
-    expect(computeApprovalTarget(sectorsAt(0), 50_000, 10_000, 'fractured').target).toBe(0);
-    expect(computeApprovalTarget(sectorsAt(100), 0, 0, 'stable').target).toBeLessThanOrEqual(100);
+    expect(computeApprovalTarget(sectorsAt(0), 50_000, 10_000, 'fractured', GDP).target).toBe(0);
+    expect(computeApprovalTarget(sectorsAt(100), 0, 0, 'stable', GDP).target).toBeLessThanOrEqual(100);
   });
 });
 

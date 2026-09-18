@@ -79,10 +79,14 @@ describe('issue scores', () => {
     expect(funded).toBeCloseTo(good, 10);
   });
 
-  it('scores debt worse as borrowing climbs, and floors at zero', () => {
+  it('scores debt against output as borrowing climbs, and floors at zero', () => {
+    const gdp = econ().gdp;
     expect(computeIssueScores(sectorsAt(60), 0, 0, econ()).debt).toBe(100);
-    expect(computeIssueScores(sectorsAt(60), 300, 0, econ()).debt).toBeLessThan(60);
-    expect(computeIssueScores(sectorsAt(60), 100_000, 0, econ()).debt).toBe(0);
+    /* Debt worth 90% of a year's output. Voters notice that; they would not
+       have noticed the ₡300bn this test used to check, which against this
+       economy is eight per cent. */
+    expect(computeIssueScores(sectorsAt(60), gdp * 0.9, 0, econ()).debt).toBeLessThan(60);
+    expect(computeIssueScores(sectorsAt(60), gdp * 100, 0, econ()).debt).toBe(0);
   });
 
   it('scores tax worse as recurring revenue is raised', () => {

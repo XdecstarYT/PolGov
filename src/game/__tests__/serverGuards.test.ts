@@ -122,7 +122,14 @@ describe('intent validation', () => {
      */
     expect(ALLOWED_INTENT_TYPES.has('advance_phase')).toBe(true);
     expect(ALLOWED_INTENT_TYPES.has('propose_bill')).toBe(true);
-    expect(ALLOWED_INTENT_TYPES.size).toBe(42);
+    /*
+     * The count is the tripwire. It has no meaning of its own — its whole
+     * job is to fail when someone adds an action, so that opening it to
+     * clients is a decision rather than a side effect. If this failed and
+     * you are reading it: check the new intent validates its own inputs and
+     * rejects the phases it does not belong in, then update the number.
+     */
+    expect(ALLOWED_INTENT_TYPES.size).toBe(46);
   });
 });
 

@@ -17,7 +17,7 @@ import {
   CAMPAIGN_EFFECT_PER_INVESTMENT,
   INCUMBENT_PERFORMANCE_SWING,
   ISSUE_COST_PER_REVENUE,
-  ISSUE_DEBT_ZERO_AT,
+  ISSUE_DEBT_ZERO_AT_RATIO,
   ISSUE_TAX_BASE,
   ISSUE_TAX_PER_REVENUE,
   OPPOSITION_PERFORMANCE_SWING,
@@ -36,6 +36,7 @@ import { affinity } from '../ideology.ts';
 import type { Economy, Party, Region, Sector } from '../types.ts';
 import { findSector } from './budget.ts';
 import { costOfLivingScore, economyIssueScore } from './economy.ts';
+import { debtRatio } from './publicFinance.ts';
 
 const clamp100 = (value: number) => Math.max(0, Math.min(100, value));
 
@@ -76,7 +77,9 @@ export function computeIssueScores(
     infrastructure: findSector(sectors, 'infrastructure').health,
     environment: findSector(sectors, 'environment').health,
     tax: clamp100(ISSUE_TAX_BASE - revenueModifier * ISSUE_TAX_PER_REVENUE),
-    debt: clamp100(100 * (1 - Math.max(0, debt) / ISSUE_DEBT_ZERO_AT)),
+    debt: clamp100(
+      100 * (1 - debtRatio(debt, economy.gdp) / ISSUE_DEBT_ZERO_AT_RATIO),
+    ),
     cost_of_living: costOfLivingScore(economy, taxBurden),
   };
 }

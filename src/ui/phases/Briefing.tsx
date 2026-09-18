@@ -30,6 +30,7 @@ import {
 } from '../components/Primitives.tsx';
 import { ApprovalTrend, SeatChart } from '../components/ChartsLazy.tsx';
 import { EconomyPanel } from '../components/EconomyPanel.tsx';
+import { FinancePanel } from '../components/FinancePanel.tsx';
 import { ElectoratePanel } from '../components/ElectoratePanel.tsx';
 
 export function Briefing() {
@@ -41,6 +42,7 @@ export function Briefing() {
     game.debt,
     turnsServed(game.termNumber, game.turnNumber),
     game.difficulty,
+    game.economy.gdp,
   );
   const unhappy = coalitionPartners(game.parties).filter(isThreateningExit);
   const budgetOpen = isBudgetTurn(game.turnNumber);
@@ -126,6 +128,8 @@ export function Briefing() {
       </div>
 
       <EconomyPanel />
+
+      <FinancePanel />
 
       <ElectoratePanel />
 

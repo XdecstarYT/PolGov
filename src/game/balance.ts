@@ -68,8 +68,18 @@ export const APPROVAL_W_SECTOR = 0.42;
 /** Extra weight on (economy health − 50) — the economy counts twice. */
 export const APPROVAL_W_ECONOMY = 0.22;
 /** Debt above this threshold starts costing approval. */
-export const APPROVAL_DEBT_FREE_ALLOWANCE = 150;
-export const APPROVAL_DEBT_DIVISOR = 40;
+/**
+ * The debt penalty on approval, expressed against output.
+ *
+ * Voters do not know what ₡2,020bn is. They know whether the debt is the
+ * sort of number that gets talked about, and that is a ratio. Below 45% of
+ * output nobody mentions it; each further point of ratio costs a fraction of
+ * a point of approval, to a cap — because past a certain point the people
+ * who care about debt already dislike you and the rest never will.
+ */
+export const APPROVAL_DEBT_FREE_RATIO = 0.45;
+/** Points of approval lost per percentage point of ratio above that. */
+export const APPROVAL_DEBT_PER_POINT = 0.16;
 export const APPROVAL_DEBT_MAX_PENALTY = 14;
 /** Voters tire of an incumbent. Accrues per turn served, capped. */
 export const APPROVAL_FATIGUE_PER_TURN = 0.16;
@@ -404,7 +414,15 @@ export const TURNOUT_BASELINE = 0.62;
 export const TURNOUT_CAMPAIGN_LIFT = 0.04;
 
 /** Debt at which the debt issue scores zero. Below it, the score scales up. */
-export const ISSUE_DEBT_ZERO_AT = 620;
+/**
+ * The debt-to-output ratio at which voters score the public finances zero.
+ *
+ * A ratio rather than an absolute figure, because an absolute one silently
+ * becomes lenient as the economy grows: the same ₡2,000bn is a crisis in a
+ * small country and unremarkable in a large one, and a constant could not
+ * tell the difference. At 55% — a normal inheritance — this scores 62.
+ */
+export const ISSUE_DEBT_ZERO_AT_RATIO = 1.45;
 /** Each ₡bn of recurring revenue above baseline costs this much tax score. */
 export const ISSUE_TAX_PER_REVENUE = 2.1;
 /** Baseline tax score when the revenue modifier is zero. */
@@ -523,6 +541,15 @@ export interface DifficultyProfile {
   readonly label: string;
   readonly blurb: string;
   /** Debt the run opens with. */
+  /**
+   * Debt inherited on day one, ₡bn.
+   *
+   * These used to be 90 / 200 / 340, from before output existed as a number
+   * in this game. Against a ₡3,680bn economy that was a debt of five per
+   * cent, which is not a hand anybody has ever been dealt and which left the
+   * entire lending model — the rating, the spread, the refinancing cliff —
+   * permanently inert at AAA. They are 35% / 55% / 80% of output now.
+   */
   readonly startingDebt: number;
   /** Multiplier on coalition mood drift away from comfort. */
   readonly coalitionVolatility: number;
@@ -539,7 +566,7 @@ export const DIFFICULTY: Record<Difficulty, DifficultyProfile> = {
     label: 'Stable',
     blurb:
       'A calm inheritance. Light debt, patient partners, mild crises. Room to learn the machinery.',
-    startingDebt: 90,
+    startingDebt: 1_290,
     coalitionVolatility: 0.7,
     eventSeverity: 0.75,
     decayPressure: 0.85,
@@ -549,7 +576,7 @@ export const DIFFICULTY: Record<Difficulty, DifficultyProfile> = {
     label: 'Standard',
     blurb:
       'A normal hand. Real debt, partners with real demands, crises that cost something.',
-    startingDebt: 200,
+    startingDebt: 2_020,
     coalitionVolatility: 1,
     eventSeverity: 1,
     decayPressure: 1,
@@ -559,7 +586,7 @@ export const DIFFICULTY: Record<Difficulty, DifficultyProfile> = {
     label: 'Fractured',
     blurb:
       'A poisoned chalice. Heavy debt, brittle partners, severe crises. Survival is the achievement.',
-    startingDebt: 340,
+    startingDebt: 2_950,
     coalitionVolatility: 1.45,
     eventSeverity: 1.35,
     decayPressure: 1.2,
@@ -576,8 +603,8 @@ export const LEGACY_WEIGHTS = {
   perBillPassed: 14,
   /** Multiplied by (final average sector health − 50). */
   finalSectorHealth: 6,
-  /** Multiplied by debt; negative, so debt subtracts. */
-  finalDebt: -0.35,
+  /** Multiplied by debt as a percentage of output, so it scales with the country. */
+  finalDebtRatio: -3.4,
   /** Multiplied by (peak approval − 50). */
   peakApproval: 4,
   perElectionWon: 90,
@@ -808,3 +835,137 @@ export const FORECAST_HORIZON = 12;
  * tax system in Engine 2C moves this share rather than replacing it.
  */
 export const REVENUE_GDP_SHARE = 0.34;
+
+/* ------------------------------------------------------------------ *
+ * Engine 2B — government finance
+ *
+ * The national budget already existed. What did not was everything that
+ * makes a budget a constraint rather than a set of sliders: what the debt
+ * is actually made of, who is willing to lend, at what price, on what
+ * conditions, and what a government has promised about all of it.
+ * ------------------------------------------------------------------ */
+
+/* --- the debt, as instruments rather than a single number --- */
+
+/** Maturities the treasury can issue at, in months. */
+export const BOND_TENORS = [12, 60, 120] as const;
+/**
+ * Yield premium over the policy rate for each tenor, in points.
+ *
+ * Longer money costs more, because the lender is taking a longer view of
+ * a government that may not be this one. Issuing short is cheap and leaves
+ * a refinancing cliff; issuing long is dear and buys certainty. That trade
+ * is the whole reason bonds are modelled separately from a debt total.
+ */
+export const BOND_TERM_PREMIUM: Record<number, number> = { 12: 0, 60: 0.55, 120: 1.05 };
+
+/** Debt as a share of GDP at which the market starts charging for the risk. */
+export const SPREAD_FREE_DEBT_RATIO = 0.55;
+/** Extra points of yield per point of debt-to-GDP above that. */
+export const SPREAD_PER_DEBT_POINT = 0.028;
+/** Extra yield per point of deficit-to-GDP, which lenders read as direction. */
+export const SPREAD_PER_DEFICIT_POINT = 0.09;
+/** The most the market will add before it simply stops buying. */
+export const SPREAD_CEILING = 9;
+
+/* --- credit ratings --- */
+
+/**
+ * The rating bands, best first, with the debt-to-GDP each one tolerates.
+ *
+ * The agencies are not modelled as characters with opinions; they are a
+ * transparent function of the numbers, because a rating the player cannot
+ * predict is a punishment rather than a constraint. What makes it bite is
+ * that the rating sets the spread, the spread sets the debt service, and
+ * the debt service is in the budget before the player allocates a credit.
+ */
+export const CREDIT_RATINGS = [
+  { grade: 'AAA', maxDebtRatio: 0.45, spread: 0 },
+  { grade: 'AA', maxDebtRatio: 0.65, spread: 0.3 },
+  { grade: 'A', maxDebtRatio: 0.85, spread: 0.8 },
+  { grade: 'BBB', maxDebtRatio: 1.05, spread: 1.6 },
+  { grade: 'BB', maxDebtRatio: 1.3, spread: 3.0 },
+  { grade: 'B', maxDebtRatio: 1.7, spread: 5.0 },
+  { grade: 'CCC', maxDebtRatio: Infinity, spread: 8.0 },
+] as const;
+
+/** A sustained deficit costs a notch regardless of the debt level. */
+export const RATING_DEFICIT_NOTCH_AT = 0.06;
+/** A recession costs a notch too — lenders price the revenue, not the promise. */
+export const RATING_RECESSION_NOTCH = true;
+/** Months a downgrade takes to arrive. Agencies are slow, and then sudden. */
+export const RATING_REVIEW_MONTHS = 3;
+
+/* --- fiscal rules, which a government imposes on itself --- */
+
+/** PC to legislate a fiscal rule. Binding yourself is a political act. */
+export const FISCAL_RULE_PC_COST = 18;
+/** PC to repeal one. Cheaper than adopting it, which is the trap. */
+export const FISCAL_RULE_REPEAL_PC_COST = 10;
+/** Approval cost per month a rule is in breach. Compounds while it lasts. */
+export const FISCAL_RULE_BREACH_APPROVAL = 0.9;
+/** Coalition mood cost per month in breach, for partners who demanded it. */
+export const FISCAL_RULE_BREACH_MOOD = 1.6;
+/** Yield relief for a government holding to its own rules, in points. */
+export const FISCAL_RULE_CREDIBILITY_RELIEF = 0.35;
+/** Months of compliance before the market believes you. */
+export const FISCAL_RULE_CREDIBILITY_MONTHS = 12;
+
+/* --- the funds --- */
+
+/**
+ * The emergency fund: cash set aside that can only be released against a
+ * declared emergency. Drawing it is free; refilling it is not, which is why
+ * the honest failure mode is arriving at the next crisis with it empty.
+ */
+export const EMERGENCY_FUND_TARGET = 60;
+/** Share of a surplus that tops it up automatically, before debt repayment. */
+export const EMERGENCY_FUND_REFILL_SHARE = 0.15;
+
+/**
+ * The reserve fund: a sovereign fund that compounds.
+ *
+ * It returns more than debt costs, which makes paying into it correct on a
+ * long horizon and wrong on a short one — the exact shape of every decision
+ * this game is about. A government that funds it is handing a stronger
+ * position to whoever wins the election it just lost.
+ */
+export const RESERVE_FUND_RETURN = 0.0055;
+/** Political capital to change the standing contribution. */
+export const RESERVE_CONTRIBUTION_PC_COST = 6;
+/** The most that can be paid in per month, ₡bn. */
+export const RESERVE_CONTRIBUTION_MAX = 40;
+
+/* --- the tiers --- */
+
+/**
+ * Share of national revenue that flows automatically to the regions.
+ *
+ * Regions deliver services and have almost no ability to raise their own
+ * money, which is the arrangement most countries actually have and the one
+ * that produces the argument the game wants: a national government that
+ * cuts the grant has cut regional services without appearing anywhere in
+ * the regional accounts.
+ */
+export const REGIONAL_GRANT_SHARE = 0.22;
+/** Share of the grant a region raises locally, from its own base. */
+export const LOCAL_OWN_REVENUE_SHARE = 0.18;
+/**
+ * The funding per seat, per month, that sustains a regional service quality
+ * of 60 — the same "adequate" the national sectors are calibrated to.
+ *
+ * Derived rather than picked: at the starting economy the centre raises
+ * ₡104bn a month, sends 22% of it to the regions, and the regions add 18% of
+ * that from their own base, which is ₡27bn across 180 seats — ₡0.15bn each.
+ * Setting the constant to anything else means the regions start failing on
+ * turn one through nobody's decision, which is what happened when this was
+ * an unexamined 1.15 and every region decayed to a quality of 17.
+ */
+export const REGIONAL_FUNDING_PER_SEAT = 0.15;
+/** How fast regional service quality drifts toward what funding sustains. */
+export const REGIONAL_SERVICE_DRIFT = 0.16;
+/** Points of regional satisfaction per point of regional service quality. */
+export const REGIONAL_SERVICE_WEIGHT = 0.0022;
+
+/** Months between statements of the public accounts. */
+export const BUDGET_UPDATE_INTERVAL = 6;

@@ -33,6 +33,7 @@ import {
   money,
 } from '../components/Primitives.tsx';
 import { benchInk } from '../bench.ts';
+import { FiscalRulesRoom } from '../components/FiscalRulesRoom.tsx';
 
 export function BudgetRoom() {
   const { game, dispatch, endTurn, resolvingRemotely } = useGame();
@@ -165,6 +166,8 @@ export function BudgetRoom() {
           </ul>
         </Panel>
       )}
+
+      <FiscalRulesRoom />
 
       <Panel title="End the month">
         <p className="text-sm leading-relaxed text-ink-soft">

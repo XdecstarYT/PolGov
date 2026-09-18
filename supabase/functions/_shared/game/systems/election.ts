@@ -111,6 +111,17 @@ export interface ElectionInput {
   debt?: number;
   revenueModifier?: number;
   /**
+   * Regional service quality, by region id, as a swing toward or away from
+   * the incumbent.
+   *
+   * This is how a grant cut made in the national budget reaches the ballot:
+   * not as a national issue score, where it would be averaged away, but as a
+   * penalty in exactly the regions whose services were degraded — and
+   * nowhere else. A government can be liked nationally and thrown out of the
+   * three regions it quietly stopped funding.
+   */
+  regionalSwing?: Record<string, number>;
+  /**
    * The macroeconomy the country votes in. Omitted only by tests that care
    * about seat arithmetic rather than about why anyone voted; without it the
    * electorate falls back to neutral scores on every issue.
@@ -192,7 +203,12 @@ export function simulateElection(input: ElectionInput): ElectionResult {
   let seatTotal = 0;
 
   for (const region of regions) {
-    const breakdown = regionBreakdown(region, parties, context);
+    const swing = input.regionalSwing?.[region.id] ?? 0;
+    const localContext: SupportContext =
+      swing === 0
+        ? context
+        : { ...context, incumbentBonus: (context.incumbentBonus ?? 0) + swing };
+    const breakdown = regionBreakdown(region, parties, localContext);
     regionShares.set(region.id, jitter(breakdown.shares));
     turnoutWeighted += breakdown.turnout * region.seats;
     seatTotal += region.seats;

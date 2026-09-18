@@ -15,8 +15,9 @@ import {
   SECTOR_KEYS,
   SURPLUS_TO_DEBT_RATIO,
 } from '../balance.ts';
-import type { Difficulty, Economy, Sector, SectorKey } from '../types.ts';
+import type { Bond, Difficulty, Economy, Sector, SectorKey } from '../types.ts';
 import { computeRevenueFromGdp } from './economy.ts';
+import { couponsDue } from './publicFinance.ts';
 
 /**
  * The health a sector settles at for a given funding level.
@@ -122,10 +123,21 @@ export function resolveFiscalTurn(
   economy: Economy,
   revenueModifier: number,
   debt: number,
+  /**
+   * The actual bond book, when there is one.
+   *
+   * With it, debt service is the sum of the coupons on paper actually
+   * issued — which is lower than the old flat rate, because the old flat
+   * rate was an unexamined 10.8% a year. Debt was never punishing through
+   * interest anyway: it bites through the rating, the spread it adds to
+   * every future issue, and the voters who read the number. Those channels
+   * are stronger now, and this one is honest.
+   */
+  bonds?: readonly Bond[],
 ): FiscalTick {
   const revenue = computeRevenue(economy.gdp, revenueModifier);
   const spending = totalFunding(sectors);
-  const debtService = computeDebtService(debt, economy.policyRate);
+  const debtService = bonds ? couponsDue(bonds) : computeDebtService(debt, economy.policyRate);
   const balance = revenue - spending - debtService;
 
   if (balance < 0) {

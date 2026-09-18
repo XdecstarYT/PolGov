@@ -9,8 +9,8 @@
 
 import {
   APPROVAL_BASE,
-  APPROVAL_DEBT_DIVISOR,
-  APPROVAL_DEBT_FREE_ALLOWANCE,
+  APPROVAL_DEBT_PER_POINT,
+  APPROVAL_DEBT_FREE_RATIO,
   APPROVAL_DEBT_MAX_PENALTY,
   APPROVAL_FATIGUE_CAP,
   APPROVAL_FATIGUE_PER_TURN,
@@ -40,6 +40,8 @@ export function computeApprovalTarget(
   debt: number,
   turnsServed: number,
   difficulty: Difficulty,
+  /** The economy the debt is carried by. Debt is judged against output. */
+  gdp: number,
 ): ApprovalTarget {
   const profile = DIFFICULTY[difficulty];
   const avgHealth = averageSectorHealth(sectors);
@@ -47,9 +49,10 @@ export function computeApprovalTarget(
 
   const sectorTerm = (avgHealth - 50) * APPROVAL_W_SECTOR;
   const economyTerm = (economyHealth - 50) * APPROVAL_W_ECONOMY;
+  const ratio = gdp > 0 ? Math.max(0, debt) / gdp : 0;
   const debtPenalty = -Math.min(
     APPROVAL_DEBT_MAX_PENALTY,
-    Math.max(0, (debt - APPROVAL_DEBT_FREE_ALLOWANCE) / APPROVAL_DEBT_DIVISOR),
+    Math.max(0, (ratio - APPROVAL_DEBT_FREE_RATIO) * 100 * APPROVAL_DEBT_PER_POINT),
   );
   const fatigue = -Math.min(APPROVAL_FATIGUE_CAP, turnsServed * APPROVAL_FATIGUE_PER_TURN);
 
