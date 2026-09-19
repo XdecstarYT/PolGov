@@ -113,7 +113,9 @@ src/state/         Zustand store.
 src/ui/            Screens, phase panels, shared components.
 supabase/          Migrations and the two edge functions.
 scripts/           Engine sync, secret audit, headless playtest, browser smoke test.
-docs/ENGINE-1.md   Feature-by-feature coverage, including what is NOT built.
+docs/ENGINE-1.md   Democracy and politics: coverage, including what is NOT built.
+docs/ENGINE-2.md   Nation and economy: the same, for the money.
+docs/ENGINE-3.md   World and geopolitics: the same, for everything outside.
 ```
 
 ### The systems worth knowing about
