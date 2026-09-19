@@ -1029,6 +1029,112 @@ export interface WorldPoint {
 
 /** Everything outside the borders. */
 /* ------------------------------------------------------------------ *
+ * The forces
+ * ------------------------------------------------------------------ */
+
+/** One arm, and the three numbers that mean different things. */
+export interface ArmState {
+  key: import('./content/forces.ts').ArmKey;
+  /** How much of it there is. Bought over years, lost in weeks. */
+  strength: number;
+  /** Whether it could go tomorrow. The first thing cut. */
+  readiness: number;
+  /** How old the kit is. Falls every week whatever anybody does. */
+  equipment: number;
+  /** People in uniform, in thousands. */
+  personnel: number;
+}
+
+/** Something that takes years, costs more than anybody said, arrives late. */
+export interface Programme {
+  id: string;
+  key: string;
+  startedTurn: number;
+  /** The turn it was announced for. */
+  dueTurn: number;
+  /** The turn it is now expected. These are never the same. */
+  slippedTo: number;
+  spent: number;
+  /** The current estimate, which is not the original one. */
+  cost: number;
+  cancelled: boolean;
+  delivered: boolean;
+}
+
+/** Forces committed somewhere that is not here. */
+export interface Deployment {
+  id: string;
+  nation: import('./content/nations.ts').NationKey;
+  kind: 'peacekeeping' | 'alliance' | 'combat' | 'training';
+  /** Share of the total force tied up by it. */
+  commitment: number;
+  /** ₡bn a year. */
+  cost: number;
+  startedTurn: number;
+  /** Why the country is there, in its own words. */
+  mandate: string;
+}
+
+export interface MilitaryPoint {
+  turn: number;
+  power: number;
+  readiness: number;
+  committed: number;
+}
+
+export interface Military {
+  arms: ArmState[];
+  doctrine: import('./content/forces.ts').DoctrineKey;
+  programmes: Programme[];
+  deployments: Deployment[];
+  /**
+   * The decision that cannot be taken back.
+   *
+   * 'none' is where almost every country is and stays. 'pursuing' is a
+   * decade of expense and a permanent argument with everybody. 'held'
+   * changes what the country is, in the eyes of every other government,
+   * for good.
+   */
+  deterrent: 'none' | 'pursuing' | 'held';
+  /** Thousands. A constituency rather than a statistic, and they remember. */
+  veterans: number;
+  history: MilitaryPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Conflict
+ * ------------------------------------------------------------------ */
+
+export type CrisisStage = 'incident' | 'standoff' | 'crisis' | 'war' | 'settled';
+
+/**
+ * A quarrel with somebody, and where it has got to.
+ *
+ * Crises arrive rather than being started, because the decision a
+ * government actually faces is never whether to have one.
+ */
+export interface Crisis {
+  id: string;
+  nation: import('./content/nations.ts').NationKey;
+  /** What happened, in one line. */
+  cause: string;
+  stage: CrisisStage;
+  startedTurn: number;
+  stageSince: number;
+  /** 0–100. Climbs on provocation, falls when nobody feeds it. */
+  escalation: number;
+  /** Points of annual approval the flag is currently worth. Decays. */
+  rally: number;
+  casualties: number;
+  /** How long each side will keep going. Not the same as who is winning. */
+  ourResolve: number;
+  theirResolve: number;
+  /** Who else is in it. */
+  allies: import('./content/nations.ts').NationKey[];
+  settlement: 'favourable' | 'even' | 'unfavourable' | null;
+}
+
+/* ------------------------------------------------------------------ *
  * Trade
  * ------------------------------------------------------------------ */
 
@@ -1250,6 +1356,19 @@ export interface GameState {
    * reaches an embassy.
    */
   trade: Trade;
+
+  /**
+   * What the country could actually do, as distinct from what it owns.
+   *
+   * Every decision here is slow and every consequence is late, which is
+   * the honest shape of defence policy: a government that cuts readiness
+   * changes nothing anybody can see, and changes what is possible under a
+   * government that will not be this one.
+   */
+  military: Military;
+
+  /** Quarrels with other states, and how far up the ladder each one is. */
+  crises: Crisis[];
 
   /** The budget: line items, ministries, and where it is in the process. */
   budget: Budget;

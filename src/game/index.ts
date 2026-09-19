@@ -44,6 +44,9 @@ export * from './systems/budgetProcess.ts';
 export * from './systems/organisations.ts';
 export * from './content/organisations.ts';
 export * from './systems/trade.ts';
+export * from './systems/military.ts';
+export * from './systems/conflict.ts';
+export * from './content/forces.ts';
 
 export { BILL_TEMPLATES, BILL_CATEGORY_LABELS } from './content/bills.ts';
 export { EVENT_TEMPLATES, EVENT_CATEGORY_LABELS } from './content/events.ts';

@@ -81,6 +81,12 @@ await step('look at the trade schedule', async () => {
   await page.screenshot({ path: `${OUT}/04c-trade.png`, fullPage: true });
 });
 
+await step('look at the forces', async () => {
+  await page.getByRole('heading', { name: 'The forces' }).waitFor();
+  await page.getByRole('heading', { name: 'Procurement' }).waitFor();
+  await page.screenshot({ path: `${OUT}/04d-defence.png`, fullPage: true });
+});
+
 await step('open the red box', async () => {
   await page.getByRole('button', { name: /Open the red box/ }).click();
   await page.waitForTimeout(400);

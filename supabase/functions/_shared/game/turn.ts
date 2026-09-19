@@ -54,6 +54,7 @@ import { generateNews, fallbackDebateAttack } from './content/news.ts';
 import { Rng } from './rng.ts';
 import type {
   Bill,
+  Deployment,
   FiscalRuleKind,
   TreatyKind,
   DebateExchange,
@@ -141,6 +142,15 @@ import {
   COMPLAINT_REPUTATION,
   RESOLUTION_DEFEAT_INFLUENCE,
   RESOLUTION_TARGET_RELATIONS,
+  CRISIS_BASE_RISK,
+  DEESCALATE_PC_COST,
+  DEESCALATION_APPROVAL,
+  DEPLOY_PC_COST,
+  ESCALATE_PC_COST,
+  ESCALATION_APPROVAL,
+  PROCUREMENT_OVERRUN,
+  PROGRAMME_PC_COST,
+  SETTLE_PC_COST,
   SURCHARGE_MAX,
   TARIFF_PC_COST,
   TRADE_COMPLAINT_PC_COST,
@@ -151,6 +161,31 @@ import {
 } from './balance.ts';
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
 import { duesTotal } from './systems/organisations.ts';
+import {
+  atWar,
+  deEscalate as deEscalateCrisis,
+  escalate as escalateCrisis,
+  live as liveCrises,
+  openCrisis,
+  settle as settleCrisis,
+  stepConflicts,
+  STAGE_LABELS,
+} from './systems/conflict.ts';
+import {
+  cancelProgramme,
+  combatPower,
+  committedShare,
+  findDoctrine,
+  deploy,
+  deploymentCost,
+  deploymentTerms,
+  doctrineCost,
+  findProgramme,
+  programmeSpend,
+  startProgramme,
+  stepMilitary,
+  withdraw,
+} from './systems/military.ts';
 import {
   findFlow,
   importPriceEffect,
@@ -215,6 +250,7 @@ import {
   type InfrastructureKey,
 } from './systems/infrastructure.ts';
 import type { NationKey } from './content/nations.ts';
+import type { DoctrineKey } from './content/forces.ts';
 import type { ServiceKey } from './content/services.ts';
 import {
   apportionSeats,
@@ -310,6 +346,14 @@ export type Intent =
   | { type: 'propose_resolution'; kind: ResolutionKind; target?: NationKey | null }
   | { type: 'set_tariff'; nation: NationKey; points: number }
   | { type: 'file_trade_complaint'; nation: NationKey }
+  | { type: 'set_doctrine'; doctrine: DoctrineKey }
+  | { type: 'start_programme'; programme: string }
+  | { type: 'cancel_programme'; id: string }
+  | { type: 'deploy_force'; nation: NationKey; kind: Deployment['kind']; scale: number }
+  | { type: 'withdraw_force'; id: string }
+  | { type: 'escalate_crisis'; crisisId: string }
+  | { type: 'de_escalate_crisis'; crisisId: string }
+  | { type: 'settle_crisis'; crisisId: string }
   | { type: 'set_budget_line'; service: ServiceKey; amount: number }
   | { type: 'set_capital_share'; service: ServiceKey; share: number }
   | { type: 'present_budget' }
@@ -387,6 +431,36 @@ function currentLog(state: GameState): LogEntry[] {
   return existing.entries;
 }
 
+
+/**
+ * Weeks since the run began, which is not the same as the turn number.
+ *
+ * The turn number resets at every election, because a term is the unit
+ * everything political is measured in. Anything that OUTLIVES a term needs
+ * a clock that does not reset — and procurement is the archetype, since a
+ * programme finished by a successor is the entire point of modelling one.
+ */
+export function absoluteWeek(state: GameState): number {
+  return (state.termNumber - 1) * TURNS_PER_TERM + state.turnNumber;
+}
+
+/** What actually happened, which is never the thing being argued about. */
+function crisisCause(name: string): string {
+  const causes = [
+    `A ${name} patrol crossed a line both governments have described differently for years.`,
+    `A vessel was stopped, searched and released, and ${name} says it was none of those things.`,
+    `Airspace was entered. ${name} calls it navigation; nobody else does.`,
+    `A ${name} broadcast named Verdanan officials and said what should happen to them.`,
+  ];
+  return causes[Math.abs(name.length * 7) % causes.length]!;
+}
+
+/** ₡bn a year the fighting is costing, across every live war. */
+function warCost(crises: readonly GameState['crises'][number][]): number {
+  return crises
+    .filter((c) => c.stage === 'war')
+    .reduce((sum, c) => sum + 180 + c.casualties * 1.4, 0);
+}
 
 /**
  * The partners the country has an agreement with.
@@ -1092,7 +1166,12 @@ export function resolveTurn(state: GameState): GameState {
     /* Keeping what exists, building what does not, and the subscriptions
        to every room the country has a seat in. All three are spending, and
        all three are the kind nobody notices until they stop. */
-    infrastructureSpend(next.infrastructure) + duesTotal(next.world.organisations),
+    infrastructureSpend(next.infrastructure) +
+      duesTotal(next.world.organisations) +
+      deploymentCost(next.military) +
+      doctrineCost(next.military) +
+      programmeSpend(next.military) +
+      warCost(next.crises),
   );
   next.treasury += fiscal.treasuryDelta;
   next.debt = Math.max(0, next.debt + fiscal.debtDelta);
@@ -1591,6 +1670,125 @@ export function resolveTurn(state: GameState): GameState {
     });
   }
 
+  /*
+   * The forces, and the quarrels.
+   *
+   * Stepped before the economy because a war is an economic shock and the
+   * fighting costs money that the fiscal result has already been computed
+   * against — the cost lands next week, which is also how it works.
+   */
+  const defenceLine = lineFor(next.budget, 'defence');
+  const defenceService = next.services.find((s) => s.key === 'defence');
+  const militaryTick = stepMilitary(next.military, {
+    funding: defenceLine.enacted - deploymentCost(next.military) - doctrineCost(next.military),
+    required: defenceService?.demand ?? defenceLine.enacted,
+    demography: next.demography,
+    unemployment: next.economy.unemployment,
+    turn: next.turnNumber,
+    /* Procurement runs on a clock that does not reset at an election, which
+       is what makes "a successor collects it" mean anything. */
+    week: absoluteWeek(next),
+    rng,
+    atWar: atWar(next.crises),
+  });
+  next.military = militaryTick.military;
+
+  for (const programme of militaryTick.delivered) {
+    const template = findProgramme(programme.key);
+    log(entries, {
+      kind: 'note',
+      label: `${template.name} delivered`,
+      delta: template.strength,
+      cause:
+        `${Math.round(((programme.slippedTo - programme.dueTurn) / TURNS_PER_YEAR) * 10) / 10} years ` +
+        `late and ₡${(programme.cost - template.cost).toFixed(0)}bn over. It was started ` +
+        `${Math.round((absoluteWeek(next) - programme.startedTurn) / TURNS_PER_YEAR)} years ago, ` +
+        'and whoever started it is not necessarily the government collecting it.',
+      unit: 'pts',
+    });
+  }
+  for (const slip of militaryTick.slipped) {
+    const template = findProgramme(slip.programme.key);
+    log(entries, {
+      kind: 'note',
+      label: `${template.name} slips again`,
+      delta: -slip.weeks,
+      cause:
+        `Another ${slip.weeks} weeks and ₡${(slip.programme.cost * PROCUREMENT_OVERRUN).toFixed(0)}bn. ` +
+        'Nobody involved is surprised, which is itself the problem.',
+      unit: 'weeks',
+      informational: true,
+    });
+  }
+
+  /*
+   * A crisis arrives.
+   *
+   * Not started by the player, because the decision a government actually
+   * faces is never whether to have one. The chance is set by how dangerous
+   * the world is and by the worst relationship the country has — and it
+   * falls when the forces are strong enough that nobody wants to find out,
+   * which is what a deterrent IS and the only place it shows up.
+   */
+  if (liveCrises(next.crises).length < 2) {
+    const worst = [...next.world.nations]
+      .filter((n) => n.recognised)
+      .sort((a, b) => a.relations - b.relations)[0];
+    if (worst && worst.relations < -15) {
+      const risk =
+        (next.world.tension / 100) *
+        ((-worst.relations - 15) / 85) *
+        CRISIS_BASE_RISK *
+        /* A deterrent halves it. Not to nothing: the whole point is that a
+           country can do everything right and still have a bad year. */
+        (combatPower(next.military) > 55 ? 0.5 : 1);
+      if (rng.chance(risk)) {
+        const template = findNation(worst.key);
+        const crisis = openCrisis(worst.key, crisisCause(template.name), next.turnNumber, next.world);
+        next.crises = [...next.crises, crisis];
+        log(entries, {
+          kind: 'event',
+          label: `An incident with ${template.name}`,
+          delta: 0,
+          cause: `${crisis.cause} Nothing has to happen next. Something usually does.`,
+          unit: '',
+        });
+      }
+    }
+  }
+
+  const conflictTick = stepConflicts(next.crises, {
+    military: next.military,
+    world: next.world,
+    turn: next.turnNumber,
+    rng,
+  });
+  next.crises = conflictTick.crises;
+  if (Math.abs(conflictTick.approval) > 0.005) {
+    next.approval = clampApproval(next.approval + conflictTick.approval);
+    log(entries, {
+      kind: 'approval',
+      label: conflictTick.approval > 0 ? 'The flag' : 'The crisis, still running',
+      delta: conflictTick.approval,
+      cause:
+        conflictTick.approval > 0
+          ? 'A country rallies to a government in a crisis. It is the most reliable finding ' +
+            'in the subject and the shortest-lived.'
+          : 'An unresolved crisis stops being a flag to rally round and becomes a thing the ' +
+            'government has failed to finish.',
+      unit: 'pts',
+    });
+  }
+  for (const event of conflictTick.events) {
+    log(entries, {
+      kind: 'event',
+      label: event.label,
+      delta: 0,
+      cause: event.cause,
+      unit: '',
+    });
+  }
+
   const economyBefore = next.economy;
   next.economy = stepEconomy(next.economy, {
     fiscalImpulse: fiscalImpulse(fiscal),
@@ -1628,7 +1826,8 @@ export function resolveTurn(state: GameState): GameState {
      * the macroeconomy: the first is a demand term nobody voted for, the
      * second a supply shock the government chose.
      */
-    tradeImpulse: tradeImpulse(next.trade, next.economy.gdp),
+    tradeImpulse:
+      tradeImpulse(next.trade, next.economy.gdp) + conflictTick.economicShock * TURNS_PER_YEAR,
     importPrices: importPriceEffect(
       next.trade,
       next.taxes.rates.import_tariff,
@@ -2131,6 +2330,22 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleSetTariff(state, intent.nation, intent.points);
     case 'file_trade_complaint':
       return handleFileTradeComplaint(state, intent.nation);
+    case 'set_doctrine':
+      return handleSetDoctrine(state, intent.doctrine);
+    case 'start_programme':
+      return handleStartProgramme(state, intent.programme);
+    case 'cancel_programme':
+      return handleCancelProgramme(state, intent.id);
+    case 'deploy_force':
+      return handleDeployForce(state, intent.nation, intent.kind, intent.scale);
+    case 'withdraw_force':
+      return handleWithdrawForce(state, intent.id);
+    case 'escalate_crisis':
+      return handleEscalateCrisis(state, intent.crisisId);
+    case 'de_escalate_crisis':
+      return handleDeEscalateCrisis(state, intent.crisisId);
+    case 'settle_crisis':
+      return handleSettleCrisis(state, intent.crisisId);
     case 'set_budget_line':
       return handleSetBudgetLine(state, intent.service, intent.amount);
     case 'set_capital_share':
@@ -3390,6 +3605,352 @@ function handleFileTradeComplaint(state: GameState, key: NationKey): IntentResul
       `Their ${flow.theirTariff.toFixed(0)}-point tariff goes to the Convention rather than ` +
       'being answered in kind. Slower, cheaper, and read by every other government as a ' +
       'statement about how this one settles arguments.',
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+
+/* ------------------------------------------------------------------ *
+ * The forces
+ * ------------------------------------------------------------------ */
+
+/**
+ * Change how the country raises and uses its forces.
+ *
+ * None of the four is better. Conscription puts far more people under arms
+ * and makes every family with a teenager an opponent; a territorial posture
+ * makes the country genuinely hard to invade and useless to an ally; an
+ * expeditionary one is a statement about the country rather than about the
+ * forces. The player is choosing what kind of state this is.
+ */
+function handleSetDoctrine(state: GameState, doctrine: DoctrineKey): IntentResult {
+  const template = findDoctrine(doctrine);
+  if (state.military.doctrine === doctrine) {
+    return reject(state, `The forces are already on ${template.name.toLowerCase()}.`);
+  }
+  if (state.politicalCapital < template.cost) {
+    return reject(state, `Changing the whole posture of the forces costs ${template.cost} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, template.cost);
+  next.military = { ...next.military, doctrine };
+  if (template.approval !== 0) {
+    next.approval = clampApproval(next.approval + template.approval);
+  }
+
+  log(entries, {
+    kind: 'note',
+    label: template.name,
+    delta: template.approval,
+    cause:
+      `${template.blurb} It changes the defence line by ` +
+      `₡${Math.abs(template.surcharge).toFixed(0)}bn a year, ${template.surcharge >= 0 ? 'upward' : 'downward'}.`,
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Start something a successor will finish.
+ *
+ * Already late on the day it is announced, because the announced date was
+ * never the expected one. The interesting question is not which to buy; it
+ * is whether to begin something that will be collected by somebody else, in
+ * a region whose jobs will make it impossible to cancel.
+ */
+function handleStartProgramme(state: GameState, key: string): IntentResult {
+  let template;
+  try {
+    template = findProgramme(key);
+  } catch {
+    return reject(state, 'No such programme.');
+  }
+
+  if (state.military.programmes.some((p) => p.key === key && !p.cancelled && !p.delivered)) {
+    return reject(state, `${template.name} is already under way.`);
+  }
+  if (state.politicalCapital < PROGRAMME_PC_COST) {
+    return reject(state, 'Not enough political capital to commit to a programme.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PROGRAMME_PC_COST);
+  next.military = startProgramme(next.military, key, absoluteWeek(next));
+
+  const started = next.military.programmes[next.military.programmes.length - 1]!;
+  log(entries, {
+    kind: 'note',
+    label: `${template.name} begun`,
+    delta: -template.cost,
+    cause:
+      `₡${template.cost.toFixed(0)}bn over ${template.years} years, and the internal estimate ` +
+      `already says ${Math.round((started.slippedTo - started.dueTurn) / TURNS_PER_YEAR * 10) / 10} ` +
+      `years longer than that. The work is in ${template.regions.join(' and ')}, which is why ` +
+      'cancelling it later will not be a financial decision.',
+    unit: '₡bn',
+  });
+  return ok(next);
+}
+
+/**
+ * Stop one.
+ *
+ * The money already spent is gone either way, which makes this the cheapest
+ * decision on the page and the hardest one — the jobs are in somebody's
+ * seat, and that somebody is usually on the government benches.
+ */
+function handleCancelProgramme(state: GameState, id: string): IntentResult {
+  const programme = state.military.programmes.find((p) => p.id === id);
+  if (!programme) return reject(state, 'No such programme.');
+  if (programme.cancelled || programme.delivered) {
+    return reject(state, 'That programme is no longer running.');
+  }
+
+  const template = findProgramme(programme.key);
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.military = cancelProgramme(next.military, id);
+
+  /* The regions where the work was pay for it, in seats. */
+  for (const regionId of template.regions) {
+    const region = next.regions.find((r) => r.id === regionId);
+    if (region) region.campaignInvestment = Math.max(0, region.campaignInvestment - 12);
+  }
+  next.approval = clampApproval(next.approval - 2.5);
+
+  log(entries, {
+    kind: 'approval',
+    label: `${template.name} cancelled`,
+    delta: -2.5,
+    cause:
+      `₡${programme.spent.toFixed(0)}bn spent and nothing to show for it, which is the honest ` +
+      `figure and not the one that will be used. ${template.regions.join(' and ')} will be ` +
+      'hearing about this at the next election.',
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Send forces somewhere.
+ *
+ * What is committed abroad is not available at home, wears out faster than
+ * any budget repairs it, and produces veterans — who are a constituency
+ * rather than a statistic and who remember which government sent them.
+ */
+function handleDeployForce(
+  state: GameState,
+  key: NationKey,
+  kind: Deployment['kind'],
+  scale: number,
+): IntentResult {
+  const template = findNation(key);
+  if (!state.world.nations.some((n) => n.key === key)) return reject(state, 'No such country.');
+  if (!Number.isFinite(scale) || scale <= 0 || scale > 1.6) {
+    return reject(state, 'A deployment is sized between nothing and everything available.');
+  }
+  if (state.politicalCapital < DEPLOY_PC_COST) {
+    return reject(state, 'Not enough political capital to send anybody anywhere.');
+  }
+
+  const terms = deploymentTerms(kind, scale);
+  if (committedShare(state.military) + terms.commitment > 0.75) {
+    return reject(
+      state,
+      'There is not enough force left uncommitted. Something has to come home first.',
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, DEPLOY_PC_COST);
+  next.military = deploy(
+    next.military,
+    {
+      nation: key,
+      kind,
+      commitment: terms.commitment,
+      cost: terms.cost,
+      startedTurn: next.turnNumber,
+      mandate: mandateFor(kind, template.name),
+    },
+    next.turnNumber,
+  );
+
+  log(entries, {
+    kind: 'note',
+    label: `Forces to ${template.name}`,
+    delta: -terms.cost,
+    cause:
+      `${mandateFor(kind, template.name)} ₡${terms.cost.toFixed(0)}bn a year, and ` +
+      `${Math.round(terms.commitment * 100)}% of the force is now somewhere it cannot be used ` +
+      'for anything else.',
+    unit: '₡bn',
+  });
+  return ok(next);
+}
+
+function mandateFor(kind: Deployment['kind'], name: string): string {
+  switch (kind) {
+    case 'peacekeeping':
+      return `Standing between two parties in ${name} who have agreed to let somebody.`;
+    case 'alliance':
+      return `Meeting an obligation to ${name} that a previous government signed.`;
+    case 'combat':
+      return `Fighting in ${name}, which is the word that will be avoided in every statement.`;
+    default:
+      return `Training ${name}'s forces, which is the cheapest thing a country can be seen doing.`;
+  }
+}
+
+/** Bring them home. */
+function handleWithdrawForce(state: GameState, id: string): IntentResult {
+  const deployment = state.military.deployments.find((d) => d.id === id);
+  if (!deployment) return reject(state, 'There is nothing deployed there.');
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.military = withdraw(next.military, id);
+
+  const years = (next.turnNumber - deployment.startedTurn) / TURNS_PER_YEAR;
+  log(entries, {
+    kind: 'note',
+    label: `Withdrawal from ${findNation(deployment.nation).name}`,
+    delta: deployment.cost,
+    cause:
+      `${years.toFixed(1)} years. What it achieved is a question for somebody else; what it ` +
+      'cost is on this page, and the people who went are now a constituency.',
+    unit: '₡bn',
+  });
+  return ok(next);
+}
+
+/* ------------------------------------------------------------------ *
+ * The ladder
+ * ------------------------------------------------------------------ */
+
+/**
+ * Go up a rung.
+ *
+ * Cheap, popular and fast, which is the entire problem with it. The rally
+ * refreshes, their resolve hardens, and the country is one rung closer to
+ * the place where none of this is a decision any more.
+ */
+function handleEscalateCrisis(state: GameState, id: string): IntentResult {
+  const crisis = state.crises.find((c) => c.id === id);
+  if (!crisis) return reject(state, 'There is no such crisis.');
+  if (crisis.stage === 'settled') return reject(state, 'That one is over.');
+  if (crisis.stage === 'war') {
+    return reject(state, 'There are no rungs above this one. There is only how it ends.');
+  }
+  if (state.politicalCapital < ESCALATE_PC_COST) {
+    return reject(state, 'Not enough political capital.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, ESCALATE_PC_COST);
+  const after = escalateCrisis(crisis, next.turnNumber);
+  next.crises = next.crises.map((c) => (c.id === id ? after : c));
+  next.approval = clampApproval(next.approval + ESCALATION_APPROVAL);
+
+  log(entries, {
+    kind: 'approval',
+    label: `${findNation(crisis.nation).name}: ${STAGE_LABELS[after.stage].toLowerCase()}`,
+    delta: ESCALATION_APPROVAL,
+    cause:
+      'Standing firm is popular the week it happens. Their resolve has hardened too, and ' +
+      'nobody will report that part until it matters.',
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Come down a rung.
+ *
+ * Expensive, unpopular and slow. It costs approval immediately and in
+ * public, and it is very often the right thing to do — which is the whole
+ * shape of the decision and the reason so few governments take it.
+ */
+function handleDeEscalateCrisis(state: GameState, id: string): IntentResult {
+  const crisis = state.crises.find((c) => c.id === id);
+  if (!crisis) return reject(state, 'There is no such crisis.');
+  if (crisis.stage === 'settled') return reject(state, 'That one is over.');
+  if (state.politicalCapital < DEESCALATE_PC_COST) {
+    return reject(state, 'Not enough political capital to back down in public.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, DEESCALATE_PC_COST);
+  const after = deEscalateCrisis(crisis, next.turnNumber);
+  next.crises = next.crises.map((c) => (c.id === id ? after : c));
+  next.approval = clampApproval(next.approval + DEESCALATION_APPROVAL);
+
+  log(entries, {
+    kind: 'approval',
+    label: `${findNation(crisis.nation).name}: stepping back`,
+    delta: DEESCALATION_APPROVAL,
+    cause:
+      'The cost of backing down arrives immediately and in public, and the cost of not ' +
+      'backing down arrives later and is paid by somebody else. That asymmetry is why this ' +
+      'is rare rather than why it is wrong.',
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Settle it.
+ *
+ * The terms are not negotiated. They are what the balance of force and the
+ * remaining resolve produce, and both of those were set by budgets passed
+ * years ago. A government that wants better terms needed a better position,
+ * and needed it before the crisis started.
+ */
+function handleSettleCrisis(state: GameState, id: string): IntentResult {
+  const crisis = state.crises.find((c) => c.id === id);
+  if (!crisis) return reject(state, 'There is no such crisis.');
+  if (crisis.stage === 'settled') return reject(state, 'That one is over.');
+  if (state.politicalCapital < SETTLE_PC_COST) {
+    return reject(state, 'Not enough political capital to sign anything.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SETTLE_PC_COST);
+
+  const outcome = settleCrisis(crisis, next.military, next.world, next.turnNumber);
+  next.crises = next.crises.map((c) => (c.id === id ? outcome.crisis : c));
+  next.approval = clampApproval(next.approval + outcome.approval);
+  next.world = {
+    ...next.world,
+    nations: next.world.nations.map((n) =>
+      n.key === crisis.nation
+        ? { ...n, relations: clampRelations(n.relations + (outcome.terms === 'even' ? 10 : 4)) }
+        : n,
+    ),
+    tension: clamp01to100(next.world.tension - 8),
+  };
+
+  log(entries, {
+    kind: 'approval',
+    label: `Settlement with ${findNation(crisis.nation).name}`,
+    delta: outcome.approval,
+    cause:
+      outcome.terms === 'favourable'
+        ? 'Terms this government can live with, produced by a position it inherited or built ' +
+          'rather than by anything said this week.'
+        : outcome.terms === 'even'
+          ? 'Nobody got what they wanted, which is what most settlements are and what almost ' +
+            'none of them are described as.'
+          : 'Worse terms than were available a year ago. The position was decided by budgets ' +
+            'and this is the bill for them.',
     unit: 'pts',
   });
   return ok(next);

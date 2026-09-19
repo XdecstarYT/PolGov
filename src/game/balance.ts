@@ -1637,3 +1637,128 @@ export const COMPLAINT_RELATIONS = -4;
  * one-for-one would make every other lever in the game irrelevant.
  */
 export const IS_TRADE_WEIGHT = 0.28;
+
+/* ------------------------------------------------------------------ *
+ * The forces
+ * ------------------------------------------------------------------ */
+
+/**
+ * Where the defence line stops being upkeep and starts being readiness.
+ *
+ * Below this share of what the force costs to keep, readiness falls however
+ * loudly anybody insists it is not falling. Above it, the money buys flying
+ * hours, sea days and exercises — the things that make a force something
+ * other than a budget line.
+ */
+export const READINESS_FUNDING_PIVOT = 0.7;
+
+/**
+ * And how much more than upkeep a fully ready force costs.
+ *
+ * Level funding buys a force about half ready; a genuinely ready one costs
+ * a third again on top. That is the real number and the reason almost no
+ * country has one — and a steeper curve would let a government reach full
+ * readiness by merely not cutting, at which point readiness stops being a
+ * decision and becomes a default.
+ */
+export const READINESS_FUNDING_SPAN = 0.65;
+
+/** How fast a force can be grown or cut. Both directions are slow. */
+export const STRENGTH_ADJUST_RATE = 0.012;
+
+/** Equipment never falls below this. Something is always serviceable. */
+export const EQUIPMENT_FLOOR = 12;
+
+/**
+ * How late a programme already is on the day it is announced.
+ *
+ * Thirty-five per cent, before anything has gone wrong, because the
+ * announced date was never the expected one. Everything after this is the
+ * slip on top of the slip.
+ */
+export const PROCUREMENT_SLIP = 0.35;
+
+/** And what each further slip adds to the bill. */
+export const PROCUREMENT_OVERRUN = 0.09;
+
+/**
+ * How late and how expensive it is allowed to get.
+ *
+ * Bounded, because unbounded slip is not realism — it is a programme that
+ * never arrives, which teaches nothing and is not what happens. Big
+ * projects run about half again as long and most of the way again as
+ * expensive, and then they land.
+ */
+export const PROCUREMENT_SLIP_CAP = 0.55;
+export const PROCUREMENT_COST_CAP = 1.8;
+
+/** Points of readiness a fully committed force loses each week. */
+export const DEPLOYMENT_WEAR = 0.55;
+
+/** Thousands of veterans a fully committed force produces a year. */
+export const VETERANS_PER_DEPLOYMENT_YEAR = 34;
+
+/** Years of expense and argument before a deterrent exists at all. */
+export const DETERRENT_PROGRAMME_YEARS = 11;
+
+/* ------------------------------------------------------------------ *
+ * Conflict
+ * ------------------------------------------------------------------ */
+
+/**
+ * The rally, in points of annual approval.
+ *
+ * The single most reliable finding about war and public opinion: approval
+ * jumps when a crisis begins. It is large on purpose, because it is large in
+ * reality and because the whole mechanic depends on the temptation being
+ * real rather than nominal.
+ */
+export const CRISIS_RALLY = 9;
+
+/** And how fast it goes. Halved every quarter, which is also real. */
+export const CRISIS_RALLY_HALFLIFE = 13;
+
+/**
+ * The most a stale crisis can cost in approval each week.
+ *
+ * A steady bleed rather than a spiral. A spiral would make every long
+ * crisis fatal, and long crises are usually survived — which is precisely
+ * why governments let them run.
+ */
+export const PATIENCE_FLOOR = 0.35;
+
+/** What going up a rung does to the escalation figure. */
+export const ESCALATION_STEP = 14;
+
+/** Standing firm is popular the week it happens. */
+export const ESCALATION_APPROVAL = 3.5;
+
+/** Backing down is not, and the cost arrives immediately and in public. */
+export const DEESCALATION_APPROVAL = -6;
+
+/** Points of approval a casualty costs, and does not give back. */
+export const CASUALTY_APPROVAL = -0.25;
+
+/** Points of growth a week of war takes out of the economy. */
+export const WAR_ECONOMY_SHOCK = -0.09;
+
+/**
+ * How often something happens at all.
+ *
+ * Scaled by how dangerous the world is and by the worst relationship the
+ * country has, so a government that keeps its quarrels small has fewer of
+ * them — and a deterrent halves what is left, but never to nothing. A
+ * country can do everything right and still have a bad year.
+ */
+export const CRISIS_BASE_RISK = 0.25;
+
+/** How fast each side's willingness to continue erodes, per week. */
+export const RESOLVE_DECAY = 0.42;
+
+/** Political capital to go up a rung, or to come down one. */
+export const ESCALATE_PC_COST = 12;
+export const DEESCALATE_PC_COST = 18;
+export const SETTLE_PC_COST = 22;
+/** And to send forces somewhere, or change the whole doctrine. */
+export const DEPLOY_PC_COST = 16;
+export const PROGRAMME_PC_COST = 14;

@@ -75,6 +75,14 @@ export const ALLOWED_INTENT_TYPES: ReadonlySet<Intent['type']> = new Set([
   'propose_resolution',
   'set_tariff',
   'file_trade_complaint',
+  'set_doctrine',
+  'start_programme',
+  'cancel_programme',
+  'deploy_force',
+  'withdraw_force',
+  'escalate_crisis',
+  'de_escalate_crisis',
+  'settle_crisis',
 ]);
 
 /** Cap the journal so one request cannot ask for unbounded computation. */

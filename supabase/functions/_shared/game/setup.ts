@@ -34,6 +34,7 @@ import { buildInfrastructure } from './systems/infrastructure.ts';
 import { buildServices } from './systems/services.ts';
 import { buildWorld } from './systems/diplomacy.ts';
 import { buildTrade } from './systems/trade.ts';
+import { buildMilitary } from './systems/military.ts';
 import { assignMinistries, buildBudget } from './systems/budgetProcess.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
 import { buildSenate } from './systems/parliament.ts';
@@ -257,6 +258,15 @@ export function createGame(options: NewGameOptions): GameState {
        agreements. The first thing worth noticing about it is how little of
        it is the new government's to decide. */
     trade: buildTrade(buildEconomy().gdp, buildWorld(), inheritedTradeAgreements()),
+
+    /* Adequate, ageing, and nobody's achievement. The gap between what the
+       forces are said to be and what they could do tomorrow was left by
+       somebody else, and it is the player's to find. */
+    military: buildMilitary(),
+
+    /* No quarrels yet. They arrive, which is the correct shape: the
+       decision a government faces is never whether to have a crisis. */
+    crises: [],
 
     /* Somebody else's budget. Nobody arrives with a blank sheet; they arrive
        with the last government's spending and a manifesto that contradicts
