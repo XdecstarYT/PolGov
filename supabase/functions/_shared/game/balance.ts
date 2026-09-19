@@ -907,7 +907,7 @@ export const INVESTMENT_RATE_WEIGHT = 0.011;
 /** Annualised growth below this counts as a contracting month. */
 export const CONTRACTION_THRESHOLD = 0;
 /** Consecutive contracting months before it is called a recession. */
-export const RECESSION_MONTHS = months(3);
+export const RECESSION_TURNS = months(3);
 /** Output gap above this is a boom. */
 export const BOOM_OUTPUT_GAP = 1.8;
 /** Output gap below this is a slump, whatever growth is doing. */
@@ -994,7 +994,7 @@ export const RATING_DEFICIT_NOTCH_AT = 0.06;
 /** A recession costs a notch too — lenders price the revenue, not the promise. */
 export const RATING_RECESSION_NOTCH = true;
 /** Months a downgrade takes to arrive. Agencies are slow, and then sudden. */
-export const RATING_REVIEW_MONTHS = months(3);
+export const RATING_REVIEW_TURNS = months(3);
 
 /* --- fiscal rules, which a government imposes on itself --- */
 
@@ -1009,7 +1009,7 @@ export const FISCAL_RULE_BREACH_MOOD = perMonth(1.6);
 /** Yield relief for a government holding to its own rules, in points. */
 export const FISCAL_RULE_CREDIBILITY_RELIEF = 0.35;
 /** Months of compliance before the market believes you. */
-export const FISCAL_RULE_CREDIBILITY_MONTHS = months(12);
+export const FISCAL_RULE_CREDIBILITY_TURNS = months(12);
 
 /* --- the funds --- */
 
@@ -1431,3 +1431,95 @@ export const PACT_MINIMUM_RELATIONS = -25;
 
 /** Months of world history kept. */
 export const WORLD_HISTORY_LIMIT = 120;
+
+/* ------------------------------------------------------------------ *
+ * The budget engine
+ *
+ * A budget is the most important vote a government takes. Everything
+ * else it does is optional; this is the one it cannot avoid, cannot
+ * delay past the year, and cannot lose without the whole thing coming
+ * down. The mechanics below exist to make losing it possible.
+ * ------------------------------------------------------------------ */
+
+/** Political capital to move a single line, however far. */
+export const BUDGET_LINE_PC_COST = 2;
+/** Political capital to put the finished budget to the chamber. */
+export const BUDGET_PRESENT_PC_COST = 14;
+
+/**
+ * How far a line can move in one budget, as a share of what it was.
+ *
+ * Nobody halves a department in a year. Staff are on contracts, buildings
+ * are leased, and a minister who is told to find forty per cent resigns.
+ * A budget is a series of small movements repeated over years, which is
+ * why a government that wants to change the shape of the state has to win
+ * twice.
+ */
+export const BUDGET_MAX_CUT = 0.25;
+export const BUDGET_MAX_RISE = 0.4;
+
+/** Coalition mood lost per percentage point cut from a partner's ministry. */
+export const MINISTRY_CUT_MOOD = 0.55;
+/** Mood gained per point ADDED, which is worth much less. Gratitude is cheap. */
+export const MINISTRY_RISE_MOOD = 0.18;
+
+/**
+ * How much a minister's own party backs the budget in the division.
+ *
+ * A partner whose ministry was cut hard votes for the budget anyway — they
+ * are in the government — but their backbenchers do not, and that is where
+ * budgets are actually lost.
+ */
+export const MINISTRY_REBELLION_PER_POINT = 0.011;
+
+/** Approval cost of losing a budget vote. A government that cannot pass one. */
+export const BUDGET_DEFEAT_APPROVAL = -9;
+/** Political capital cost of having to come back with another one. */
+export const BUDGET_DEFEAT_PC = 20;
+/** Coalition mood cost across every partner when the budget falls. */
+export const BUDGET_DEFEAT_MOOD = -12;
+
+/**
+ * Years a capital commitment binds the budget for.
+ *
+ * Capital spending is contracted. A successor who wants the money back has
+ * to break a contract, which costs more than the money — this is why so
+ * much of any government's budget was decided by somebody else.
+ */
+export const CAPITAL_COMMITMENT_YEARS = 3;
+
+/** Share of a capital line that reaches infrastructure condition, per year. */
+export const CAPITAL_TO_CONDITION = 0.035;
+
+/**
+ * The share of the budget nobody votes on.
+ *
+ * Pensions, debt service and standing legal entitlements are paid whether
+ * or not a budget passes, because they are statute rather than
+ * appropriation. It is the single most important fact about public
+ * finance and almost no game says it: most of the budget is not a
+ * decision, and the argument is always about the remaining fifth.
+ */
+export const STATUTORY_SERVICES = ['pensions', 'welfare', 'disability'] as const;
+
+/* ------------------------------------------------------------------ *
+ * Supply
+ * ------------------------------------------------------------------ */
+
+/**
+ * What it costs to buy a budget through a chamber you do not control.
+ *
+ * A minority government that could never pass a budget would simply be a
+ * losing position rather than a hard one, so there has to be a way through
+ * — and in real parliaments there is exactly one: confidence and supply. An
+ * opposition party agrees to abstain on the budget, for a year, in return
+ * for something. The price is their seats and their distance from you, and
+ * it is paid partly in capital and partly in your own party's patience,
+ * because nothing annoys a backbench like watching the other side get paid.
+ */
+export const SUPPLY_PC_BASE = 8;
+export const SUPPLY_PC_PER_SEAT = 0.45;
+/** Multiplier on the capital cost per unit of ideological distance. */
+export const SUPPLY_DISTANCE_COST = 0.85;
+/** What a deal with the other side costs in your own party's cohesion. */
+export const SUPPLY_COHESION_COST = -3.5;

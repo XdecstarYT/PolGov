@@ -76,7 +76,7 @@ import {
   PRODUCTIVITY_DRIFT_RATE,
   PRODUCTIVITY_START,
   PRODUCTIVITY_TO_GROWTH,
-  RECESSION_MONTHS,
+  RECESSION_TURNS,
   REVENUE_GDP_SHARE,
   SAVINGS_CONFIDENCE_WEIGHT,
   SAVINGS_RATE_BASE,
@@ -297,7 +297,7 @@ export function taylorRate(economy: Economy): number {
 /**
  * Name the phase of the cycle.
  *
- * A recession is three consecutive contracting months — an explicit rule,
+ * A recession is a quarter of consecutive contraction — an explicit rule,
  * stated the way a statistician would state it, rather than a vibe. The
  * player can see the run building before it is declared, which is the whole
  * tension of the thing.
@@ -307,7 +307,7 @@ export function classifyCycle(
   outputGap: number,
   contractionRun: number,
 ): CyclePhase {
-  if (contractionRun >= RECESSION_MONTHS) return 'recession';
+  if (contractionRun >= RECESSION_TURNS) return 'recession';
   if (growth <= CONTRACTION_THRESHOLD) return 'slowdown';
   if (outputGap <= SLUMP_OUTPUT_GAP) return 'recovery';
   if (outputGap >= BOOM_OUTPUT_GAP) return 'peak';
@@ -662,10 +662,10 @@ export function productivityTarget(educationHealth: number, infrastructureHealth
 export function describeCycle(economy: Economy): string {
   switch (economy.phase) {
     case 'recession':
-      return `In recession — ${economy.contractionRun} straight months of contraction.`;
+      return `In recession — ${economy.contractionRun} straight weeks of contraction.`;
     case 'slowdown':
       return economy.contractionRun > 0
-        ? `Contracting. ${RECESSION_MONTHS - economy.contractionRun} more months like this and it is a recession.`
+        ? `Contracting. ${RECESSION_TURNS - economy.contractionRun} more weeks like this and it is a recession.`
         : 'Growth has stalled.';
     case 'recovery':
       return 'Recovering, but still well below capacity.';

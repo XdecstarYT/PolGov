@@ -577,6 +577,18 @@ describe('the budget inside a run', () => {
     }
   });
 
+  it('will not vote the same year\u2019s money twice', () => {
+    const state = inOffice();
+    const first = applyIntent(state, { type: 'present_budget' });
+    expect(first.error).toBeUndefined();
+    if (first.state.budget.stage !== 'enacted') return;
+
+    const again = applyIntent(first.state, { type: 'present_budget' });
+    expect(again.error).toContain('already voted');
+    /* And no capital was taken for the attempt. */
+    expect(again.state.politicalCapital).toBe(first.state.politicalCapital);
+  });
+
   it('refuses to reopen the document outside the season', () => {
     const state = weeks(inOffice(), BUDGET_TURN_INTERVAL + 1);
     const attempt = applyIntent(state, {

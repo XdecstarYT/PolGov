@@ -1,38 +1,33 @@
 /**
  * BudgetRoom.tsx — phase 4.
  *
- * Five sliders, a live projection of what each setting sustains, and an
- * honest deficit readout. The projection runs the same drift function the
- * resolution phase will run, so the preview cannot disagree with the outcome.
+ * The estimates come first, because they are the only decision in the game a
+ * government cannot avoid, delay past the year, or lose without the whole
+ * thing coming apart. Everything else on this screen — tax, infrastructure,
+ * the fiscal rules — is a lever on one side or other of the same equation,
+ * and sits underneath it.
  *
- * Editable only on budget weeks unless an emergency budget is bought.
+ * The five sector sliders that used to be here are gone. They are still a
+ * legitimate coarse control and the engine still accepts one, but a chart of
+ * five numbers cannot say whose department it is, and that turned out to be
+ * the only part of a budget that matters.
  */
 
 import { useGame } from '../../state/store.ts';
 import {
   PC_COSTS,
-  SECTOR_LABELS,
+  TURNS_PER_YEAR,
   budgetPromiseKept,
   canEditBudget,
   coalitionPartners,
   computeDebtService,
   computeRevenue,
-  findSector,
-  isBudgetTurn,
-  projectBudget,
-  totalFunding,
+  isBudgetSeason,
+  proposedTotal,
 } from '../../game/index.ts';
-import {
-  Button,
-  Delta,
-  Panel,
-  PartyMark,
-  Stat,
-  Tag,
-  bandFor,
-  money,
-} from '../components/Primitives.tsx';
+import { Button, Panel, PartyMark, Stat, Tag, money } from '../components/Primitives.tsx';
 import { benchInk } from '../bench.ts';
+import { BudgetDocument } from '../components/BudgetDocument.tsx';
 import { FiscalRulesRoom } from '../components/FiscalRulesRoom.tsx';
 import { TaxPanel } from '../components/TaxPanel.tsx';
 import { InfrastructurePanel } from '../components/InfrastructurePanel.tsx';
@@ -41,42 +36,50 @@ export function BudgetRoom() {
   const { game, dispatch, endTurn, resolvingRemotely } = useGame();
   if (!game) return null;
 
+  const inSeason = isBudgetSeason(game.turnNumber);
   const editable = canEditBudget(game);
-  const projections = projectBudget(game.sectors, game.difficulty);
-  const spending = totalFunding(game.sectors);
-  const revenue = computeRevenue(findSector(game.sectors, 'economy').health, game.revenueModifier);
-  const debtService = computeDebtService(game.debt);
+
+  /* Everything in the document is annual. Debt service is what this week
+     costs, because that is a bill that arrives every week regardless. */
+  const revenue =
+    computeRevenue(game.economy.gdp, game.revenueModifier, game.taxes) * TURNS_PER_YEAR;
+  const spending = proposedTotal(game.budget);
+  const debtService = computeDebtService(game.debt) * TURNS_PER_YEAR;
   const balance = revenue - spending - debtService;
 
   const partners = coalitionPartners(game.parties);
 
   return (
     <div className="space-y-5">
-      <Panel
-        title="Budget room"
-        aside={editable ? 'open for revision' : `fixed — reopens on month ${nextBudgetTurn(game.turnNumber)}`}
-      >
-        {!editable && (
-          <div className="mb-4 border border-rule-strong bg-sunk/40 p-3">
-            <p className="text-sm text-ink-soft">
-              The estimates are settled for this week. You can force them open, but it costs
-              capital and the chamber will notice.
-            </p>
-            <div className="mt-2">
-              <Button
-                disabled={game.politicalCapital < PC_COSTS.emergencyBudget}
-                onClick={() => void dispatch({ type: 'emergency_budget' })}
-              >
-                Call an emergency budget · {PC_COSTS.emergencyBudget} PC
-              </Button>
-            </div>
+      {!inSeason && (
+        <Panel title="Supplementary estimates" tone="quiet">
+          <p className="text-sm leading-relaxed text-ink-soft">
+            The budget is settled for the year. A government that needs money it did not ask
+            for has to go back to the chamber for it, out of order and in public, and everybody
+            will want to know what changed.
+          </p>
+          <div className="mt-3">
+            <Button
+              disabled={editable || game.politicalCapital < PC_COSTS.emergencyBudget}
+              onClick={() => void dispatch({ type: 'emergency_budget' })}
+            >
+              {editable
+                ? 'Supplementary estimates are open'
+                : `Call an emergency budget · ${PC_COSTS.emergencyBudget} PC`}
+            </Button>
           </div>
-        )}
+        </Panel>
+      )}
 
-        <div className="mb-4 flex flex-wrap gap-x-6 gap-y-3 border-b border-rule pb-4">
-          <Stat label="Revenue" value={money(revenue)} detail="per month" />
-          <Stat label="Spending" value={money(spending)} detail="across five sectors" />
-          <Stat label="Debt service" value={money(debtService)} detail="interest this week" />
+      <Panel title="The position" tone="quiet">
+        <div className="flex flex-wrap gap-x-7 gap-y-3">
+          <Stat label="Receipts" value={money(revenue)} detail="a year, at current rates" />
+          <Stat label="Estimates" value={money(spending)} detail="a year, across twenty lines" />
+          <Stat
+            label="Debt service"
+            value={money(debtService)}
+            detail="a year, on paper already issued"
+          />
           <Stat
             label="Balance"
             value={money(balance)}
@@ -84,61 +87,9 @@ export function BudgetRoom() {
             tone={balance < 0 ? 'loss' : 'gain'}
           />
         </div>
-
-        <ul className="space-y-5">
-          {projections.map((projection) => {
-            const drift = projection.projectedHealth - projection.currentHealth;
-            return (
-              <li key={projection.key}>
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <label
-                    className="font-serif text-sm font-semibold text-ink"
-                    htmlFor={`funding-${projection.key}`}
-                  >
-                    {SECTOR_LABELS[projection.key]}
-                  </label>
-                  <span className="text-xs tnum text-ink-faint">
-                    health {projection.currentHealth.toFixed(0)} ·{' '}
-                    {bandFor(projection.currentHealth)}
-                  </span>
-                </div>
-
-                <div className="mt-1.5 flex flex-wrap items-center gap-3">
-                  <input
-                    id={`funding-${projection.key}`}
-                    type="range"
-                    min={0}
-                    max={60}
-                    step={0.5}
-                    value={projection.funding}
-                    disabled={!editable}
-                    onChange={(e) =>
-                      void dispatch({
-                        type: 'set_funding',
-                        sector: projection.key,
-                        amount: Number(e.target.value),
-                      })
-                    }
-                    className="w-56 max-w-full accent-[var(--color-civic)] disabled:opacity-50"
-                    aria-describedby={`projection-${projection.key}`}
-                  />
-                  <span className="text-sm tnum text-ink">{money(projection.funding)}/yr</span>
-                </div>
-
-                <p id={`projection-${projection.key}`} className="mt-1 text-xs text-ink-faint">
-                  This level sustains a health of{' '}
-                  <span className="tnum text-ink-soft">{projection.equilibrium.toFixed(0)}</span>.
-                  Next week it moves <Delta value={drift} unit="pts" /> to{' '}
-                  <span className="tnum text-ink-soft">
-                    {projection.projectedHealth.toFixed(0)}
-                  </span>
-                  .
-                </p>
-              </li>
-            );
-          })}
-        </ul>
       </Panel>
+
+      <BudgetDocument />
 
       {partners.length > 0 && (
         <Panel title="Commitments to partners">
@@ -188,10 +139,4 @@ export function BudgetRoom() {
       </Panel>
     </div>
   );
-}
-
-function nextBudgetTurn(turn: number): number {
-  let next = turn + 1;
-  while (!isBudgetTurn(next)) next += 1;
-  return next;
 }

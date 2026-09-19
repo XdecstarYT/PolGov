@@ -92,10 +92,27 @@ await step('table a bill from the policy desk', async () => {
 
 await step('go to the budget', async () => {
   await page.getByRole('button', { name: /Continue to the budget/ }).click();
-  await page.getByRole('heading', { name: 'Budget room' }).waitFor();
+  await page.getByRole('heading', { name: 'The departments' }).waitFor();
   await page.waitForTimeout(300);
 });
 await page.screenshot({ path: `${OUT}/07-budget.png`, fullPage: true });
+
+await step('open a department and move a line', async () => {
+  /* The treasury is expanded by default; open a second one so the document
+     is shown the way a player who is actually arguing with it sees it. */
+  await page.getByRole('button', { name: /Health/ }).first().click();
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: `${OUT}/07b-budget-document.png`, fullPage: true });
+});
+
+await step('put the budget to the chamber', async () => {
+  const present = page.getByRole('button', { name: /Put it to the chamber/ });
+  if (await present.isEnabled().catch(() => false)) {
+    await present.click();
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${OUT}/07c-budget-division.png`, fullPage: true });
+  }
+});
 
 await step('end the turn', async () => {
   await page.getByRole('button', { name: /End turn/ }).click();

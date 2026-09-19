@@ -12,7 +12,9 @@ import {
   SECTOR_LABELS,
   computeApprovalTarget,
   coalitionPartners,
-  isBudgetTurn,
+  BUDGET_TURN_INTERVAL,
+  budgetDeadline,
+  isBudgetSeason,
   isCampaignTurn,
   isThreateningExit,
   sectorEquilibrium,
@@ -50,7 +52,8 @@ export function Briefing() {
     game.economy.gdp,
   );
   const unhappy = coalitionPartners(game.parties).filter(isThreateningExit);
-  const budgetOpen = isBudgetTurn(game.turnNumber);
+  const budgetOpen = isBudgetSeason(game.turnNumber);
+  const budgetDone = game.budget.enactedTurn > budgetDeadline(game.turnNumber) - BUDGET_TURN_INTERVAL;
   const campaign = isCampaignTurn(game.turnNumber);
 
   return (
@@ -71,9 +74,16 @@ export function Briefing() {
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {budgetOpen ? (
-            <Tag tone="accent">Budget open this week</Tag>
+            budgetDone ? (
+              <Tag tone="gain">Budget carried</Tag>
+            ) : (
+              <Tag tone="accent">
+                Budget due in {budgetDeadline(game.turnNumber) - game.turnNumber + 1} week
+                {budgetDeadline(game.turnNumber) - game.turnNumber === 0 ? '' : 's'}
+              </Tag>
+            )
           ) : (
-            <Tag>Budget fixed this week</Tag>
+            <Tag>Estimates settled for the year</Tag>
           )}
           {campaign && <Tag tone="warn">Campaign period</Tag>}
           {unhappy.length > 0 && (

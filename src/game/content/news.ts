@@ -68,7 +68,7 @@ export function generateNews(
     if (entry.kind === 'legislature' && entry.cause.includes('passed')) {
       drafts.push({
         headline: `${entry.label} clears the chamber`,
-        body: `The government carried ${entry.label} on the floor this month. ${entry.cause}`,
+        body: `The government carried ${entry.label} on the floor this week. ${entry.cause}`,
         sentiment: 0.4,
         priority: 9,
       });
@@ -115,8 +115,8 @@ export function generateNews(
     drafts.push({
       headline: rising
         ? `Polling firms up for ${context.playerPartyName}`
-        : `${context.playerPartyName} slips in monthly polling`,
-      body: `Aggregated polling moved ${rising ? 'up' : 'down'} ${n(Math.abs(netApproval))} points this month, to ${n(context.approval, 0)}%.`,
+        : `${context.playerPartyName} slips in the weekly polling`,
+      body: `Aggregated polling moved ${rising ? 'up' : 'down'} ${n(Math.abs(netApproval))} points this week, to ${n(context.approval, 0)}%.`,
       sentiment: rising ? 0.5 : -0.5,
       priority: 5,
     });
@@ -133,7 +133,7 @@ export function generateNews(
 
   if (drafts.length === 0) {
     drafts.push({
-      headline: 'A quiet month in the chamber',
+      headline: 'A quiet week in the chamber',
       body: `No major division reached the floor. Attention in ${context.countryName} turned to committee work and the estimates.`,
       sentiment: 0,
       priority: 1,

@@ -664,7 +664,7 @@ export interface CreditRating {
    */
   pending: CreditGrade;
   /** Months the pending grade has been worse than the actual one. */
-  reviewMonths: number;
+  reviewTurns: number;
   /** Plain-language reasons, shown verbatim. Never a hidden judgement. */
   reasons: string[];
 }
@@ -690,9 +690,9 @@ export interface FiscalRule {
   threshold: number;
   adoptedTurn: number;
   /** Consecutive months in breach. Zero when compliant. */
-  breachMonths: number;
+  breachTurns: number;
   /** Consecutive months compliant. Credibility is earned slowly. */
-  complianceMonths: number;
+  complianceTurns: number;
 }
 
 /** A region's own accounts, which the centre funds and the region spends. */

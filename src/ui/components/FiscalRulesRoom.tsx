@@ -112,9 +112,9 @@ export function FiscalRulesRoom() {
                     {FISCAL_RULE_LABELS[rule.kind]}
                   </span>
                   {holds ? (
-                    <Tag tone="gain">kept for {rule.complianceMonths} months</Tag>
+                    <Tag tone="gain">kept for {rule.complianceTurns} weeks</Tag>
                   ) : (
-                    <Tag tone="loss">broken for {rule.breachMonths} months</Tag>
+                    <Tag tone="loss">broken for {rule.breachTurns} weeks</Tag>
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-ink-faint">{describeRule(rule)}</p>

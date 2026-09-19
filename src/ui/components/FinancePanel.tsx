@@ -17,7 +17,7 @@ import { useMemo } from 'react';
 import { useGame } from '../../state/store.ts';
 import {
   FISCAL_RULE_LABELS,
-  RATING_REVIEW_MONTHS,
+  RATING_REVIEW_TURNS,
   averageCoupon,
   averageMaturity,
   borrowingCost,
@@ -99,7 +99,7 @@ export function FinancePanel() {
           </div>
           <div className="mt-0.5 text-xs text-ink-faint">
             {onReview
-              ? `on review, month ${f.rating.reviewMonths} of ${RATING_REVIEW_MONTHS}`
+              ? `on review, week ${f.rating.reviewTurns} of ${RATING_REVIEW_TURNS}`
               : 'not under review'}
           </div>
         </div>
@@ -195,9 +195,9 @@ export function FinancePanel() {
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-ink">{FISCAL_RULE_LABELS[rule.kind]}</span>
                     {holds ? (
-                      <Tag tone="gain">kept {rule.complianceMonths}mo</Tag>
+                      <Tag tone="gain">kept {rule.complianceTurns}mo</Tag>
                     ) : (
-                      <Tag tone="loss">broken {rule.breachMonths}mo</Tag>
+                      <Tag tone="loss">broken {rule.breachTurns}mo</Tag>
                     )}
                   </div>
                   <p className="text-xs text-ink-faint">{describeRule(rule)}</p>

@@ -14,6 +14,7 @@ import {
   MANIFESTO_SIZE,
   PC_COSTS_POLICY,
   REFERENDUM_TEMPLATES,
+  months,
   computeIssueScores,
   policyOpinion,
   type Bill,
@@ -70,8 +71,11 @@ export function PolicyLifecycle() {
   if (!game) return null;
 
   const inForce = game.bills.filter((b) => b.status === 'passed');
+  /* A quarter's notice. Three turns was three months before a turn became a
+     week, and three weeks is not enough warning to do anything about it. */
   const lapsing = inForce.filter(
-    (b) => b.lapsesOn !== null && b.lapsesOn !== undefined && b.lapsesOn - game.turnNumber <= 3,
+    (b) =>
+      b.lapsesOn !== null && b.lapsesOn !== undefined && b.lapsesOn - game.turnNumber <= months(3),
   );
   const pending = inForce.filter((b) => !b.inEffect);
   const outstanding = game.promises.filter((p) => p.status === 'outstanding');
@@ -125,7 +129,7 @@ export function PolicyLifecycle() {
           <p className="mt-2 text-xs leading-relaxed text-ink-faint">
             {pending.length > 0 && `${pending.length} not yet being felt. `}
             {lapsing.length > 0 &&
-              `${lapsing.length} due to lapse within three months unless renewed.`}
+              `${lapsing.length} due to lapse within the quarter unless renewed.`}
           </p>
         )}
       </Panel>

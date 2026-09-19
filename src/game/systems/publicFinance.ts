@@ -29,12 +29,12 @@ import {
   EMERGENCY_FUND_TARGET,
   FISCAL_RULE_BREACH_APPROVAL,
   FISCAL_RULE_BREACH_MOOD,
-  FISCAL_RULE_CREDIBILITY_MONTHS,
+  FISCAL_RULE_CREDIBILITY_TURNS,
   FISCAL_RULE_CREDIBILITY_RELIEF,
   LOCAL_OWN_REVENUE_SHARE,
   RATING_DEFICIT_NOTCH_AT,
   RATING_RECESSION_NOTCH,
-  RATING_REVIEW_MONTHS,
+  RATING_REVIEW_TURNS,
   REGIONAL_FUNDING_PER_SEAT,
   REGIONAL_GRANT_SHARE,
   REGIONAL_SERVICE_DRIFT,
@@ -121,9 +121,9 @@ export function marketSpread(
 export function ruleCredibility(rules: readonly FiscalRule[]): number {
   if (rules.length === 0) return 0;
   const scores = rules.map((rule) =>
-    rule.breachMonths > 0
+    rule.breachTurns > 0
       ? 0
-      : clamp(rule.complianceMonths / FISCAL_RULE_CREDIBILITY_MONTHS, 0, 1),
+      : clamp(rule.complianceTurns / FISCAL_RULE_CREDIBILITY_TURNS, 0, 1),
   );
   return scores.reduce((a, b) => a + b, 0) / scores.length;
 }
@@ -187,7 +187,7 @@ export function justifiedRating(
 /**
  * Advance the rating by a month.
  *
- * Downgrades take `RATING_REVIEW_MONTHS` to arrive, which gives the player a
+ * Downgrades take `RATING_REVIEW_TURNS` to arrive, which gives the player a
  * standing, visible warning. Upgrades are immediate — not out of generosity,
  * but because the alternative is a government that fixes its finances and
  * then waits a quarter to be told, which reads as the game withholding
@@ -210,18 +210,18 @@ export function stepRating(
       grade: justified.grade,
       spread: justified.spread,
       pending: justified.grade,
-      reviewMonths: 0,
+      reviewTurns: 0,
       reasons: justified.reasons,
     };
   }
 
-  const reviewMonths = rating.pending === justified.grade ? rating.reviewMonths + 1 : 1;
-  if (reviewMonths >= RATING_REVIEW_MONTHS) {
+  const reviewTurns = rating.pending === justified.grade ? rating.reviewTurns + 1 : 1;
+  if (reviewTurns >= RATING_REVIEW_TURNS) {
     return {
       grade: justified.grade,
       spread: justified.spread,
       pending: justified.grade,
-      reviewMonths: 0,
+      reviewTurns: 0,
       reasons: justified.reasons,
     };
   }
@@ -230,7 +230,7 @@ export function stepRating(
   return {
     ...rating,
     pending: justified.grade,
-    reviewMonths,
+    reviewTurns,
     reasons: justified.reasons,
   };
 }
@@ -315,7 +315,7 @@ export function describeRule(rule: FiscalRule): string {
     case 'debt_ceiling':
       return `Debt will not exceed ${(rule.threshold * 100).toFixed(0)}% of output.`;
     case 'spending_cap':
-      return `Programme spending will not exceed ₡${rule.threshold.toFixed(0)}bn a month.`;
+      return `Programme spending will not exceed ₡${rule.threshold.toFixed(0)}bn a year.`;
     case 'balanced_budget':
       return 'The budget will balance over the cycle.';
   }
@@ -341,7 +341,7 @@ export function ruleHolds(
   }
 }
 
-/** Advance each rule's compliance and breach counters by a month. */
+/** Advance each rule's compliance and breach counters by a week. */
 export function stepRules(
   rules: readonly FiscalRule[],
   debt: number,
@@ -353,15 +353,15 @@ export function stepRules(
     const holds = ruleHolds(rule, debt, gdp, turnBalance, spending);
     return {
       ...rule,
-      breachMonths: holds ? 0 : rule.breachMonths + 1,
-      complianceMonths: holds ? rule.complianceMonths + 1 : 0,
+      breachTurns: holds ? 0 : rule.breachTurns + 1,
+      complianceTurns: holds ? rule.complianceTurns + 1 : 0,
     };
   });
 }
 
 /** Rules currently being broken. */
 export function rulesInBreach(rules: readonly FiscalRule[]): FiscalRule[] {
-  return rules.filter((r) => r.breachMonths > 0);
+  return rules.filter((r) => r.breachTurns > 0);
 }
 
 /**
@@ -373,7 +373,7 @@ export function rulesInBreach(rules: readonly FiscalRule[]): FiscalRule[] {
  */
 export function breachApprovalCost(rules: readonly FiscalRule[]): number {
   return rulesInBreach(rules).reduce(
-    (sum, rule) => sum + FISCAL_RULE_BREACH_APPROVAL * Math.min(4, Math.sqrt(rule.breachMonths)),
+    (sum, rule) => sum + FISCAL_RULE_BREACH_APPROVAL * Math.min(4, Math.sqrt(rule.breachTurns)),
     0,
   );
 }
@@ -523,7 +523,7 @@ export function buildPublicFinance(
       grade: justified.grade,
       spread: justified.spread,
       pending: justified.grade,
-      reviewMonths: 0,
+      reviewTurns: 0,
       reasons: justified.reasons,
     },
     spread: justified.spread,

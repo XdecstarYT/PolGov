@@ -907,7 +907,7 @@ export const INVESTMENT_RATE_WEIGHT = 0.011;
 /** Annualised growth below this counts as a contracting month. */
 export const CONTRACTION_THRESHOLD = 0;
 /** Consecutive contracting months before it is called a recession. */
-export const RECESSION_MONTHS = months(3);
+export const RECESSION_TURNS = months(3);
 /** Output gap above this is a boom. */
 export const BOOM_OUTPUT_GAP = 1.8;
 /** Output gap below this is a slump, whatever growth is doing. */
@@ -994,7 +994,7 @@ export const RATING_DEFICIT_NOTCH_AT = 0.06;
 /** A recession costs a notch too — lenders price the revenue, not the promise. */
 export const RATING_RECESSION_NOTCH = true;
 /** Months a downgrade takes to arrive. Agencies are slow, and then sudden. */
-export const RATING_REVIEW_MONTHS = months(3);
+export const RATING_REVIEW_TURNS = months(3);
 
 /* --- fiscal rules, which a government imposes on itself --- */
 
@@ -1009,7 +1009,7 @@ export const FISCAL_RULE_BREACH_MOOD = perMonth(1.6);
 /** Yield relief for a government holding to its own rules, in points. */
 export const FISCAL_RULE_CREDIBILITY_RELIEF = 0.35;
 /** Months of compliance before the market believes you. */
-export const FISCAL_RULE_CREDIBILITY_MONTHS = months(12);
+export const FISCAL_RULE_CREDIBILITY_TURNS = months(12);
 
 /* --- the funds --- */
 

@@ -664,7 +664,7 @@ export interface CreditRating {
    */
   pending: CreditGrade;
   /** Months the pending grade has been worse than the actual one. */
-  reviewMonths: number;
+  reviewTurns: number;
   /** Plain-language reasons, shown verbatim. Never a hidden judgement. */
   reasons: string[];
 }
@@ -690,9 +690,9 @@ export interface FiscalRule {
   threshold: number;
   adoptedTurn: number;
   /** Consecutive months in breach. Zero when compliant. */
-  breachMonths: number;
+  breachTurns: number;
   /** Consecutive months compliant. Credibility is earned slowly. */
-  complianceMonths: number;
+  complianceTurns: number;
 }
 
 /** A region's own accounts, which the centre funds and the region spends. */
@@ -1047,6 +1047,76 @@ export interface World {
   history: WorldPoint[];
 }
 
+/* ------------------------------------------------------------------ *
+ * The budget
+ * ------------------------------------------------------------------ */
+
+/** One line of the budget: what a single service is funded at. */
+export interface BudgetLine {
+  service: import('./content/services.ts').ServiceKey;
+  /** ₡bn a year currently in force. What is actually being spent. */
+  enacted: number;
+  /** ₡bn a year the government is proposing for next year. */
+  proposed: number;
+  /** Share of the line that is capital rather than running costs. */
+  capitalShare: number;
+  /**
+   * Years this line is contractually committed for.
+   *
+   * Capital spending is contracted, so a successor who wants the money back
+   * has to break a contract. This is why so much of any government's budget
+   * was decided by somebody else.
+   */
+  committedYears: number;
+}
+
+/** A department, and the party that holds it. */
+export interface MinistryState {
+  key: import('./content/ministries.ts').MinistryKey;
+  /** The party whose minister runs it, or null for the governing party. */
+  heldBy: string | null;
+  /**
+   * What this minister is asking for, as a multiple of what they have.
+   *
+   * Always more than one. Every minister believes their department is
+   * underfunded, and most of them are right.
+   */
+  demand: number;
+}
+
+export type BudgetStage = 'drafting' | 'presented' | 'enacted' | 'rejected';
+
+/**
+ * The budget, as a document rather than a set of sliders.
+ *
+ * It has a stage, because a budget is a process: drafted by the treasury,
+ * fought over in cabinet, put to the chamber, and either enacted or lost. It
+ * is the most important vote a government takes — the only one it cannot
+ * avoid, cannot delay past the year, and cannot lose without the whole thing
+ * coming down.
+ */
+export interface Budget {
+  /** The financial year it covers. */
+  year: number;
+  stage: BudgetStage;
+  lines: BudgetLine[];
+  ministries: MinistryState[];
+  /** The division, once it has been held. */
+  division: { for: number; against: number; abstain: number } | null;
+  /** Budgets lost in a row. Two is a government in serious trouble. */
+  defeats: number;
+  /**
+   * Opposition parties that have agreed to abstain on this budget.
+   *
+   * Confidence and supply: the only way a minority government ever passes
+   * one, and the reason being in a minority is a hard position rather than
+   * a lost one. The agreement lasts a year.
+   */
+  supply: string[];
+  /** The turn the current budget was enacted. */
+  enactedTurn: number;
+}
+
 export interface GameState {
   id: string;
   ownerId: string | null;
@@ -1087,6 +1157,9 @@ export interface GameState {
 
   /** Everything outside the borders. */
   world: World;
+
+  /** The budget: line items, ministries, and where it is in the process. */
+  budget: Budget;
 
   /**
    * The player's own party: factions, discipline, members, and money that is

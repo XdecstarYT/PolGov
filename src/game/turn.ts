@@ -118,7 +118,7 @@ import {
   FISCAL_RULE_PC_COST,
   FISCAL_RULE_REPEAL_PC_COST,
   INFLATION_TARGET,
-  RATING_REVIEW_MONTHS,
+  RATING_REVIEW_TURNS,
   RESERVE_CONTRIBUTION_MAX,
   RESERVE_CONTRIBUTION_PC_COST,
   DIPLOMACY_EFFECTS,
@@ -393,7 +393,19 @@ function syncSectorsToBudget(state: GameState): void {
 function budgetHasLapsed(state: GameState): boolean {
   const seasonEnd = budgetDeadline(state.turnNumber);
   if (state.turnNumber !== seasonEnd + 1) return false;
-  return state.budget.enactedTurn <= seasonEnd - BUDGET_TURN_INTERVAL;
+  return !budgetSettled(state);
+}
+
+/**
+ * Has THIS year's budget been carried?
+ *
+ * Not the same as whether a budget exists. One always does: last year's, or
+ * the previous government's, and it stays in force until somebody replaces
+ * it. That distinction is the whole reason the deadline bites, and it is
+ * also what stops a government passing the same budget twice.
+ */
+export function budgetSettled(state: GameState): boolean {
+  return state.budget.enactedTurn > budgetDeadline(state.turnNumber) - BUDGET_TURN_INTERVAL;
 }
 
 export function isBudgetTurn(turnNumber: number): boolean {
@@ -910,8 +922,8 @@ export function resolveTurn(state: GameState): GameState {
         kind: 'legislature',
         label: `${bill.title} — implementation`,
         delta: delay,
-        cause: `Enacted. It will begin to be felt in ${delay} month${delay === 1 ? '' : 's'}.${bill.lapsesOn ? ` Lapses on month ${bill.lapsesOn} unless renewed.` : ''}`,
-        unit: 'months',
+        cause: `Enacted. It will begin to be felt in ${delay} week${delay === 1 ? '' : 's'}.${bill.lapsesOn ? ` Lapses in week ${bill.lapsesOn} unless renewed.` : ''}`,
+        unit: 'weeks',
       });
 
       /* Crossing a red line carries: the bill stands, the partner is furious. */
@@ -951,7 +963,7 @@ export function resolveTurn(state: GameState): GameState {
     applyEffects(
       next,
       bill.effects,
-      `${bill.title} takes effect${bill.turnResolved !== null ? ` (enacted month ${bill.turnResolved})` : ''}`,
+      `${bill.title} takes effect${bill.turnResolved !== null ? ` (enacted in week ${bill.turnResolved})` : ''}`,
       entries,
     );
   }
@@ -1008,7 +1020,7 @@ export function resolveTurn(state: GameState): GameState {
         kind: 'sector',
         label: SECTOR_LABELS[sector.key],
         delta,
-        cause: `Drift toward the level ₡${sector.funding.toFixed(0)}bn per turn sustains`,
+        cause: `Drift toward the level ₡${sector.funding.toFixed(0)}bn a year sustains`,
         unit: 'pts',
       });
     }
@@ -1064,7 +1076,7 @@ export function resolveTurn(state: GameState): GameState {
       cause:
         fiscal.balance >= 0
           ? 'Surplus remaining after debt repayment, banked as cash'
-          : 'Net cash movement for the month',
+          : 'Net cash movement for the week',
       unit: '₡bn',
     });
   }
@@ -1373,15 +1385,15 @@ export function resolveTurn(state: GameState): GameState {
       });
     } else if (
       next.finance.rating.pending !== next.finance.rating.grade &&
-      next.finance.rating.reviewMonths > 0
+      next.finance.rating.reviewTurns > 0
     ) {
       log(entries, {
         kind: 'debt',
         label: 'On review',
         delta: 0,
         cause:
-          `The agencies are ${next.finance.rating.reviewMonths} of ` +
-          `${RATING_REVIEW_MONTHS} months into a review that would take you to ` +
+          `The agencies are ${next.finance.rating.reviewTurns} of ` +
+          `${RATING_REVIEW_TURNS} weeks into a review that would take you to ` +
           `${next.finance.rating.pending}. ${next.finance.rating.reasons.join('. ')}.`,
         unit: '',
       });
@@ -1406,7 +1418,7 @@ export function resolveTurn(state: GameState): GameState {
         label: `${FISCAL_RULE_LABELS[kind]} breached`,
         delta: 0,
         cause:
-          'Your own rule, broken by your own budget. It costs approval every month it stands, ' +
+          'Your own rule, broken by your own budget. It costs approval every week it stands, ' +
           'and the credibility it bought with lenders is gone until it is kept again.',
         unit: '',
       });
@@ -1421,7 +1433,7 @@ export function resolveTurn(state: GameState): GameState {
         label: 'Fiscal rules',
         delta: -breachCost,
         cause: rulesInBreach(next.finance.rules)
-          .map((r) => `${FISCAL_RULE_LABELS[r.kind]} in breach for ${r.breachMonths} months`)
+          .map((r) => `${FISCAL_RULE_LABELS[r.kind]} in breach for ${r.breachTurns} weeks`)
           .join('; '),
         unit: 'pts',
       });
@@ -1552,7 +1564,7 @@ export function resolveTurn(state: GameState): GameState {
         kind: 'economy',
         label: 'Recession',
         delta: 0,
-        cause: `${e.contractionRun} consecutive months of contraction. It is now called what it is.`,
+        cause: `${e.contractionRun} consecutive weeks of contraction. It is now called what it is.`,
         unit: '',
       });
     }
@@ -2779,6 +2791,13 @@ function handlePresentBudget(state: GameState): IntentResult {
   if (state.budget.stage === 'presented') {
     return reject(state, 'It is already before the chamber.');
   }
+  if (budgetSettled(state)) {
+    return reject(
+      state,
+      'The chamber has already voted the year\u2019s appropriation. The next budget is ' +
+        'written next spring, and what you want before then is a supplementary estimate.',
+    );
+  }
   if (state.politicalCapital < BUDGET_PRESENT_PC_COST) {
     return reject(state, 'Not enough political capital to take a budget to the floor.');
   }
@@ -3081,7 +3100,7 @@ function handleAdoptFiscalRule(
   spendPc(next, FISCAL_RULE_PC_COST);
   next.finance.rules = [
     ...next.finance.rules,
-    { kind, threshold, adoptedTurn: next.turnNumber, breachMonths: 0, complianceMonths: 0 },
+    { kind, threshold, adoptedTurn: next.turnNumber, breachTurns: 0, complianceTurns: 0 },
   ];
   return ok(next);
 }
@@ -3580,7 +3599,7 @@ function handleSendToCommittee(state: GameState, billId: string): IntentResult {
     kind: 'legislature',
     label: `${target.title} referred to committee`,
     delta: -PC_COSTS_PROCEDURE.sendToCommittee,
-    cause: `It will miss this month's division and return next month, better drafted and less contentious.`,
+    cause: `It will miss this week's division and return better drafted and less contentious.`,
     unit: 'PC',
   });
   return ok(next);
@@ -3849,7 +3868,7 @@ function handleRenewSunset(state: GameState, billId: string): IntentResult {
     kind: 'legislature',
     label: `${target.title} renewed`,
     delta: -PC_COSTS_POLICY.renewSunset,
-    cause: `Extended to month ${target.lapsesOn}. It will need renewing again.`,
+    cause: `Extended to week ${target.lapsesOn}. It will need renewing again.`,
     unit: 'PC',
   });
   return ok(next);

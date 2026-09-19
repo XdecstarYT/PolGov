@@ -71,7 +71,7 @@ export function driverSize(
 }
 
 /**
- * What it would cost to meet a service's demand in full, ₡bn a month.
+ * What it would cost to meet a service's demand in full, ₡bn a year.
  *
  * Nobody decides this. It is what the country is asking for.
  */
@@ -163,7 +163,7 @@ export interface ServicesTick {
 }
 
 /**
- * Advance every service by a month.
+ * Advance every service by a week.
  *
  * Demand is recomputed from the population every month — that is the whole
  * mechanic. Funding follows the sector budgets, which the player set and
@@ -174,10 +174,23 @@ export function stepServices(
   sectors: readonly Sector[],
   demography: Demography,
   economy: Economy,
+  /**
+   * What each line is actually funded at, from the budget.
+   *
+   * Passed in rather than derived, because the budget is the authority on
+   * this now — the player sets twenty lines and the five sector figures are
+   * a summary of them. Without it, the old fixed-weight split stands in,
+   * which a couple of tests still rely on.
+   */
+  funding?: Record<string, number>,
 ): ServicesTick {
   const allocations: Record<string, number> = {};
-  for (const sector of sectors) {
-    Object.assign(allocations, allocateToServices(sector.key, sector.funding));
+  if (funding) {
+    Object.assign(allocations, funding);
+  } else {
+    for (const sector of sectors) {
+      Object.assign(allocations, allocateToServices(sector.key, sector.funding));
+    }
   }
 
   const wasStrained = new Set(
@@ -268,12 +281,12 @@ export function longestWaits(services: readonly ServiceState[], count = 4): Serv
     .slice(0, count);
 }
 
-/** Total demand across every service, ₡bn a month. */
+/** Total demand across every service, ₡bn a year. */
 export function totalDemand(services: readonly ServiceState[]): number {
   return services.reduce((sum, s) => sum + s.demand, 0);
 }
 
-/** Total funding across every service, ₡bn a month. */
+/** Total funding across every service, ₡bn a year. */
 export function totalServiceFunding(services: readonly ServiceState[]): number {
   return services.reduce((sum, s) => sum + s.funding, 0);
 }

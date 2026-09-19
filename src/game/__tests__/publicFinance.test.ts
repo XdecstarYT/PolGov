@@ -37,9 +37,9 @@ import {
 import { buildEconomy } from '../systems/economy.ts';
 import { buildRegions } from '../setup.ts';
 import {
-  FISCAL_RULE_CREDIBILITY_MONTHS,
+  FISCAL_RULE_CREDIBILITY_TURNS,
   TURNS_PER_YEAR,
-  RATING_REVIEW_MONTHS,
+  RATING_REVIEW_TURNS,
   SPREAD_CEILING,
 } from '../balance.ts';
 import type { Economy, FiscalRule } from '../types.ts';
@@ -56,8 +56,8 @@ const rule = (overrides: Partial<FiscalRule> = {}): FiscalRule => ({
   kind: 'deficit_cap',
   threshold: 0.03,
   adoptedTurn: 1,
-  breachMonths: 0,
-  complianceMonths: 0,
+  breachTurns: 0,
+  complianceTurns: 0,
   ...overrides,
 });
 
@@ -121,15 +121,15 @@ describe('credibility', () => {
   });
 
   it('is earned over a year of compliance, not announced', () => {
-    const fresh = ruleCredibility([rule({ complianceMonths: 1 })]);
-    const proven = ruleCredibility([rule({ complianceMonths: FISCAL_RULE_CREDIBILITY_MONTHS })]);
+    const fresh = ruleCredibility([rule({ complianceTurns: 1 })]);
+    const proven = ruleCredibility([rule({ complianceTurns: FISCAL_RULE_CREDIBILITY_TURNS })]);
     expect(fresh).toBeLessThan(proven);
     expect(proven).toBeCloseTo(1, 10);
   });
 
   it('is gone the moment a rule is broken, however long it was kept', () => {
     const broken = ruleCredibility([
-      rule({ complianceMonths: 0, breachMonths: 1 }),
+      rule({ complianceTurns: 0, breachTurns: 1 }),
     ]);
     expect(broken).toBe(0);
   });
@@ -163,11 +163,11 @@ describe('ratings', () => {
   it('warns for months before it downgrades', () => {
     let rating = finance().rating;
     const heavy = gdp * 1.5;
-    for (let i = 1; i < RATING_REVIEW_MONTHS; i += 1) {
+    for (let i = 1; i < RATING_REVIEW_TURNS; i += 1) {
       rating = stepRating(rating, heavy, gdp, -50, economy());
       /* The grade has not moved, and the player can see exactly what is coming. */
       expect(rating.pending).not.toBe(rating.grade);
-      expect(rating.reviewMonths).toBe(i);
+      expect(rating.reviewTurns).toBe(i);
     }
     rating = stepRating(rating, heavy, gdp, -50, economy());
     expect(rating.grade).toBe(rating.pending);
@@ -177,15 +177,15 @@ describe('ratings', () => {
     let rating = finance().rating;
     rating = stepRating(rating, 0, gdp, 40, economy());
     expect(rating.grade).toBe('AAA');
-    expect(rating.reviewMonths).toBe(0);
+    expect(rating.reviewTurns).toBe(0);
   });
 
   it('abandons a review if the numbers recover before it completes', () => {
     let rating = finance().rating;
     rating = stepRating(rating, gdp * 1.5, gdp, -50, economy());
-    expect(rating.reviewMonths).toBe(1);
+    expect(rating.reviewTurns).toBe(1);
     rating = stepRating(rating, gdp * 0.2, gdp, 20, economy());
-    expect(rating.reviewMonths).toBe(0);
+    expect(rating.reviewTurns).toBe(0);
     expect(rating.pending).toBe(rating.grade);
   });
 });
@@ -250,18 +250,18 @@ describe('fiscal rules', () => {
   });
 
   it('counts compliance and breach as opposites', () => {
-    const kept = stepRules([rule({ breachMonths: 3 })], 0, gdp, 5, 100)[0]!;
-    expect(kept.breachMonths).toBe(0);
-    expect(kept.complianceMonths).toBe(1);
+    const kept = stepRules([rule({ breachTurns: 3 })], 0, gdp, 5, 100)[0]!;
+    expect(kept.breachTurns).toBe(0);
+    expect(kept.complianceTurns).toBe(1);
 
-    const broken = stepRules([rule({ complianceMonths: 9 })], 0, gdp, -90, 100)[0]!;
-    expect(broken.complianceMonths).toBe(0);
-    expect(broken.breachMonths).toBe(1);
+    const broken = stepRules([rule({ complianceTurns: 9 })], 0, gdp, -90, 100)[0]!;
+    expect(broken.complianceTurns).toBe(0);
+    expect(broken.breachTurns).toBe(1);
   });
 
   it('costs more the longer it goes unfixed', () => {
-    const fresh = breachApprovalCost([rule({ breachMonths: 1 })]);
-    const chronic = breachApprovalCost([rule({ breachMonths: 12 })]);
+    const fresh = breachApprovalCost([rule({ breachTurns: 1 })]);
+    const chronic = breachApprovalCost([rule({ breachTurns: 12 })]);
     expect(chronic).toBeGreaterThan(fresh);
     /* The political problem is not the month you break it. It is the
        eleventh month of explaining why it is still broken. */
@@ -269,8 +269,8 @@ describe('fiscal rules', () => {
   });
 
   it('costs nothing at all while it is kept', () => {
-    expect(breachApprovalCost([rule({ complianceMonths: 30 })])).toBe(0);
-    expect(rulesInBreach([rule({ complianceMonths: 30 })])).toHaveLength(0);
+    expect(breachApprovalCost([rule({ complianceTurns: 30 })])).toBe(0);
+    expect(rulesInBreach([rule({ complianceTurns: 30 })])).toHaveLength(0);
   });
 });
 

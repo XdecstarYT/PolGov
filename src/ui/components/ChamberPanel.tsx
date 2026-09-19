@@ -111,7 +111,7 @@ export function BillProcedure({ billId }: { billId: string }) {
           variant="quiet"
           disabled={game.politicalCapital < PC_COSTS_PROCEDURE.sendToCommittee}
           onClick={() => void dispatch({ type: 'send_to_committee', billId })}
-          title="Delayed a month; returns better drafted and less contentious"
+          title="Delayed; returns better drafted and less contentious"
         >
           Refer to committee · {PC_COSTS_PROCEDURE.sendToCommittee} PC
         </Button>

@@ -36,7 +36,7 @@ import {
   POLICY_RATE_MAX_STEP,
   POLICY_RATE_NEUTRAL,
   PRODUCTIVITY_START,
-  RECESSION_MONTHS,
+  RECESSION_TURNS,
   TURNS_PER_YEAR,
 } from '../balance.ts';
 import { Rng } from '../rng.ts';
@@ -178,8 +178,8 @@ describe('the central bank', () => {
 
 describe('the cycle', () => {
   it('calls a recession only after the stated run of contracting months', () => {
-    expect(classifyCycle(-1, -1, RECESSION_MONTHS - 1)).not.toBe('recession');
-    expect(classifyCycle(-1, -1, RECESSION_MONTHS)).toBe('recession');
+    expect(classifyCycle(-1, -1, RECESSION_TURNS - 1)).not.toBe('recession');
+    expect(classifyCycle(-1, -1, RECESSION_TURNS)).toBe('recession');
   });
 
   it('counts a contraction run and resets it on any growing month', () => {
