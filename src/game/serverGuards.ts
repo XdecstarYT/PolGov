@@ -16,6 +16,7 @@ export const ALLOWED_INTENT_TYPES: ReadonlySet<Intent['type']> = new Set([
   'resolve_event',
   'propose_bill',
   'draft_bill',
+  'record_remark',
   'withdraw_bill',
   'public_address',
   'coalition_concession',

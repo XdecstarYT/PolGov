@@ -79,6 +79,10 @@ export function migrateState(raw: unknown): GameState | null {
     };
   });
 
+  /* A save written before the cast existed has no people in it. They are
+     built fresh, which loses the memory of a run that never had one. */
+  if (!next.cast || !Array.isArray(next.cast.leaders)) next.cast = fresh.cast;
+
   /* Subsystems that may not have existed when the save was written. */
   if (!next.world) next.world = fresh.world;
   if (!Array.isArray(next.world.organisations)) {

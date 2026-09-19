@@ -11,7 +11,13 @@
  */
 
 import type { BillMagnitude, GameEvent, GameState, NewsItem } from '../game/index.ts';
-import { draftingVocabulary, type RawDraft } from '../game/index.ts';
+import {
+  draftingVocabulary,
+  outletOf,
+  voiceContext,
+  type Persona,
+  type RawDraft,
+} from '../game/index.ts';
 import {
   fallbackCoalitionLine,
   fallbackDebateAttack,
@@ -108,6 +114,69 @@ export async function draftBill(
   } catch {
     return null;
   }
+}
+
+/**
+ * A named politician, speaking about what the government just did.
+ *
+ * The persona is state, not prose: who they are, what they did before,
+ * their temperament and what they already think of this government were
+ * all decided by game code and have been moving all run. What the model
+ * adds is the sentence — and the last few sentences it wrote for the same
+ * person go back in with the request, which is what stops a persona being
+ * a style and makes them somebody who can be held to what they said.
+ *
+ * Falls back to the hand-written line, which is what ships when the AI is
+ * unreachable.
+ */
+export async function leaderVoice(
+  state: GameState,
+  persona: Persona,
+  about: string,
+  facts: Record<string, unknown>,
+  fallback: string,
+): Promise<string> {
+  const outlet = persona.outletId ? outletOf(state.cast, persona.outletId) : undefined;
+  const key = cacheKey('leader_voice', state.id, state.turnNumber, `${persona.id}:${about}`);
+  const hit = cache.get(key);
+  if (hit) return hit;
+
+  const text = await callNarrator(
+    'leader_voice',
+    state.id,
+    voiceContext(persona, outlet, about, { ...facts, country: compactContext(state) }),
+  );
+  const line = text ?? fallback;
+  cache.set(key, line);
+  return line;
+}
+
+/**
+ * A columnist's week, written to their paper's disposition.
+ *
+ * Same division of labour. The outlet's disposition, the columnist's beat
+ * and what they make of this government are all game state; the model
+ * supplies eighty words about a record it is given and may not add to.
+ */
+export async function pressColumn(
+  state: GameState,
+  persona: Persona,
+  facts: Record<string, unknown>,
+  fallback: string,
+): Promise<string> {
+  const outlet = persona.outletId ? outletOf(state.cast, persona.outletId) : undefined;
+  const key = cacheKey('press_column', state.id, state.turnNumber, persona.id);
+  const hit = cache.get(key);
+  if (hit) return hit;
+
+  const text = await callNarrator(
+    'press_column',
+    state.id,
+    voiceContext(persona, outlet, 'the week', { ...facts, country: compactContext(state) }),
+  );
+  const column = text ?? fallback;
+  cache.set(key, column);
+  return column;
 }
 
 /**

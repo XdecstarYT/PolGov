@@ -40,6 +40,7 @@ import { CrisisPanel } from '../components/CrisisPanel.tsx';
 import { GlobalPanel } from '../components/GlobalPanel.tsx';
 import { DefencePanel } from '../components/DefencePanel.tsx';
 import { IntelligencePanel } from '../components/IntelligencePanel.tsx';
+import { CastPanel } from '../components/CastPanel.tsx';
 import { TradePanel } from '../components/TradePanel.tsx';
 import { WorldPanel } from '../components/WorldPanel.tsx';
 import { ServicesPanel } from '../components/ServicesPanel.tsx';
@@ -181,6 +182,13 @@ export function Briefing() {
                 <TradePanel />
               </>
             ),
+          },
+          {
+            key: 'people',
+            label: 'The people',
+            blurb:
+              'Everybody in here is invented, and everybody in here has been in this run since the first week — with a temperament, a prior career, and a view of this government that has been moving on the record ever since. The opposition is not a number; it is a person who said something in term one and can be reminded of it in term four.',
+            content: <CastPanel />,
           },
           {
             key: 'security',

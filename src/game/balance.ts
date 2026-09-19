@@ -1945,3 +1945,12 @@ export const DRAFT_BILL_PC_COST = 8;
 
 /** How many bills of their own one government may have on the paper at once. */
 export const DRAFT_BILL_LIMIT = 3;
+
+/**
+ * How long a remembered remark may be.
+ *
+ * Prose arriving from a client, stored in authoritative state, so it is
+ * capped rather than trusted. Six remarks per person and a dozen people
+ * puts the ceiling on the whole cast's memory at about thirty kilobytes.
+ */
+export const REMARK_LIMIT = 400;

@@ -222,16 +222,38 @@ asserted by a test, not by comment.
 
 ### The AI layer
 
-The model writes prose and never decides a mechanic. Every number, choice and
-consequence comes from game code; `ai-narrator` receives outcomes that have
-already been computed and is asked only for words about them. Every system
-prompt restates the fiction constraint in full, because a model asked to write
-political prose drifts toward real parties and real leaders unless told not to
-every single time.
+**The model authors. The engine adjudicates.** Every number, choice and
+consequence comes from game code. Every system prompt restates the fiction
+constraint in full, because a model asked to write political prose drifts
+toward real parties and real leaders unless told not to every single time.
+
+Three things use it.
+
+**News, reaction and retrospect.** `ai-narrator` receives outcomes that have
+already been computed and is asked only for words about them.
+
+**Bills you write yourself.** Describe a law in your own words and
+parliamentary counsel drafts it. What comes back is a *proposal* in the
+engine's own vocabulary, and `systems/drafting.ts` re-reads every field of it:
+figures clamped to what a bill of that size has ever been allowed to do, keys
+it has never heard of dropped, a bill that pulls every lever trimmed to one
+idea, and a bill that is all upside cut back until it is not. Everything it
+changed is shown before the bill is filed. Then it is an ordinary bill, and
+the chamber does not care who wrote it. Because the call happens once, at
+authoring time, and the bill it produces lives in state, a run still replays
+identically.
+
+**People who remember.** Every party leader and every columnist is an invented
+person with a temperament, a prior career, and a view of this government that
+has been moving since the first week — on the record, by game code, never by
+anything a model said. The last few things each of them said go back in with
+the next request, which is what makes a persona somebody who can be held to
+what they told you in term one.
 
 On any failure — no key, rate limit, timeout, bad response — the client falls
 back to prose written by hand. Those fallbacks were written first. The game is
-fully playable with the AI switched off entirely, which is the normal case.
+fully playable with the AI switched off entirely, which is the normal case:
+drafting says it is unavailable, and every other way of passing a law works.
 
 ---
 

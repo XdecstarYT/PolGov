@@ -39,6 +39,8 @@ export * from './systems/partyInternals.ts';
 export * from './systems/parliament.ts';
 export * from './systems/policy.ts';
 export * from './systems/drafting.ts';
+export * from './systems/personas.ts';
+export * from './content/personas.ts';
 export * from './systems/media.ts';
 export * from './systems/eventEngine.ts';
 export * from './systems/legacy.ts';

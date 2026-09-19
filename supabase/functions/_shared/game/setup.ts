@@ -56,6 +56,7 @@ import type {
 import type { District } from './systems/districts.ts';
 import type { NationKey } from './content/nations.ts';
 import { findCountry, type CountryKey } from './content/world/countries.ts';
+import { buildCast } from './systems/personas.ts';
 import { findPolitics, hasPolitics } from './content/world/politics.ts';
 import { financesFor, partiesFor, regionsFor } from './content/world/generate.ts';
 
@@ -323,6 +324,9 @@ export function createGame(options: NewGameOptions): GameState {
        heavily indebted country is hard for the reason it is actually hard. */
     debt: Math.round(finances.debt * (profile.startingDebt / (GDP_START * 0.55))),
     revenueModifier: 0,
+
+    /* Named people, invented, and the same ones for the whole run. */
+    cast: buildCast(parties, country, rng),
 
     /* On trend, on target, at the natural rate. Whatever goes wrong first
        should be legible as something that happened, not as the starting

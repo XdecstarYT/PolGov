@@ -1532,6 +1532,15 @@ export interface GameState {
   /** Recurring revenue modifier accumulated from passed bills. */
   revenueModifier: number;
 
+  /**
+   * The people, all of whom are invented.
+   *
+   * Built once from the run's own seed and carried for sixteen years, so
+   * the leader who called something a betrayal in term one is the same
+   * person in term four and can be reminded of it.
+   */
+  cast: import('./systems/personas.ts').Cast;
+
   /** The macroeconomy: output, prices, jobs, rates and the cycle. */
   economy: Economy;
 

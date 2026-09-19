@@ -170,10 +170,12 @@ import {
   WITHDRAWAL_REPUTATION,
   DRAFT_BILL_PC_COST,
   DRAFT_BILL_LIMIT,
+  REMARK_LIMIT,
 } from './balance.ts';
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
 import { duesTotal } from './systems/organisations.ts';
 import { readDraft, type RawDraft } from './systems/drafting.ts';
+import { findPersona, remember, stepCast } from './systems/personas.ts';
 import { driftPower, globalEffects, stepWorldSim } from './systems/worldSim.ts';
 import { findGlobalEvent } from './content/globalEvents.ts';
 import {
@@ -376,6 +378,18 @@ export type Intent =
    * safe to accept from a client at all.
    */
   | { type: 'draft_bill'; description: string; draft: RawDraft }
+  /**
+   * Put something a persona said on the record.
+   *
+   * Prose in, prose out. Nothing in the engine ever reads a remark back as
+   * a number — what a persona THINKS is `standing`, which game code moves
+   * from the week's record and a model never touches. This stores only the
+   * words, so that the next time somebody writes in that person's voice
+   * they can be held to what they said before.
+   *
+   * Capped hard, because the text arrives from a client.
+   */
+  | { type: 'record_remark'; personaId: string; about: string; text: string }
   | { type: 'withdraw_bill'; billId: string }
   | { type: 'public_address' }
   | { type: 'coalition_concession'; partyId: string }
@@ -2368,6 +2382,33 @@ export function resolveTurn(state: GameState): GameState {
     }
   }
 
+  /*
+   * And the cast reads the papers.
+   *
+   * Everybody who has a view of this government moves toward what the
+   * week's record justifies, at a rate their own temperament sets. No
+   * randomness and no model: the same record always moves the same people
+   * the same distance, which is what makes a hostile columnist's grudging
+   * half-point a week worth earning.
+   */
+  {
+    const passedThisWeek = next.bills.filter(
+      (b) => b.status === 'passed' && b.turnResolved === next.turnNumber,
+    ).length;
+    const failedThisWeek = next.bills.filter(
+      (b) => b.status === 'failed' && b.turnResolved === next.turnNumber,
+    ).length;
+
+    next.cast = stepCast(next.cast, {
+      approvalDelta,
+      billsPassed: passedThisWeek,
+      billsFailed: failedThisWeek,
+      sectorHealth: averageSectorHealth(next.sectors),
+      debtRatio: next.economy.gdp > 0 ? next.debt / next.economy.gdp : 0,
+      recession: next.economy.phase === 'recession',
+    });
+  }
+
   /* Partners at zero walk out. */
   const walkedOut = partnersWalkingOut(next.parties);
   for (const partner of walkedOut) {
@@ -2715,6 +2756,8 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleProposeBill(state, intent.billId, intent.whipSteps);
     case 'draft_bill':
       return handleDraftBill(state, intent.description, intent.draft);
+    case 'record_remark':
+      return handleRecordRemark(state, intent.personaId, intent.about, intent.text);
     case 'withdraw_bill':
       return handleWithdrawBill(state, intent.billId);
     case 'public_address':
@@ -2953,6 +2996,44 @@ function handleResolveEvent(
   event.chosenIndex = choiceIndex;
   event.resolved = true;
   next.career.eventsResolved += 1;
+  return ok(next);
+}
+
+/** Strip anything that is not prose, and hold it to a length. */
+function asRemark(value: unknown, limit: number): string {
+  if (typeof value !== 'string') return '';
+  return value
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, limit);
+}
+
+/**
+ * Record something a persona said.
+ *
+ * Costs nothing and changes nothing anybody can measure: what a persona
+ * thinks is `standing`, which this does not touch. It exists so that the
+ * next time somebody writes in that person's voice, the person is the same
+ * person — which is the whole of what separates a persona from a style.
+ */
+function handleRecordRemark(
+  state: GameState,
+  personaId: string,
+  about: string,
+  text: string,
+): IntentResult {
+  const words = asRemark(text, REMARK_LIMIT);
+  if (words.length < 8) return reject(state, 'Nothing was said.');
+  if (!findPersona(state.cast, personaId)) return reject(state, 'No such person.');
+
+  const next = clone(state);
+  next.cast = remember(next.cast, personaId, {
+    week: absoluteWeek(next),
+    about: asRemark(about, 80) || 'the record',
+    text: words,
+  });
   return ok(next);
 }
 
