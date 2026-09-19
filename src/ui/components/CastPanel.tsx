@@ -174,7 +174,7 @@ export function CastPanel() {
         </ul>
       </Panel>
 
-      <Panel title="The press">
+      <Panel title="The papers, and who writes them">
         <p className="text-sm leading-relaxed text-ink-soft">
           Five papers, each with a disposition it does not hide. A hostile paper still reports
           what happened and a friendly one still notices when something has gone wrong; what

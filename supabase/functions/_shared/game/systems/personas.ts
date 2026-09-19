@@ -123,15 +123,34 @@ const pick = <T,>(rng: Rng, list: readonly T[]): T =>
  */
 function makeName(rng: Rng, country: CountryKey, used: Set<string>): string {
   const bank = nameBankFor(findCountry(country).region);
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const name = `${pick(rng, bank.given)} ${pick(rng, bank.family)}`;
-    if (!used.has(name)) {
+
+  /*
+   * Both halves are held apart, not just the pair.
+   *
+   * Deduping on the full name alone let a chamber contain two Isoldes and
+   * two Marchbanks, which reads as a bug even though every name in it was
+   * unique. A dozen people out of a hundred given names and a hundred
+   * surnames has room to avoid it entirely.
+   */
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const given = pick(rng, bank.given);
+    const family = pick(rng, bank.family);
+    if (used.has(`given:${given}`) || used.has(`family:${family}`)) continue;
+    used.add(`given:${given}`);
+    used.add(`family:${family}`);
+    return `${given} ${family}`;
+  }
+
+  /* More people in the run than the bank holds distinct halves for. Take
+     whatever is left rather than loop forever. */
+  for (const given of bank.given) {
+    for (const family of bank.family) {
+      const name = `${given} ${family}`;
+      if (used.has(name)) continue;
       used.add(name);
       return name;
     }
   }
-  /* Forty collisions in a bank of a hundred combinations means the run has
-     more people in it than the bank holds. Number them rather than loop. */
   const fallback = `${pick(rng, bank.given)} ${pick(rng, bank.family)} ${used.size}`;
   used.add(fallback);
   return fallback;
@@ -168,14 +187,15 @@ export function buildCast(
     remarks: [],
   }));
 
-  const mastheads = new Set<string>();
+  /* Same rule for the mastheads: three papers all called something Ledger
+     is a newsstand nobody would believe. */
+  const usedSecond = new Set<string>();
   const outlets: PressOutlet[] = Array.from({ length: outletCount }, (_, i) => {
-    let name = `${pick(rng, MASTHEAD_FIRST)} ${pick(rng, MASTHEAD_SECOND)}`;
+    let second = pick(rng, MASTHEAD_SECOND);
     let guard = 0;
-    while (mastheads.has(name) && guard++ < 30) {
-      name = `${pick(rng, MASTHEAD_FIRST)} ${pick(rng, MASTHEAD_SECOND)}`;
-    }
-    mastheads.add(name);
+    while (usedSecond.has(second) && guard++ < 30) second = pick(rng, MASTHEAD_SECOND);
+    usedSecond.add(second);
+    const name = `${pick(rng, MASTHEAD_FIRST)} ${second}`;
 
     const disposition = DISPOSITIONS[i % DISPOSITIONS.length]!;
     const register: Register = pick(rng, [

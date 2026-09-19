@@ -66,9 +66,9 @@ await step('open the world papers', async () => {
   await page.getByRole('tab', { name: /The world/ }).click();
   await page.waitForTimeout(250);
   await page.getByRole('heading', { name: 'The institutions' }).waitFor();
-  await page.getByRole('button', { name: /Standing Council/ }).click();
+  await page.getByRole('button', { name: /^United Nations General Assembly/ }).click();
   await page.waitForTimeout(200);
-  await page.getByRole('button', { name: /Humanitarian Mission/ }).click();
+  await page.getByRole('button', { name: /^Humanitarian Mission/ }).click();
   await page.waitForTimeout(250);
   await page.screenshot({ path: `${OUT}/04b-organisations.png`, fullPage: true });
 });
@@ -81,6 +81,21 @@ await step('look at the trade schedule', async () => {
     .click();
   await page.waitForTimeout(250);
   await page.screenshot({ path: `${OUT}/04c-trade.png`, fullPage: true });
+});
+
+await step('open the people papers', async () => {
+  await page.getByRole('tab', { name: /The people/ }).click();
+  await page.waitForTimeout(250);
+  await page.getByRole('heading', { name: 'The other benches' }).waitFor();
+  await page.getByRole('heading', { name: 'The papers, and who writes them' }).waitFor();
+  /* Open a leader, so the temperament, the prior career and the standing
+     are all on screen in the shot. */
+  await page
+    .locator('section:has(> header h2:text-is("The other benches")) button[aria-expanded]')
+    .first()
+    .click();
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: `${OUT}/04e-people.png`, fullPage: true });
 });
 
 await step('open the security papers', async () => {
@@ -126,6 +141,17 @@ await step('table a bill from the policy desk', async () => {
   const table = page.getByRole('button', { name: /^Table this bill/ }).first();
   if (await table.isVisible().catch(() => false)) await table.click();
   await page.waitForTimeout(300);
+});
+
+await step('look at the drafting desk', async () => {
+  await page.getByRole('heading', { name: 'Draft a bill' }).waitFor();
+  await page
+    .getByLabel('What should it do?')
+    .fill('Free school meals for every primary pupil, paid for by ending the reduced rate on private tuition.');
+  await page.waitForTimeout(150);
+  /* Not sent: the AI is not configured in a smoke run, and the point of
+     the shot is that the desk is there and legible without it. */
+  await page.screenshot({ path: `${OUT}/06b-drafting.png`, fullPage: true });
 });
 
 await step('go to the budget', async () => {

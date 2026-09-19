@@ -62,7 +62,7 @@ const NAMES: Record<WorldRegion, NameBank> = {
   },
   middle_east: {
     given: ['Rania', 'Faris', 'Dalia', 'Nadim', 'Yasmin', 'Karim', 'Layan', 'Sami', 'Noor', 'Tarek'],
-    family: ['Al-Numani', 'Haddadin', 'Barghouti', 'Sarraf', 'Qassemi', 'Nashashib', 'Tabrizian', 'Mansouri', 'Kheirallah', 'Zaydoun'],
+    family: ['Al-Numani', 'Haddadin', 'Barghouti', 'Sarraf', 'Qassemi', 'Nashashibi', 'Tabrizian', 'Mansouri', 'Kheirallah', 'Zaydoun'],
   },
   north_africa: {
     given: ['Amina', 'Idris', 'Selma', 'Hakim', 'Nadia', 'Younes', 'Farida', 'Bilal', 'Sanaa', 'Omar'],
@@ -78,11 +78,11 @@ const NAMES: Record<WorldRegion, NameBank> = {
   },
   east_asia: {
     given: ['Hiroe', 'Kenta', 'Mizuki', 'Sora', 'Rina', 'Daichi', 'Yuna', 'Haruto', 'Seina', 'Kaito'],
-    family: ['Kurosawano', 'Mitsuhara', 'Nagasakae', 'Ishibayash', 'Takamorio', 'Hoshizaki', 'Fujiwarano', 'Amagiri', 'Sakuranobe', 'Yamashiro'],
+    family: ['Kurosawano', 'Mitsuhara', 'Nagasakae', 'Ishibayashi', 'Takamorio', 'Hoshizaki', 'Fujiwarano', 'Amagiri', 'Sakuranobe', 'Yamashiro'],
   },
   southeast_asia: {
     given: ['Intan', 'Rizal', 'Maya', 'Bayu', 'Sari', 'Thanh', 'Linh', 'Arif', 'Dewi', 'Nguyet'],
-    family: ['Wijayanto', 'Sasongko', 'Hartadi', 'Purnomoaji', 'Nguyen-Vo', 'Suryaningr', 'Tanuwijaya', 'Pramudita', 'Halimanto', 'Setiabudi'],
+    family: ['Wijayanto', 'Sasongko', 'Hartadi', 'Purnomoaji', 'Nguyen-Vo', 'Suryaningrat', 'Tanuwijaya', 'Pramudita', 'Halimanto', 'Setiabudi'],
   },
   oceania: {
     given: ['Marlowe', 'Keira', 'Fletcher', 'Talia', 'Jarrah', 'Piper', 'Ruaridh', 'Sienna', 'Callum', 'Tamar'],
@@ -90,7 +90,7 @@ const NAMES: Record<WorldRegion, NameBank> = {
   },
   nowhere: {
     given: ['Isolde', 'Rafe', 'Cordelia', 'Ambrose', 'Winifred', 'Gideon', 'Perdita', 'Caspar', 'Rosalind', 'Alaric'],
-    family: ['Vandermeer', 'Ashgrove', 'Halloway', 'Ternbury', 'Estmoor', 'Caldwick', 'Ravensmere', 'Thornleigh', 'Marchbank', 'Stellingw'],
+    family: ['Vandermeer', 'Ashgrove', 'Halloway', 'Ternbury', 'Estmoor', 'Caldwick', 'Ravensmere', 'Thornleigh', 'Marchbank', 'Stellingworth'],
   },
 };
 
