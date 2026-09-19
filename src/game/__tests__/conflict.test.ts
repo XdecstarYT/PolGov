@@ -20,7 +20,6 @@ import {
   ESCALATION_APPROVAL,
   PATIENCE_FLOOR,
 } from '../balance.ts';
-import { findNation } from '../content/nations.ts';
 import { Rng } from '../rng.ts';
 import { buildWorld } from '../systems/diplomacy.ts';
 import { buildMilitary, combatPower } from '../systems/military.ts';
@@ -40,7 +39,13 @@ import {
 } from '../systems/conflict.ts';
 import { createStandardGame } from '../setup.ts';
 import { absoluteWeek, applyIntent, resolveTurn } from '../turn.ts';
-import type { Crisis, GameState, Military, World } from '../index.ts';
+import type { Crisis, GameState, Military, NationState, World } from '../index.ts';
+
+const nationIn = (world: World, key: string): NationState => {
+  const found = world.nations.find((n) => n.key === key);
+  if (!found) throw new Error(`no nation ${key}`);
+  return found;
+};
 
 /** A world where somebody is genuinely hostile and the room is tense. */
 function dangerous(): World {
@@ -48,7 +53,7 @@ function dangerous(): World {
   return {
     ...base,
     tension: 62,
-    nations: base.nations.map((n) => (n.key === 'ehlas' ? { ...n, relations: -70 } : n)),
+    nations: base.nations.map((n) => (n.key === 'russia' ? { ...n, relations: -70 } : n)),
   };
 }
 
@@ -108,7 +113,7 @@ describe('the ladder', () => {
   });
 
   it('refreshes the rally when the government stands firm, and hardens them', () => {
-    const crisis = openCrisis('ehlas', 'A patrol crossed a line.', 1, dangerous());
+    const crisis = openCrisis('russia', 'A patrol crossed a line.', 1, dangerous());
     const after = escalate(crisis, 5);
 
     expect(rungOf(after.stage)).toBe(rungOf(crisis.stage) + 1);
@@ -119,7 +124,7 @@ describe('the ladder', () => {
   });
 
   it('costs resolve on both sides to step back', () => {
-    const crisis = escalate(openCrisis('ehlas', 'x', 1, dangerous()), 2);
+    const crisis = escalate(openCrisis('russia', 'x', 1, dangerous()), 2);
     const after = deEscalate(crisis, 6);
     expect(rungOf(after.stage)).toBe(rungOf(crisis.stage) - 1);
     expect(after.rally).toBe(0);
@@ -127,7 +132,7 @@ describe('the ladder', () => {
   });
 
   it('has no rung above war', () => {
-    const war: Crisis = { ...openCrisis('ehlas', 'x', 1, dangerous()), stage: 'war' };
+    const war: Crisis = { ...openCrisis('russia', 'x', 1, dangerous()), stage: 'war' };
     expect(escalate(war, 2).stage).toBe('war');
     /* Coming down from a war goes to a crisis, not to nothing. */
     expect(deEscalate(war, 2).stage).toBe('crisis');
@@ -137,7 +142,7 @@ describe('the ladder', () => {
 describe('the rally, and what happens to it', () => {
   it('is worth what the literature says and goes as fast', () => {
     const world = dangerous();
-    const crisis = openCrisis('ehlas', 'x', 1, world);
+    const crisis = openCrisis('russia', 'x', 1, world);
     const { approvalByWeek } = run(crisis, buildMilitary(), world, 26);
 
     /* Front-loaded: most of what the flag is worth arrives in the first
@@ -150,7 +155,7 @@ describe('the rally, and what happens to it', () => {
 
   it('curdles: an unfinished crisis costs what it first paid, and more', () => {
     const world = dangerous();
-    const crisis = openCrisis('ehlas', 'A patrol crossed a line.', 1, world);
+    const crisis = openCrisis('russia', 'A patrol crossed a line.', 1, world);
     const { approvalByWeek } = run(crisis, buildMilitary(), world, 120);
 
     const peak = Math.max(
@@ -177,11 +182,11 @@ describe('what decides a war', () => {
   it('is the force ratio, and distance is most of it', () => {
     const world = dangerous();
     const military = buildMilitary();
-    const neighbour = openCrisis('ehlas', 'x', 1, world);
-    const distant = openCrisis('holm', 'x', 1, world);
+    const neighbour = openCrisis('russia', 'x', 1, world);
+    const distant = openCrisis('new_zealand', 'x', 1, world);
 
-    expect(findNation('ehlas').neighbour).toBe(true);
-    expect(findNation('holm').neighbour).toBe(false);
+    expect(nationIn(world, 'russia').neighbour).toBe(false);
+    expect(nationIn(world, 'germany').neighbour).toBe(true);
     /* Fought at home, everything the country owns counts. Fought abroad,
        almost nothing does — which is why a middling country can be hard to
        invade and unable to do anything two borders away. */
@@ -192,7 +197,7 @@ describe('what decides a war', () => {
   it('is never chosen by the player, only paid for by them', () => {
     const world = dangerous();
     const war: Crisis = {
-      ...openCrisis('ehlas', 'x', 1, world),
+      ...openCrisis('russia', 'x', 1, world),
       stage: 'war',
       theirResolve: 90,
       ourResolve: 80,
@@ -209,7 +214,7 @@ describe('what decides a war', () => {
   it('ends when one side has had enough, not when anybody wins', () => {
     const world = dangerous();
     const war: Crisis = {
-      ...openCrisis('ehlas', 'x', 1, world),
+      ...openCrisis('russia', 'x', 1, world),
       stage: 'war',
       ourResolve: 26,
       theirResolve: 95,
@@ -221,7 +226,7 @@ describe('what decides a war', () => {
 
   it('knocks a war out of the economy as well as the polling', () => {
     const world = dangerous();
-    const war: Crisis = { ...openCrisis('ehlas', 'x', 1, world), stage: 'war' };
+    const war: Crisis = { ...openCrisis('russia', 'x', 1, world), stage: 'war' };
     const tick = stepConflicts([war], {
       military: buildMilitary(),
       world,
@@ -242,7 +247,7 @@ describe('deterrence', () => {
       ...weak,
       arms: weak.arms.map((a) => ({ ...a, strength: 95, readiness: 95, equipment: 90 })),
     };
-    const crisis = openCrisis('ehlas', 'x', 1, world);
+    const crisis = openCrisis('russia', 'x', 1, world);
 
     expect(combatPower(strong)).toBeGreaterThan(combatPower(weak));
     expect(deterred(crisis, strong, world)).toBe(true);
@@ -264,7 +269,7 @@ describe('settling', () => {
       ...weak,
       arms: weak.arms.map((a) => ({ ...a, strength: 98, readiness: 98, equipment: 95 })),
     };
-    const crisis = openCrisis('ehlas', 'x', 1, world);
+    const crisis = openCrisis('russia', 'x', 1, world);
 
     const fromStrength = settle({ ...crisis, ourResolve: 85, theirResolve: 40 }, strong, world, 9);
     const fromWeakness = settle({ ...crisis, ourResolve: 30, theirResolve: 90 }, weak, world, 9);
@@ -280,7 +285,7 @@ describe('through the turn engine', () => {
   const withCrisis = (state: GameState): GameState => ({
     ...state,
     politicalCapital: 200,
-    crises: [openCrisis('ehlas', 'A patrol crossed a line.', state.turnNumber, state.world)],
+    crises: [openCrisis('russia', 'A patrol crossed a line.', state.turnNumber, state.world)],
   });
 
   it('pays for standing firm this week and charges for it later', () => {
@@ -331,8 +336,8 @@ describe('through the turn engine', () => {
     expect(live(result.state.crises)).toHaveLength(0);
     expect(result.state.world.tension).toBeLessThan(state.world.tension);
 
-    const was = state.world.nations.find((n) => n.key === 'ehlas')!.relations;
-    const now = result.state.world.nations.find((n) => n.key === 'ehlas')!.relations;
+    const was = state.world.nations.find((n) => n.key === 'russia')!.relations;
+    const now = result.state.world.nations.find((n) => n.key === 'russia')!.relations;
     expect(now).toBeGreaterThan(was);
   });
 });
@@ -358,7 +363,7 @@ describe('the cheque being presented', () => {
           {
             id: 'inherited-defence',
             kind: 'mutual_defence' as const,
-            parties: ['holm' as const],
+            parties: ['new_zealand' as const],
             signedTurn: -40,
             signedTerm: 0,
             obligation: 'Verdana will defend Holm.',
@@ -375,14 +380,14 @@ describe('the cheque being presented', () => {
       world: {
         ...bound.world,
         wars: [
-          { a: 'holm' as const, b: 'astrun' as const, since: week, expected: 100, ended: false, endedTurn: null },
+          { a: 'new_zealand' as const, b: 'united_states' as const, since: week, expected: 100, ended: false, endedTurn: null },
         ],
       },
     };
 
     /* Resolving the week presents it. */
     const resolved = resolveTurn(attacked);
-    const called = resolved.crises.find((c) => c.nation === 'astrun');
+    const called = resolved.crises.find((c) => c.nation === 'united_states');
 
     expect(called).toBeDefined();
     /* And not at the bottom of the ladder: the choice to honour it or not
@@ -402,12 +407,12 @@ describe('the cheque being presented', () => {
         ...base.world,
         treaties: base.world.treaties.filter((t) => t.kind !== 'mutual_defence'),
         wars: [
-          { a: 'holm' as const, b: 'astrun' as const, since: week, expected: 100, ended: false, endedTurn: null },
+          { a: 'new_zealand' as const, b: 'united_states' as const, since: week, expected: 100, ended: false, endedTurn: null },
         ],
       },
     };
 
     const resolved = resolveTurn(watching);
-    expect(resolved.crises.some((c) => c.nation === 'astrun')).toBe(false);
+    expect(resolved.crises.some((c) => c.nation === 'united_states')).toBe(false);
   });
 });

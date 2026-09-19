@@ -130,13 +130,14 @@ function theirStartingResolve(nation: NationKey, relations: number): number {
  */
 export function balanceOfForce(crisis: Crisis, military: Military, world: World): number {
   const template = findNation(crisis.nation);
-  const away = !template.neighbour;
+  const state = world.nations.find((n) => n.key === crisis.nation);
+  const away = !state?.neighbour;
   const ours = combatPower(military, away);
 
   /* Their strength scales off their power — the LIVE figure, because a
      country that has been rising for three terms is not the country the
      briefing described at the start of the first one. */
-  const power = world.nations.find((n) => n.key === crisis.nation)?.power ?? template.power;
+  const power = state?.power ?? template.power;
   const theirs = power * 40 * (away ? 1.25 : 0.85);
 
   /* Allies bound to defend us are in this whether they like it or not. */

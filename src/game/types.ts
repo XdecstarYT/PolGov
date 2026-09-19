@@ -1052,6 +1052,21 @@ export interface NationState {
    * with it.
    */
   posture: import('./content/nations.ts').Posture;
+  /**
+   * Do we share a land border with them?
+   *
+   * The next four fields are relational rather than absolute: they are only
+   * true from one capital. Which country the player governs is a choice, so
+   * they cannot live on the country table — they are computed for the chosen
+   * country when the world is built, and stored here.
+   */
+  neighbour: boolean;
+  /** Their output as a multiple of ours. What trade gravity reads. */
+  economy: number;
+  /** What they buy from us: our exports they need. */
+  buys: import('./content/industries.ts').IndustryKey[];
+  /** What they sell us: their exports we import. */
+  sells: import('./content/industries.ts').IndustryKey[];
 }
 
 /** One month of the world record. */

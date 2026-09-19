@@ -243,6 +243,7 @@ import {
 } from './systems/budgetProcess.ts';
 import {
   RESOLUTION_TEMPLATES,
+  duesOf,
   findOrganisation,
   type OrganisationKey,
   type ResolutionKind,
@@ -1219,7 +1220,7 @@ export function resolveTurn(state: GameState): GameState {
        to every room the country has a seat in. All three are spending, and
        all three are the kind nobody notices until they stop. */
     infrastructureSpend(next.infrastructure) +
-      duesTotal(next.world.organisations) +
+      duesTotal(next.world.organisations, next.economy.gdp) +
       deploymentCost(next.military) +
       doctrineCost(next.military) +
       programmeSpend(next.military) +
@@ -1329,6 +1330,7 @@ export function resolveTurn(state: GameState): GameState {
     const tick = stepWorld(next.world, {
       playerIdeology: player.ideology,
       industries: next.industries,
+      gdp: next.economy.gdp,
       turn: next.turnNumber,
     });
     next.world = tick.world;
@@ -3712,8 +3714,10 @@ function handleJoinOrganisation(state: GameState, key: OrganisationKey): IntentR
   log(entries, {
     kind: 'note',
     label: `Acceded to the ${template.name}`,
-    delta: -template.dues,
-    cause: `${template.obligation} Dues are ₡${template.dues.toFixed(1)}bn a year from now on.`,
+    delta: -duesOf(template.key, state.economy.gdp),
+    cause:
+      `${template.obligation} Dues are ₡${duesOf(template.key, state.economy.gdp).toFixed(1)}bn ` +
+      'a year from now on.',
     unit: '₡bn',
   });
   return ok(next);
@@ -3753,7 +3757,8 @@ function handleLeaveOrganisation(state: GameState, key: OrganisationKey): Intent
     label: `Withdrew from the ${template.name}`,
     delta: WITHDRAWAL_REPUTATION,
     cause:
-      `₡${template.dues.toFixed(1)}bn a year saved, and ${template.members.length} governments ` +
+      `₡${duesOf(template.key, state.economy.gdp).toFixed(1)}bn a year saved, and ` +
+      `${template.members.length} governments ` +
       'now know what this one\u2019s commitments are worth. That part does not come back for years.',
     unit: 'pts',
   });
@@ -3933,10 +3938,10 @@ function handleSetTariff(state: GameState, key: NationKey, points: number): Inte
 function handleFileTradeComplaint(state: GameState, key: NationKey): IntentResult {
   const template = findNation(key);
   if (!state.world.nations.some((n) => n.key === key)) return reject(state, 'No such country.');
-  if (!isMember(state.world.organisations, 'trade_body')) {
+  if (!isMember(state.world.organisations, 'wto')) {
     return reject(
       state,
-      'Verdana is not in the Commercial Convention. A complaint has to be filed somewhere.',
+      'The country is not in the World Trade Organization. A complaint has to be filed somewhere.',
     );
   }
 

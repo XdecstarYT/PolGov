@@ -28,11 +28,13 @@
 
 import {
   ORGANISATION_TEMPLATES,
+  duesOf,
   findOrganisation,
   type OrganisationKey,
   type OrganisationTemplate,
   type ResolutionTemplate,
 } from '../content/organisations.ts';
+import { findCountry, type CountryKey } from '../content/world/countries.ts';
 import { NATION_TEMPLATES, findNation, type NationKey } from '../content/nations.ts';
 import { TURNS_PER_YEAR } from '../balance.ts';
 import type { Rng } from '../rng.ts';
@@ -42,15 +44,30 @@ import type { OrganisationState, Resolution, World } from '../types.ts';
  * Membership
  * ------------------------------------------------------------------ */
 
-export function buildOrganisations(): OrganisationState[] {
-  return ORGANISATION_TEMPLATES.map((template) => ({
-    key: template.key,
-    member: template.memberAtStart,
-    /* Somebody signed these before the player was born. */
-    joinedTurn: template.memberAtStart ? 0 : null,
-    suspended: false,
-    standing: template.memberAtStart ? 55 : 0,
-  }));
+/**
+ * Which rooms the country is already in.
+ *
+ * Inherited, like everything else in the world: read off the chosen
+ * country's own list of memberships rather than written against one
+ * nation, so a government that starts inside an alliance and a government
+ * that starts outside every one of them are both describable.
+ */
+export function buildOrganisations(
+  player: CountryKey = 'verdana',
+): OrganisationState[] {
+  const held = findCountry(player).institutions;
+
+  return ORGANISATION_TEMPLATES.map((template) => {
+    const inherited = held.includes(template.key);
+    return {
+      key: template.key,
+      member: inherited,
+      /* Somebody signed these before the player was born. */
+      joinedTurn: inherited ? 0 : null,
+      suspended: false,
+      standing: inherited ? 55 : 0,
+    };
+  });
 }
 
 export function findMembership(
@@ -68,10 +85,13 @@ export function isMember(organisations: readonly OrganisationState[], key: Organ
 }
 
 /** Dues across every body the country belongs to, ₡bn a year. */
-export function duesTotal(organisations: readonly OrganisationState[]): number {
+export function duesTotal(
+  organisations: readonly OrganisationState[],
+  gdp: number,
+): number {
   return organisations
     .filter((o) => o.member)
-    .reduce((sum, o) => sum + findOrganisation(o.key).dues, 0);
+    .reduce((sum, o) => sum + duesOf(o.key, gdp), 0);
 }
 
 /**
@@ -123,7 +143,10 @@ export interface OrganisationTick {
  * it: belonging to these bodies is a long position. A government that joins
  * one to fix this year's problem has misunderstood what it bought.
  */
-export function stepOrganisations(organisations: readonly OrganisationState[]): OrganisationTick {
+export function stepOrganisations(
+  organisations: readonly OrganisationState[],
+  gdp: number,
+): OrganisationTick {
   const tick: OrganisationTick = {
     influence: 0,
     reputation: 0,
@@ -135,7 +158,7 @@ export function stepOrganisations(organisations: readonly OrganisationState[]): 
   for (const state of organisations) {
     if (!state.member) continue;
     const template = findOrganisation(state.key);
-    tick.dues += template.dues / TURNS_PER_YEAR;
+    tick.dues += duesOf(state.key, gdp) / TURNS_PER_YEAR;
     if (state.suspended) continue;
 
     /* A member in poor standing gets the obligations and less of the rest. */
@@ -256,7 +279,7 @@ export function leanOf(
     reasons.push('it is about them');
   } else if (target) {
     const them = findNation(target);
-    if (them.bloc !== 'unaligned' && them.bloc === country.bloc) {
+    if (them.bloc !== 'non_aligned' && them.bloc === country.bloc) {
       lean -= 18;
       reasons.push(`will not break with ${them.name}`);
     }

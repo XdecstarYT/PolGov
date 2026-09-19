@@ -184,7 +184,7 @@ describe('what a force can actually do', () => {
     const committed = deploy(
       military,
       {
-        nation: 'ehlas',
+        nation: 'russia',
         kind: 'combat',
         commitment: terms.commitment,
         cost: terms.cost,
@@ -207,7 +207,7 @@ describe('what a force can actually do', () => {
         {
           id: 't1',
           kind: 'mutual_defence' as const,
-          parties: ['holm' as const],
+          parties: ['new_zealand' as const],
           signedTurn: 0,
           signedTerm: 0,
           obligation: 'x',
@@ -224,7 +224,7 @@ describe('what a force can actually do', () => {
     const away = years(
       deploy(
         buildMilitary(),
-        { nation: 'ehlas', kind: 'combat', commitment: terms.commitment, cost: terms.cost, startedTurn: 1, mandate: 'x' },
+        { nation: 'russia', kind: 'combat', commitment: terms.commitment, cost: terms.cost, startedTurn: 1, mandate: 'x' },
         1,
       ),
       2,
@@ -370,7 +370,7 @@ describe('through the turn engine', () => {
   it('will not send forces that are already somewhere else', () => {
     const state = inOffice('mil-deploy');
     let current: GameState = { ...state, politicalCapital: 200 };
-    for (const nation of ['holm', 'lorne', 'garda'] as const) {
+    for (const nation of ['new_zealand', 'spain', 'iran'] as const) {
       const result = applyIntent(current, {
         type: 'deploy_force',
         nation,

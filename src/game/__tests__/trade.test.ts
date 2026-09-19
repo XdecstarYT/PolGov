@@ -20,7 +20,7 @@ import {
   RETALIATION_DELAY,
   SURCHARGE_MAX,
 } from '../balance.ts';
-import { NATION_TEMPLATES, findNation } from '../content/nations.ts';
+import { findNation } from '../content/nations.ts';
 import { createStandardGame } from '../setup.ts';
 import { buildWorld } from '../systems/diplomacy.ts';
 import {
@@ -41,9 +41,15 @@ import {
   tradeImpulse,
 } from '../systems/trade.ts';
 import { applyIntent } from '../turn.ts';
-import type { GameState, NationKey } from '../index.ts';
+import type { GameState, NationKey, World } from '../index.ts';
 
 const GDP = 3680;
+
+const nationIn = (world: World, key: string) => {
+  const found = world.nations.find((n) => n.key === key);
+  if (!found) throw new Error(`no nation ${key}`);
+  return found;
+};
 const book = () => buildTrade(GDP, buildWorld());
 
 function inOffice(id = 'trade-test'): GameState {
@@ -79,7 +85,8 @@ function weeks(state: GameState, count: number): GameState {
 
 describe('gravity', () => {
   it('shares the country’s trade out by size and distance', () => {
-    const shares = NATION_TEMPLATES.map((t) => gravityShare(t.key));
+    const world = buildWorld();
+    const shares = world.nations.map((n) => gravityShare(n.key, world));
     expect(shares.reduce((sum, s) => sum + s, 0)).toBeCloseTo(1, 6);
     for (const share of shares) expect(share).toBeGreaterThan(0);
   });
@@ -90,13 +97,15 @@ describe('gravity', () => {
      * in economics and almost never appears in a game. Distance is not a
      * modifier on the relationship; it is most of the relationship.
      */
-    const neighbours = NATION_TEMPLATES.filter((t) => t.neighbour);
-    const distant = NATION_TEMPLATES.filter((t) => !t.neighbour);
+    const world = buildWorld();
+    const neighbours = world.nations.filter((n) => n.neighbour);
+    const distant = world.nations.filter((n) => !n.neighbour);
     expect(neighbours.length).toBeGreaterThan(0);
 
     /* Per unit of economy, a neighbour is worth exactly the gravity factor
        more than a distant country of any size. */
-    const perUnit = (key: NationKey) => gravityShare(key) / findNation(key).economy;
+    const perUnit = (key: NationKey) =>
+      gravityShare(key, world) / nationIn(world, key).economy;
     for (const near of neighbours) {
       for (const far of distant) {
         expect(perUnit(near.key) / perUnit(far.key)).toBeCloseTo(NEIGHBOUR_GRAVITY, 4);
@@ -147,7 +156,7 @@ describe('gravity', () => {
 
 describe('tariffs', () => {
   it('lets an agreement out of the national rate, and a surcharge on top of it', () => {
-    const flow = findFlow(book(), 'astrun');
+    const flow = findFlow(book(), 'united_states');
     expect(effectiveTariff(flow, 0.02, false)).toBeCloseTo(2, 6);
     expect(effectiveTariff(flow, 0.02, true)).toBeCloseTo(0, 6);
     expect(effectiveTariff({ ...flow, surcharge: 15 }, 0.02, true)).toBeCloseTo(15, 6);
@@ -155,7 +164,7 @@ describe('tariffs', () => {
 
   it('shelters one industry and punishes another, never the same one', () => {
     const trade = book();
-    const tariffed = setSurcharge(trade, 'astrun', 20);
+    const tariffed = setSurcharge(trade, 'united_states', 20);
     const effects = tariffEffects(tariffed, 0.02, new Set());
 
     const values = Object.values(effects);
@@ -196,14 +205,14 @@ describe('they answer back, and not immediately', () => {
 
   it('says nothing for six weeks, and then everything at once', () => {
     const { args } = inputs();
-    let trade = setSurcharge(book(), 'astrun', 25);
+    let trade = setSurcharge(book(), 'united_states', 25);
 
     for (let week = 0; week < RETALIATION_DELAY - 1; week += 1) {
       const tick = stepTrade(trade, { ...args, turn: week });
       trade = tick.trade;
       /* Nothing. The announcement has been made and the bill has not come. */
       expect(tick.retaliated).toHaveLength(0);
-      expect(findFlow(trade, 'astrun').theirTariff).toBe(0);
+      expect(findFlow(trade, 'united_states').theirTariff).toBe(0);
     }
 
     const landed = stepTrade(trade, { ...args, turn: RETALIATION_DELAY });
@@ -237,13 +246,13 @@ describe('they answer back, and not immediately', () => {
 
   it('does not answer a tariff coming down', () => {
     const { args } = inputs();
-    const raised = setSurcharge(book(), 'astrun', 20);
-    const lowered = setSurcharge(raised, 'astrun', 0);
+    const raised = setSurcharge(book(), 'united_states', 20);
+    const lowered = setSurcharge(raised, 'united_states', 0);
     /* The clock was already running from the rise. Lowering does not
        restart it, and nothing new is triggered by generosity. */
-    expect(findFlow(lowered, 'astrun').surcharge).toBe(0);
+    expect(findFlow(lowered, 'united_states').surcharge).toBe(0);
 
-    let trade = setSurcharge(book(), 'astrun', 0);
+    let trade = setSurcharge(book(), 'united_states', 0);
     for (let week = 0; week <= RETALIATION_DELAY + 2; week += 1) {
       const tick = stepTrade(trade, { ...args, turn: week });
       trade = tick.trade;
@@ -273,7 +282,7 @@ describe('through the turn engine', () => {
     const state = inOffice();
     const attempt = applyIntent(state, {
       type: 'set_tariff',
-      nation: 'astrun',
+      nation: 'united_states',
       points: SURCHARGE_MAX + 10,
     });
     expect(attempt.error).toBeTruthy();
@@ -288,18 +297,18 @@ describe('through the turn engine', () => {
       trade: {
         ...state.trade,
         flows: state.trade.flows.map((f) =>
-          f.nation === 'astrun' ? { ...f, theirTariff: 12 } : f,
+          f.nation === 'united_states' ? { ...f, theirTariff: 12 } : f,
         ),
       },
       world: {
         ...state.world,
         organisations: state.world.organisations.map((o) =>
-          o.key === 'trade_body' ? { ...o, member: false } : o,
+          o.key === 'wto' ? { ...o, member: false } : o,
         ),
       },
     };
     expect(
-      applyIntent(tariffed, { type: 'file_trade_complaint', nation: 'astrun' }).error,
+      applyIntent(tariffed, { type: 'file_trade_complaint', nation: 'united_states' }).error,
     ).toContain('filed somewhere');
   });
 
@@ -311,25 +320,25 @@ describe('through the turn engine', () => {
       trade: {
         ...state.trade,
         flows: state.trade.flows.map((f) =>
-          f.nation === 'astrun' ? { ...f, theirTariff: 18 } : f,
+          f.nation === 'united_states' ? { ...f, theirTariff: 18 } : f,
         ),
       },
       world: {
         ...state.world,
         organisations: state.world.organisations.map((o) =>
-          o.key === 'trade_body' ? { ...o, member: true } : o,
+          o.key === 'wto' ? { ...o, member: true } : o,
         ),
       },
     };
 
-    const filed = applyIntent(tariffed, { type: 'file_trade_complaint', nation: 'astrun' });
+    const filed = applyIntent(tariffed, { type: 'file_trade_complaint', nation: 'united_states' });
     expect(filed.error).toBeUndefined();
     expect(filed.state.world.reputation).toBeGreaterThan(tariffed.world.reputation);
-    expect(findFlow(filed.state.trade, 'astrun').dispute).toBe('ours');
+    expect(findFlow(filed.state.trade, 'united_states').dispute).toBe('ours');
     /* And it still annoys the country complained about, just less than a
        tariff would have. */
-    const was = tariffed.world.nations.find((n) => n.key === 'astrun')!.relations;
-    expect(filed.state.world.nations.find((n) => n.key === 'astrun')!.relations).toBeLessThan(was);
+    const was = tariffed.world.nations.find((n) => n.key === 'united_states')!.relations;
+    expect(filed.state.world.nations.find((n) => n.key === 'united_states')!.relations).toBeLessThan(was);
   });
 
   it('a trade war, over thirty weeks', () => {
@@ -343,7 +352,7 @@ describe('through the turn engine', () => {
     const controlAt30 = weeks(controlAt6, 24);
 
     let war: GameState = { ...inOffice('trade-war-control'), politicalCapital: 200 };
-    for (const nation of ['astrun', 'ehlas', 'kestran'] as const) {
+    for (const nation of ['united_states', 'russia', 'india'] as const) {
       const result = applyIntent(war, { type: 'set_tariff', nation, points: 25 });
       expect(result.error).toBeUndefined();
       war = { ...result.state, politicalCapital: 200 };

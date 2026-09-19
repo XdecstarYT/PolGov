@@ -20,6 +20,7 @@ import {
   findOrganisation,
 } from '../content/organisations.ts';
 import { NATION_TEMPLATES } from '../content/nations.ts';
+import { GDP_START } from '../balance.ts';
 import { Rng } from '../rng.ts';
 import { buildWorld } from '../systems/diplomacy.ts';
 import {
@@ -90,13 +91,13 @@ describe('the bodies themselves', () => {
 
 describe('what belonging costs', () => {
   it('bills dues every week whether or not the room was used', () => {
-    const tick = stepOrganisations(buildOrganisations());
+    const tick = stepOrganisations(buildOrganisations(), GDP_START);
     expect(tick.dues).toBeGreaterThan(0);
-    expect(tick.dues * TURNS_PER_YEAR).toBeCloseTo(duesTotal(buildOrganisations()), 4);
+    expect(tick.dues * TURNS_PER_YEAR).toBeCloseTo(duesTotal(buildOrganisations(), GDP_START), 4);
   });
 
   it('returns less than it costs in any one week, and compounds', () => {
-    const tick = stepOrganisations(buildOrganisations());
+    const tick = stepOrganisations(buildOrganisations(), GDP_START);
     /* Membership is a long position. A government that joins one to fix
        this year's problem has misunderstood what it bought. */
     expect(tick.influence).toBeLessThan(1);
@@ -105,7 +106,7 @@ describe('what belonging costs', () => {
 
   it('gives a suspended member the obligations and not the benefits', () => {
     const suspended = buildOrganisations().map((o) => ({ ...o, suspended: true }));
-    const tick = stepOrganisations(suspended);
+    const tick = stepOrganisations(suspended, GDP_START);
     expect(tick.dues).toBeGreaterThan(0);
     expect(tick.influence).toBe(0);
     expect(tick.reputation).toBe(0);
@@ -114,7 +115,7 @@ describe('what belonging costs', () => {
 
 describe('getting in', () => {
   it('is decided by the member who likes you least', () => {
-    const council = findOrganisation('council');
+    const council = findOrganisation('security_council');
     const warm = withRelations(world(), 60);
     expect(admissionCheck(council, warm).admissible).toBe(true);
 
@@ -138,7 +139,7 @@ describe('getting in', () => {
       politicalCapital: 100,
       world: withRelations(state.world, -60),
     };
-    const attempt = applyIntent(cold, { type: 'join_organisation', organisation: 'council' });
+    const attempt = applyIntent(cold, { type: 'join_organisation', organisation: 'security_council' });
     expect(attempt.error).toBeTruthy();
     expect(attempt.state).toBe(cold);
   });
@@ -150,11 +151,11 @@ describe('getting in', () => {
       politicalCapital: 100,
       world: withRelations(state.world, 70),
     };
-    const joined = applyIntent(warm, { type: 'join_organisation', organisation: 'council' });
+    const joined = applyIntent(warm, { type: 'join_organisation', organisation: 'security_council' });
     expect(joined.error).toBeUndefined();
-    expect(isMember(joined.state.world.organisations, 'council')).toBe(true);
-    expect(duesTotal(joined.state.world.organisations)).toBeGreaterThan(
-      duesTotal(warm.world.organisations),
+    expect(isMember(joined.state.world.organisations, 'security_council')).toBe(true);
+    expect(duesTotal(joined.state.world.organisations, GDP_START)).toBeGreaterThan(
+      duesTotal(warm.world.organisations, GDP_START),
     );
     expect(joined.state.politicalCapital).toBeLessThan(warm.politicalCapital);
   });
@@ -164,14 +165,14 @@ describe('getting out', () => {
   it('is read by every government, not by the body left', () => {
     const state = inOffice();
     const before = state.world.reputation;
-    const left = applyIntent(state, { type: 'leave_organisation', organisation: 'assembly' });
+    const left = applyIntent(state, { type: 'leave_organisation', organisation: 'un' });
 
     expect(left.error).toBeUndefined();
-    expect(isMember(left.state.world.organisations, 'assembly')).toBe(false);
+    expect(isMember(left.state.world.organisations, 'un')).toBe(false);
     expect(left.state.world.reputation).toBeCloseTo(before + WITHDRAWAL_REPUTATION, 4);
 
     /* And every member of the room takes it personally. */
-    const members = findOrganisation('assembly').members;
+    const members = findOrganisation('un').members;
     for (const key of members) {
       const was = state.world.nations.find((n) => n.key === key)!.relations;
       const now = left.state.world.nations.find((n) => n.key === key)!.relations;
@@ -181,9 +182,9 @@ describe('getting out', () => {
 
   it('stops the dues immediately', () => {
     const state = inOffice();
-    const left = applyIntent(state, { type: 'leave_organisation', organisation: 'assembly' });
-    expect(duesTotal(left.state.world.organisations)).toBeLessThan(
-      duesTotal(state.world.organisations),
+    const left = applyIntent(state, { type: 'leave_organisation', organisation: 'un' });
+    expect(duesTotal(left.state.world.organisations, GDP_START)).toBeLessThan(
+      duesTotal(state.world.organisations, GDP_START),
     );
   });
 });
@@ -245,7 +246,7 @@ describe('the vote', () => {
   });
 
   it('lets one permanent member stop what the room wants', () => {
-    const council = findOrganisation('council');
+    const council = findOrganisation('security_council');
     const template = RESOLUTION_TEMPLATES.find((r) => r.kind === 'peacekeeping')!;
 
     /* Everybody warm except one of the three who can stop it alone. */
@@ -265,15 +266,15 @@ describe('the vote', () => {
   });
 
   it('asks an assembly for two thirds and a council for a majority', () => {
-    const assembly = RESOLUTION_TEMPLATES.find((r) => r.organisation === 'assembly')!;
-    const council = RESOLUTION_TEMPLATES.find((r) => r.organisation === 'council')!;
+    const assembly = RESOLUTION_TEMPLATES.find((r) => r.organisation === 'un')!;
+    const council = RESOLUTION_TEMPLATES.find((r) => r.organisation === 'security_council')!;
     expect(countTheRoom(assembly, world(), null).threshold).toBeCloseTo(2 / 3, 4);
     expect(countTheRoom(council, world(), null).threshold).toBeCloseTo(0.5, 4);
   });
 
   it('does not ask a state to condemn itself, or its bloc to do it', () => {
     const template = RESOLUTION_TEMPLATES.find((r) => r.kind === 'condemnation')!;
-    const named = findOrganisation('assembly').members[0]!;
+    const named = findOrganisation('un').members[0]!;
     const warm = withRelations(world(), 70);
 
     const itself = leanOf(named, template, warm, named);
@@ -306,7 +307,7 @@ describe('the vote', () => {
 describe('putting one', () => {
   it('cannot be done in a room the country is not in', () => {
     const state = inOffice();
-    expect(isMember(state.world.organisations, 'council')).toBe(false);
+    expect(isMember(state.world.organisations, 'security_council')).toBe(false);
     const attempt = applyIntent(state, { type: 'propose_resolution', kind: 'peacekeeping' });
     expect(attempt.error).toContain('no seat');
   });
@@ -373,7 +374,7 @@ describe('putting one', () => {
       politicalCapital: 100,
       world: withRelations(state.world, 85),
     };
-    const target = findOrganisation('assembly').members[2]!;
+    const target = findOrganisation('un').members[2]!;
     const put = applyIntent(warm, {
       type: 'propose_resolution',
       kind: 'condemnation',

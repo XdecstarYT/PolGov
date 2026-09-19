@@ -47,11 +47,12 @@ import type { NationState, TreatyKind, World } from '../types.ts';
 
 const centrist = makeIdeology(0, 0, 0);
 const industries = buildIndustries();
+const GDP = 3680;
 
 function run(months: number, ideology = centrist, from = buildWorld()): World {
   let world = from;
   for (let t = 1; t <= months; t += 1) {
-    world = stepWorld(world, { playerIdeology: ideology, industries, turn: t }).world;
+    world = stepWorld(world, { playerIdeology: ideology, industries, gdp: GDP, turn: t }).world;
   }
   return world;
 }
@@ -60,12 +61,52 @@ const nationIn = (world: World, key: string): NationState =>
   world.nations.find((n) => n.key === key)!;
 
 describe('the world as inherited', () => {
-  it('has twelve countries, none of them real', () => {
-    expect(NATION_TEMPLATES).toHaveLength(12);
+  it('is the real world, plus one invented country to learn in', () => {
+    /*
+     * Thirty-six real states and Verdana. Every figure in the table is an
+     * approximation of a real one — output, population, debt, what a
+     * country sells — and nothing in it is a named living person, because
+     * a run lasts sixteen years and incumbents do not.
+     */
+    expect(NATION_TEMPLATES.length).toBeGreaterThan(30);
     for (const template of NATION_TEMPLATES) {
       expect(template.name.length).toBeGreaterThan(2);
       expect(template.power).toBeGreaterThan(0);
+      expect(template.gdp).toBeGreaterThan(0);
+      expect(template.population).toBeGreaterThan(0);
+      expect(template.institutions).toContain('un');
     }
+
+    /* The invented one is in the table and out of everybody's world, which
+       is how a fictional state coexists with real ones. */
+    const invented = NATION_TEMPLATES.filter((t) => t.region === 'nowhere');
+    expect(invented).toHaveLength(1);
+    expect(invented[0]!.key).toBe('verdana');
+    expect(buildWorld().nations.some((n) => n.key === 'verdana')).toBe(false);
+  });
+
+  it('is playable from more than one capital', () => {
+    /*
+     * The property the whole split exists for. Every relational figure is
+     * computed from the capital the question is asked in, so the same
+     * table reads correctly from either end of a relationship.
+     */
+    const fromVerdana = buildWorld('verdana');
+    const fromJapan = buildWorld('japan');
+
+    expect(fromJapan.nations.some((n) => n.key === 'verdana')).toBe(false);
+    expect(fromJapan.nations.some((n) => n.key === 'japan')).toBe(false);
+    expect(fromVerdana.nations.some((n) => n.key === 'japan')).toBe(true);
+
+    /* Japan borders nobody and Germany borders several, so the neighbour
+       count is a fact about the capital rather than about the table. */
+    expect(nationIn(fromVerdana, 'germany').neighbour).toBe(true);
+    expect(fromJapan.nations.filter((n) => n.neighbour)).toHaveLength(0);
+    expect(buildWorld('germany').nations.filter((n) => n.neighbour).length).toBeGreaterThan(2);
+
+    /* And the economies are measured against whoever is asking. */
+    expect(nationIn(buildWorld('united_states'), 'canada').economy).toBeLessThan(0.2);
+    expect(nationIn(buildWorld('canada'), 'united_states').economy).toBeGreaterThan(5);
   });
 
   it('starts with friends the player did not make and quarrels they did not start', () => {
@@ -102,17 +143,17 @@ describe('the world as inherited', () => {
 
 describe('the asymmetry', () => {
   it('makes a large country’s opinion worth more', () => {
-    const astrun = findNation('astrun');
-    const holm = findNation('holm');
+    const astrun = findNation('united_states');
+    const holm = findNation('new_zealand');
     expect(leverage(astrun)).toBeGreaterThan(leverage(holm) * 4);
   });
 
   it('scales every act by who it is aimed at', () => {
     const world = buildWorld();
-    const toAstrun = applyDiplomaticAct(nationIn(world, 'astrun'), 10, findNation('astrun'));
-    const toHolm = applyDiplomaticAct(nationIn(world, 'holm'), 10, findNation('holm'));
-    const gainAstrun = toAstrun.relations - nationIn(world, 'astrun').relations;
-    const gainHolm = toHolm.relations - nationIn(world, 'holm').relations;
+    const toAstrun = applyDiplomaticAct(nationIn(world, 'united_states'), 10, findNation('united_states'));
+    const toHolm = applyDiplomaticAct(nationIn(world, 'new_zealand'), 10, findNation('new_zealand'));
+    const gainAstrun = toAstrun.relations - nationIn(world, 'united_states').relations;
+    const gainHolm = toHolm.relations - nationIn(world, 'new_zealand').relations;
     /* Being heard by the powerful is expensive, and being principled
        cheaply is only available with the small. */
     expect(gainAstrun).toBeGreaterThan(gainHolm * 1.8);
@@ -124,13 +165,13 @@ describe('the asymmetry', () => {
     const warmSmall = run(1, centrist, {
       ...buildWorld(),
       nations: buildWorld().nations.map((n) =>
-        n.key === 'holm' ? { ...n, relations: 100 } : n.key === 'astrun' ? { ...n, relations: -100 } : n,
+        n.key === 'new_zealand' ? { ...n, relations: 100 } : n.key === 'united_states' ? { ...n, relations: -100 } : n,
       ),
     });
     const warmLarge = run(1, centrist, {
       ...buildWorld(),
       nations: buildWorld().nations.map((n) =>
-        n.key === 'holm' ? { ...n, relations: -100 } : n.key === 'astrun' ? { ...n, relations: 100 } : n,
+        n.key === 'new_zealand' ? { ...n, relations: -100 } : n.key === 'united_states' ? { ...n, relations: 100 } : n,
       ),
     });
     const standingOf = (w: World) => w.history[w.history.length - 1]!.standing;
@@ -151,36 +192,36 @@ describe('the asymmetry', () => {
 describe('where relations naturally sit', () => {
   it('makes a shared worldview cheap to maintain and an opposite one dear', () => {
     const world = buildWorld();
-    const kestran = findNation('kestran');
-    const market = naturalRelations(kestran, kestran.ideology, nationIn(world, 'kestran'));
+    const kestran = findNation('india');
+    const market = naturalRelations(kestran, kestran.ideology, nationIn(world, 'india'));
     const opposite = naturalRelations(
       kestran,
       makeIdeology(-kestran.ideology.economic, -kestran.ideology.social, -kestran.ideology.environmental),
-      nationIn(world, 'kestran'),
+      nationIn(world, 'india'),
     );
     expect(market).toBeGreaterThan(opposite);
   });
 
   it('holds neighbours slightly against you, because neighbours argue', () => {
     const world = buildWorld();
-    const neighbourly = NATION_TEMPLATES.filter((t) => t.neighbour);
+    const neighbourly = world.nations.filter((n) => n.neighbour);
     expect(neighbourly.length).toBeGreaterThan(1);
-    for (const template of neighbourly) {
-      const asNeighbour = naturalRelations(template, template.ideology, nationIn(world, template.key));
-      const asDistant = naturalRelations(
-        { ...template, neighbour: false },
-        template.ideology,
-        nationIn(world, template.key),
-      );
+    for (const nation of neighbourly) {
+      const template = findNation(nation.key);
+      const asNeighbour = naturalRelations(template, template.ideology, nation);
+      const asDistant = naturalRelations(template, template.ideology, {
+        ...nation,
+        neighbour: false,
+      });
       expect(asNeighbour).toBeLessThan(asDistant);
     }
   });
 
   it('drifts toward it slowly, over years rather than months', () => {
     const ideology = makeIdeology(0.7, -0.3, -0.5);
-    const oneYear = nationIn(run(12, ideology), 'ehlas').relations;
-    const tenYears = nationIn(run(120, ideology), 'ehlas').relations;
-    const start = nationIn(buildWorld(), 'ehlas').relations;
+    const oneYear = nationIn(run(12, ideology), 'russia').relations;
+    const tenYears = nationIn(run(120, ideology), 'russia').relations;
+    const start = nationIn(buildWorld(), 'russia').relations;
     expect(Math.abs(oneYear - start)).toBeLessThan(Math.abs(tenYears - start));
   });
 
@@ -202,17 +243,17 @@ describe('embassies', () => {
     const hostileIdeology = makeIdeology(-1, -1, -1);
     const withMission = run(60, hostileIdeology, {
       ...base,
-      nations: base.nations.map((n) => (n.key === 'kestran' ? { ...n, embassy: true } : n)),
+      nations: base.nations.map((n) => (n.key === 'india' ? { ...n, embassy: true } : n)),
     });
     const without = run(60, hostileIdeology, {
       ...base,
-      nations: base.nations.map((n) => (n.key === 'kestran' ? { ...n, embassy: false } : n)),
+      nations: base.nations.map((n) => (n.key === 'india' ? { ...n, embassy: false } : n)),
     });
-    const start = nationIn(base, 'kestran').relations;
+    const start = nationIn(base, 'india').relations;
     /* Both fall. The one with a mission falls less far. */
-    expect(nationIn(withMission, 'kestran').relations).toBeLessThan(start);
-    expect(nationIn(withMission, 'kestran').relations).toBeGreaterThan(
-      nationIn(without, 'kestran').relations,
+    expect(nationIn(withMission, 'india').relations).toBeLessThan(start);
+    expect(nationIn(withMission, 'india').relations).toBeGreaterThan(
+      nationIn(without, 'india').relations,
     );
   });
 
@@ -221,17 +262,17 @@ describe('embassies', () => {
     const fresh = run(2, centrist, {
       ...base,
       nations: base.nations.map((n) =>
-        n.key === 'garda' ? { ...n, embassy: true, ambassadorMonths: 0 } : n,
+        n.key === 'iran' ? { ...n, embassy: true, ambassadorMonths: 0 } : n,
       ),
     });
     const settled = run(2, centrist, {
       ...base,
       nations: base.nations.map((n) =>
-        n.key === 'garda' ? { ...n, embassy: true, ambassadorMonths: 30 } : n,
+        n.key === 'iran' ? { ...n, embassy: true, ambassadorMonths: 30 } : n,
       ),
     });
-    expect(nationIn(settled, 'garda').relations).toBeGreaterThan(
-      nationIn(fresh, 'garda').relations,
+    expect(nationIn(settled, 'iran').relations).toBeGreaterThan(
+      nationIn(fresh, 'iran').relations,
     );
   });
 });
@@ -264,14 +305,14 @@ describe('treaties are commitments', () => {
   });
 
   it('are refused by a government whose word is not good', () => {
-    const nation: NationState = { ...nationIn(buildWorld(), 'jorvik'), relations: 45 };
+    const nation: NationState = { ...nationIn(buildWorld(), 'japan'), relations: 45 };
     expect(willSign(nation, 'partnership', 80)).toBe(true);
     expect(willSign(nation, 'partnership', 20)).toBe(false);
   });
 
   it('are refused by anyone under sanction, at any relations', () => {
     const nation: NationState = {
-      ...nationIn(buildWorld(), 'dunmarch'),
+      ...nationIn(buildWorld(), 'ireland'),
       relations: 95,
       sanctioned: true,
     };
@@ -279,33 +320,37 @@ describe('treaties are commitments', () => {
   });
 
   it('bind the country to somebody else’s war, when that is what was signed', () => {
+    /* Australia is one of the four the country already has something in
+       writing with, so a new pact sits on top of an inherited one — which
+       is the position every incoming government is actually in. */
     const world = buildWorld();
-    expect(boundToDefend(world, 'holm')).toBe(false);
+    expect(boundToDefend(world, 'australia')).toBe(false);
+    expect(treatiesWith(world, 'australia')).toHaveLength(1);
     const bound: World = {
       ...world,
       treaties: [
         ...world.treaties,
         {
-          id: 'md-holm',
+          id: 'md-australia',
           kind: 'mutual_defence',
-          parties: ['holm'],
+          parties: ['australia'],
           signedTurn: 1,
           signedTerm: 1,
-          obligation: obligationOf('mutual_defence', 'Holm'),
+          obligation: obligationOf('mutual_defence', 'Australia'),
           dividend: 0.5,
         },
       ],
     };
-    expect(boundToDefend(bound, 'holm')).toBe(true);
-    expect(treatiesWith(bound, 'holm')).toHaveLength(2);
+    expect(boundToDefend(bound, 'australia')).toBe(true);
+    expect(treatiesWith(bound, 'australia')).toHaveLength(2);
   });
 
   it('pay a standing dividend while they hold', () => {
     const world = buildWorld();
     const withTreaty = run(24, centrist, world);
     const stripped = run(24, centrist, { ...world, treaties: [] });
-    expect(nationIn(withTreaty, 'belhaven').relations).toBeGreaterThan(
-      nationIn(stripped, 'belhaven').relations,
+    expect(nationIn(withTreaty, 'germany').relations).toBeGreaterThan(
+      nationIn(stripped, 'germany').relations,
     );
   });
 });
@@ -356,7 +401,7 @@ describe('standing and influence', () => {
   });
 
   it('holds a summit only once in a while', () => {
-    const nation = nationIn(buildWorld(), 'jorvik');
+    const nation = nationIn(buildWorld(), 'japan');
     expect(canSummit(nation, 10)).toBe(true);
     const recent = { ...nation, lastSummitTurn: 10 };
     expect(canSummit(recent, 10 + SUMMIT_COOLDOWN - 1)).toBe(false);
@@ -364,7 +409,7 @@ describe('standing and influence', () => {
   });
 
   it('will not sit down with a country under sanction', () => {
-    const nation = { ...nationIn(buildWorld(), 'jorvik'), sanctioned: true };
+    const nation = { ...nationIn(buildWorld(), 'japan'), sanctioned: true };
     expect(canSummit(nation, 100)).toBe(false);
   });
 

@@ -104,13 +104,13 @@ export function buildTrade(
  * reliably predictive things in economics. A neighbour trades far more than
  * its size implies, and there is no policy that changes that.
  */
-export function gravityShare(key: NationKey): number {
-  const weights = NATION_TEMPLATES.map((t) => ({
-    key: t.key,
-    weight: t.economy * (t.neighbour ? NEIGHBOUR_GRAVITY : 1),
+export function gravityShare(key: NationKey, world: World): number {
+  const weights = world.nations.map((n) => ({
+    key: n.key,
+    weight: n.economy * (n.neighbour ? NEIGHBOUR_GRAVITY : 1),
   }));
   const total = weights.reduce((sum, w) => sum + w.weight, 0);
-  return (weights.find((w) => w.key === key)?.weight ?? 0) / total;
+  return total > 0 ? (weights.find((w) => w.key === key)?.weight ?? 0) / total : 0;
 }
 
 export function findFlow(trade: Trade, key: NationKey): TradeFlow {
@@ -177,13 +177,12 @@ export function importExposures(trade: Trade, world: World): {
 
   return trade.flows
     .map((flow) => {
-      const template = findNation(flow.nation);
-      const relations = world.nations.find((n) => n.key === flow.nation)?.relations ?? 0;
+      const nation = world.nations.find((n) => n.key === flow.nation);
       return {
         nation: flow.nation,
         share: flow.imports / total,
-        industries: template.sells,
-        hostile: relations < -20,
+        industries: nation?.sells ?? [],
+        hostile: (nation?.relations ?? 0) < -20,
       };
     })
     .filter((e) => e.share > 0.12)
@@ -304,7 +303,7 @@ export function naturalFlow(
   inputs: TradeInputs,
 ): { exports: number; imports: number } {
   const nation = inputs.world.nations.find((n) => n.key === flow.nation);
-  const share = gravityShare(flow.nation);
+  const share = gravityShare(flow.nation, inputs.world);
   const gdp = inputs.economy.gdp;
 
   /* Relations move trade at the margin — a quarter either way at the

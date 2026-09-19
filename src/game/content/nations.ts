@@ -1,312 +1,162 @@
 /**
- * nations.ts — the twelve countries that are not yours.
+ * nations.ts — the world, seen from wherever the player happens to be.
  *
- * Every one is invented, as Verdana is. None of them is a stand-in for a
- * real state, and none of the arrangements between them maps onto a real
- * alliance, dispute or war. That is not squeamishness: a game that let a
- * player rehearse a real conflict with real names would be making an
- * argument about that conflict whether it meant to or not, and this game
- * makes no arguments. What it models is the SHAPE of international
- * relations — that power is unevenly distributed, that trade and security
- * pull in different directions, that a neighbour's domestic politics is
- * your problem — and those shapes are general.
+ * This used to be twelve invented countries with their relationships to one
+ * fixed capital written into the table. It is now an adapter over
+ * `world/countries.ts`, which holds real modern states, and
+ * `world/derive.ts`, which works out the relational half from whichever
+ * country the player is governing.
  *
- * Each nation carries the handful of attributes everything else reads:
+ * The split matters. What is true about a country regardless of who is
+ * asking — its output, its people, what it sells, who it borders, which
+ * institutions it belongs to — lives in the table and is read the same way
+ * by everybody. What is only true from somewhere — who is a neighbour, who
+ * trades with whom, who starts warm — is computed per run and stored in the
+ * game state, because the player picks which capital they are sitting in
+ * and every relationship has to read correctly from either end.
  *
- *   power      relative weight in the world. A large neighbour's opinion
- *              costs more to ignore than a small one's, and the whole
- *              asymmetry of diplomacy falls out of this one number.
- *   ideology   the same three axes the domestic parties use, so a
- *              government's own position makes some partners natural and
- *              others expensive.
- *   posture    how it behaves — what it wants and how it pursues it.
- *   trade      what it buys and what it sells, wired to the industries of
- *              Engine 2D, so a trade decision is an industrial one.
- *
- * The starting relations are a world already in progress. The player
- * inherits alliances they did not make and quarrels they did not start,
- * because every government does.
+ * On what is deliberately absent: there are no named living politicians
+ * anywhere in this file or downstream of it. Offices, not people. That is
+ * partly because putting invented words in a real, named, living person's
+ * mouth is a different thing from modelling a country, and partly for a
+ * plainer reason — a run lasts sixteen years, incumbents last four, and a
+ * game pinned to whoever held office the week it was written is wrong by
+ * its second year.
  */
 
-import type { Ideology } from '../types.ts';
-import { makeIdeology } from '../ideology.ts';
+import {
+  ALIGNMENT_LABELS,
+  COUNTRY_TEMPLATES,
+  INSTITUTION_LABELS,
+  POSTURE_LABELS,
+  REGION_LABELS,
+  findCountry,
+  playableCountries,
+  type Alignment,
+  type CountryKey,
+  type CountryTemplate,
+  type InstitutionKey,
+  type Posture,
+  type WorldRegion,
+} from './world/countries.ts';
+import {
+  betweenThem,
+  buysFrom,
+  economyOf,
+  inheritedTreaty,
+  powerOf,
+  sameRegion,
+  sellsTo,
+  shareBorder,
+  startingRelations,
+  worldFrom,
+  type ForeignCountry,
+} from './world/derive.ts';
 import type { IndustryKey } from './industries.ts';
+import type { Ideology } from '../types.ts';
 
-export type NationKey =
-  | 'astrun'
-  | 'belhaven'
-  | 'corvane'
-  | 'dunmarch'
-  | 'ehlas'
-  | 'fenwick'
-  | 'garda'
-  | 'holm'
-  | 'iskerry'
-  | 'jorvik'
-  | 'kestran'
-  | 'lorne';
+export type NationKey = CountryKey;
+export type NationBloc = Alignment;
+export type { Posture };
 
 /**
- * How a nation conducts itself.
+ * What every system reads about a country.
  *
- * Descriptive rather than evaluative: an assertive state is not a villain
- * and a mercantile one is not a friend. Each posture simply changes which
- * approaches work and what the state will ask for in return.
+ * Everything here is absolute — true of the country whoever is looking at
+ * it. The relational figures a previous version kept alongside these have
+ * moved into `NationState`, where they belong, because they depend on which
+ * capital the question is being asked from.
  */
-export type Posture =
-  | 'assertive'
-  | 'mercantile'
-  | 'institutional'
-  | 'guarded'
-  | 'aligned'
-  | 'volatile';
-
-export type NationBloc = 'northern' | 'meridian' | 'southern' | 'unaligned';
-
 export interface NationTemplate {
   key: NationKey;
   name: string;
-  /** Adjective form, for prose. */
   demonym: string;
   blurb: string;
+  region: WorldRegion;
   bloc: NationBloc;
   posture: Posture;
-  /** Relative weight in the world, roughly 0.2 to 3. Verdana is 1. */
+  /** Weight in the world, on an absolute scale. Roughly 0.4 to 6. */
   power: number;
-  /** Economy size relative to Verdana's. */
-  economy: number;
-  /** Where it sits on the same three axes the domestic parties use. */
+  /** Nominal output, USD bn, mid-2020s and approximate. */
+  gdp: number;
+  /** Population, millions. */
+  population: number;
   ideology: Ideology;
-  /** Whether the two countries share a border. Neighbours are unavoidable. */
-  neighbour: boolean;
-  /** Industries it buys from Verdana. */
-  buys: IndustryKey[];
-  /** Industries it sells to Verdana, and which it therefore competes with. */
-  sells: IndustryKey[];
-  /** Relations as inherited, −100 hostile to +100 allied. */
-  startingRelations: number;
-  /** True if the two countries already hold a treaty of some kind. */
-  inheritedTreaty?: 'trade' | 'defence' | 'non_aggression' | 'partnership';
+  /** What it mainly sells and buys, in the industry vocabulary. */
+  exports: IndustryKey[];
+  imports: IndustryKey[];
+  institutions: InstitutionKey[];
+  veto: boolean;
+  deterrent: boolean;
 }
 
-export const NATION_TEMPLATES: NationTemplate[] = [
-  {
-    key: 'astrun',
-    name: 'Astrun',
-    demonym: 'Astrunic',
-    blurb:
-      'The largest economy on the continent and the one that sets the terms. Polite about it, and immovable.',
-    bloc: 'northern',
-    posture: 'assertive',
-    power: 2.8,
-    economy: 3.1,
-    ideology: makeIdeology(0.55, -0.1, -0.2),
-    neighbour: false,
-    buys: ['mining', 'agriculture', 'energy'],
-    sells: ['manufacturing', 'technology', 'finance'],
-    startingRelations: 25,
-    inheritedTreaty: 'trade',
-  },
-  {
-    key: 'belhaven',
-    name: 'Belhaven',
-    demonym: 'Belhavener',
-    blurb:
-      'Across the strait, and on the telephone about something most weeks. Half the trade and all of the friction.',
-    bloc: 'northern',
-    posture: 'mercantile',
-    power: 1.4,
-    economy: 1.6,
-    ideology: makeIdeology(0.4, 0.3, 0.1),
-    neighbour: true,
-    buys: ['manufacturing', 'finance', 'tourism', 'fisheries'],
-    sells: ['technology', 'entertainment', 'logistics'],
-    startingRelations: 48,
-    inheritedTreaty: 'trade',
-  },
-  {
-    key: 'corvane',
-    name: 'Corvane',
-    demonym: 'Corvanish',
-    blurb:
-      'Shares the northern land border and most of the watershed. Every argument about water is really about something else.',
-    bloc: 'unaligned',
-    posture: 'guarded',
-    power: 0.9,
-    economy: 0.7,
-    ideology: makeIdeology(-0.35, -0.4, 0.15),
-    neighbour: true,
-    buys: ['agriculture', 'transport', 'healthcare'],
-    sells: ['mining', 'forestry', 'energy'],
-    startingRelations: -12,
-  },
-  {
-    key: 'dunmarch',
-    name: 'Dunmarch',
-    demonym: 'Dunmarcher',
-    blurb:
-      'Small, wealthy, institutional, and on every committee that matters. Punches far above its weight in rooms.',
-    bloc: 'northern',
-    posture: 'institutional',
-    power: 0.6,
-    economy: 0.9,
-    ideology: makeIdeology(0.1, 0.65, 0.6),
-    neighbour: false,
-    buys: ['technology', 'research', 'finance'],
-    sells: ['finance', 'research', 'healthcare'],
-    startingRelations: 55,
-    inheritedTreaty: 'partnership',
-  },
-  {
-    key: 'ehlas',
-    name: 'Ehlas',
-    demonym: 'Ehlan',
-    blurb:
-      'The old rival to the south. Two centuries of quarrels, none of them currently active, all of them remembered.',
-    bloc: 'southern',
-    posture: 'assertive',
-    power: 1.9,
-    economy: 1.7,
-    ideology: makeIdeology(-0.2, -0.55, -0.3),
-    neighbour: true,
-    buys: ['energy', 'defence'],
-    sells: ['agriculture', 'manufacturing', 'mining'],
-    startingRelations: -34,
-  },
-  {
-    key: 'fenwick',
-    name: 'Fenwick',
-    demonym: 'Fenwick',
-    blurb:
-      'A federation of islands with a merchant fleet out of all proportion to its population.',
-    bloc: 'unaligned',
-    posture: 'mercantile',
-    power: 0.5,
-    economy: 0.6,
-    ideology: makeIdeology(0.6, 0.35, 0.05),
-    neighbour: false,
-    buys: ['fisheries', 'logistics', 'tourism'],
-    sells: ['logistics', 'transport'],
-    startingRelations: 18,
-  },
-  {
-    key: 'garda',
-    name: 'Garda',
-    demonym: 'Gardan',
-    blurb:
-      'Resource-rich, institutionally thin, and courted by everyone for the same reason.',
-    bloc: 'southern',
-    posture: 'volatile',
-    power: 0.8,
-    economy: 0.5,
-    ideology: makeIdeology(-0.5, -0.2, -0.45),
-    neighbour: false,
-    buys: ['healthcare', 'education', 'construction'],
-    sells: ['mining', 'energy', 'agriculture'],
-    startingRelations: 4,
-  },
-  {
-    key: 'holm',
-    name: 'Holm',
-    demonym: 'Holmish',
-    blurb:
-      'Cold, small, and entirely dependent on the shipping lanes it sits beside. Aligned by geography rather than by choice.',
-    bloc: 'northern',
-    posture: 'aligned',
-    power: 0.4,
-    economy: 0.4,
-    ideology: makeIdeology(0.15, 0.4, 0.5),
-    neighbour: false,
-    buys: ['manufacturing', 'energy', 'healthcare'],
-    sells: ['fisheries', 'renewables' as IndustryKey],
-    startingRelations: 62,
-    inheritedTreaty: 'defence',
-  },
-  {
-    key: 'iskerry',
-    name: 'Iskerry',
-    demonym: 'Iskerran',
-    blurb:
-      'Newly independent, loudly unaligned, and determined to be taken seriously by people who do not.',
-    bloc: 'unaligned',
-    posture: 'volatile',
-    power: 0.35,
-    economy: 0.3,
-    ideology: makeIdeology(-0.6, 0.2, 0.3),
-    neighbour: false,
-    buys: ['education', 'construction', 'telecoms'],
-    sells: ['agriculture', 'tourism'],
-    startingRelations: -6,
-  },
-  {
-    key: 'jorvik',
-    name: 'Jorvik',
-    demonym: 'Jorvish',
-    blurb:
-      'A parliamentary republic with an unusually long memory and an unusually short patience for lectures.',
-    bloc: 'meridian',
-    posture: 'institutional',
-    power: 1.1,
-    economy: 1.2,
-    ideology: makeIdeology(-0.15, 0.5, 0.45),
-    neighbour: false,
-    buys: ['technology', 'research', 'manufacturing'],
-    sells: ['manufacturing', 'education', 'entertainment'],
-    startingRelations: 33,
-  },
-  {
-    key: 'kestran',
-    name: 'Kestran',
-    demonym: 'Kestrani',
-    blurb:
-      'The southern bloc’s industrial centre. Sells to everyone, trusts nobody, and is rarely wrong to.',
-    bloc: 'southern',
-    posture: 'mercantile',
-    power: 1.6,
-    economy: 1.9,
-    ideology: makeIdeology(0.7, -0.3, -0.5),
-    neighbour: false,
-    buys: ['mining', 'energy', 'agriculture'],
-    sells: ['manufacturing', 'logistics', 'construction'],
-    startingRelations: -8,
-  },
-  {
-    key: 'lorne',
-    name: 'Lorne',
-    demonym: 'Lornish',
-    blurb:
-      'The near neighbour nobody worries about, which is exactly why the border commission has met forty times.',
-    bloc: 'meridian',
-    posture: 'guarded',
-    power: 0.55,
-    economy: 0.45,
-    ideology: makeIdeology(-0.25, -0.15, 0.2),
-    neighbour: true,
-    buys: ['transport', 'retail', 'construction'],
-    sells: ['agriculture', 'forestry', 'fisheries'],
-    startingRelations: 21,
-    inheritedTreaty: 'non_aggression',
-  },
-];
+function adapt(country: CountryTemplate): NationTemplate {
+  return {
+    key: country.key,
+    name: country.name,
+    demonym: country.demonym,
+    blurb: country.blurb,
+    region: country.region,
+    bloc: country.alignment,
+    posture: country.posture,
+    power: powerOf(country),
+    gdp: country.gdp,
+    population: country.population,
+    ideology: country.ideology,
+    exports: country.exports,
+    imports: country.imports,
+    institutions: country.institutions,
+    veto: Boolean(country.veto),
+    deterrent: Boolean(country.deterrent),
+  };
+}
+
+/**
+ * Every state in the world, the invented one included.
+ *
+ * Read by anything that needs a name, a weight or a disposition. Anything
+ * that needs a RELATIONSHIP reads the game state instead, because a
+ * relationship has two ends and this list has none.
+ */
+export const NATION_TEMPLATES: NationTemplate[] = COUNTRY_TEMPLATES.map(adapt);
 
 export function findNation(key: NationKey): NationTemplate {
   const found = NATION_TEMPLATES.find((n) => n.key === key);
-  if (!found) throw new Error(`nations: unknown nation ${key}`);
+  if (!found) throw new Error(`nations: unknown country ${key}`);
   return found;
 }
 
-export const BLOC_LABELS: Record<NationBloc, string> = {
-  northern: 'Northern bloc',
-  meridian: 'Meridian group',
-  southern: 'Southern bloc',
-  unaligned: 'Unaligned',
-};
+/** Everybody except the country being governed. */
+export function foreignNations(player: NationKey): NationTemplate[] {
+  return NATION_TEMPLATES.filter((n) => n.key !== player && n.region !== 'nowhere');
+}
 
-export const POSTURE_LABELS: Record<Posture, string> = {
-  assertive: 'Assertive',
-  mercantile: 'Mercantile',
-  institutional: 'Institutional',
-  guarded: 'Guarded',
-  aligned: 'Aligned',
-  volatile: 'Volatile',
+/**
+ * The alignment labels under the name the rest of the engine knows them by.
+ *
+ * "Bloc" is what this game has always called the question of who a country
+ * lines up with, and the real-world table calls it alignment. Same thing,
+ * one alias, rather than a rename that would touch every panel.
+ */
+export const BLOC_LABELS = ALIGNMENT_LABELS;
+
+export {
+  ALIGNMENT_LABELS,
+  POSTURE_LABELS,
+  COUNTRY_TEMPLATES,
+  INSTITUTION_LABELS,
+  REGION_LABELS,
+  betweenThem,
+  buysFrom,
+  economyOf,
+  findCountry,
+  inheritedTreaty,
+  playableCountries,
+  powerOf,
+  sameRegion,
+  sellsTo,
+  shareBorder,
+  startingRelations,
+  worldFrom,
 };
+export type { CountryKey, CountryTemplate, ForeignCountry, InstitutionKey, WorldRegion };

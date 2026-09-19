@@ -24,7 +24,6 @@ import {
   describeWorld,
   findGlobalEvent,
   findNation,
-  findPair,
   liveWars,
   TURNS_PER_YEAR,
 } from '../../game/index.ts';
@@ -174,7 +173,6 @@ export function GlobalPanel() {
           These move on their own, slowly, for reasons no briefing captures. Over a run they
           redraw the map — and every treaty, every vote and every balance of force is read off
           the map as it is rather than as it was when the government took office.
-          {findPair(world.pairs, 'astrun', 'ehlas') && ''}
         </p>
       </Panel>
     </div>

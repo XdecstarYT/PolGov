@@ -25,10 +25,26 @@ things the player *did* control.
 
 ## Diplomacy (1–20)
 
-Twelve countries, each with a bloc, a posture, a weight, an economy, a set of
-industries it buys and sells, and whether it shares a border. Relations drift
-toward what ideology, geography and trade imply; an embassy does not improve
-them, it slows their decay.
+Thirty-six real modern states, plus one invented country to learn the
+machinery in. Each carries what is true about it regardless of who is asking
+— output, population, debt, defence burden, the industries it sells and buys,
+who it borders, which institutions it belongs to — and every figure is an
+approximation of a real one.
+
+The *relational* half is computed rather than stored, because it is only ever
+true from somewhere. Who counts as a neighbour, whose economy is larger than
+yours, who buys what you sell, who starts out warm: all of it is worked out
+from the capital the player is sitting in, which is the property that makes
+the same table playable from any of them. A border reads the same from both
+sides; an economy does not, and should not.
+
+Nothing in the table is a named living politician. Offices, not people —
+partly because putting invented words in a real person's mouth is a different
+thing from modelling a country, and partly because a run lasts sixteen years
+and incumbents do not.
+
+Relations drift toward what ideology, geography, institutions and trade imply;
+an embassy does not improve them, it slows their decay.
 
 Reputation is earned by keeping agreements and lost by breaking them, and it
 is read by *every* country rather than the one that was let down — which is
@@ -36,23 +52,32 @@ why withdrawing from a treaty is expensive in a way the other signatory never
 has to enforce.
 
 Everything is scaled by how much the other country's opinion is worth. A
-protest to Astrun is a diplomatic event; a protest to Holm is a letter. That
-asymmetry is not a puzzle with a solution; it is the position the country is
-in.
+protest to Washington is a diplomatic event; a protest to Wellington is a
+letter. That asymmetry is not a puzzle with a solution; it is the position a
+middling country is in.
 
 ## International organisations (21–40)
 
-Seven bodies. Membership costs dues every week whether or not the room was
-used, returns less than it costs in any single week and more over a term, and
-constrains what the government may do. Admission is by consent, so the test is
-the member who likes you least rather than the average of the room.
+Fourteen real bodies — the General Assembly, the Security Council, the ICC,
+the WTO, the IMF and the World Bank, NATO, the EU, the G7 and G20, BRICS,
+OPEC, the African Union and ASEAN. Nobody writes the membership lists: each
+room is filled from the country table, so adding a state to the world puts it
+in the right rooms and the two can never disagree.
+
+Dues are assessed as a share of output rather than a flat sum, which is how
+every one of these bodies actually bills and why the same membership is a
+rounding error for one member and a line the finance ministry argues about for
+another. They are payable every week whether or not the room was used, return
+less than they cost in any single week and more over a term, and constrain
+what the government may do. Admission is by consent, so the test is the member
+who likes you least rather than the average of the room.
 
 **You may put a resolution; you may not pass one.** Every member votes its own
 interests and each vote comes back with its reason, so a loss tells the player
 which relationships they did not build. An assembly wants two thirds of those
 voting; a room that declines to have an opinion defeats a resolution rather
-than waving it through. Three permanent members hold a veto and Verdana is not
-one of them.
+than waving it through. Five permanent members hold a veto on the Council and
+most countries are not one of them.
 
 ## Trade (41–60)
 

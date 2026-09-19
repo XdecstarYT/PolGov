@@ -57,6 +57,11 @@ import {
   type NationKey,
   type NationTemplate,
 } from '../content/nations.ts';
+import {
+  worldFrom,
+  type ForeignCountry,
+} from '../content/world/derive.ts';
+import type { CountryKey } from '../content/world/countries.ts';
 import { affinity } from '../ideology.ts';
 import { buildOrganisations, stepOrganisations } from './organisations.ts';
 import { buildPairs } from './worldSim.ts';
@@ -85,40 +90,51 @@ export const clampRelations = (v: number) => clamp(v, RELATIONS_MIN, RELATIONS_M
  * relations are not already hostile, which is roughly how real diplomatic
  * networks look and means the player begins with something to lose.
  */
-export function buildWorld(): World {
-  const nations: NationState[] = NATION_TEMPLATES.map((template) => ({
-    key: template.key,
-    relations: template.startingRelations,
-    embassy: template.startingRelations > -25,
-    ambassadorMonths: template.startingRelations > 0 ? 24 : null,
+export const DEFAULT_PLAYER_COUNTRY: CountryKey = 'verdana';
+
+export function buildWorld(player: CountryKey = DEFAULT_PLAYER_COUNTRY): World {
+  /* Every relational figure below is computed from the player's capital
+     rather than read off a table, which is what makes the same world
+     playable from any of its capitals. */
+  const foreign = worldFrom(player);
+
+  const nations: NationState[] = foreign.map((f) => ({
+    key: f.key,
+    relations: f.startingRelations,
+    embassy: f.startingRelations > -25,
+    ambassadorMonths: f.startingRelations > 0 ? 24 : null,
     recognised: true,
     lastSummitTurn: null,
     sanctioned: false,
-    tradeDependence: dependenceOn(template, 'theirs'),
-    ourDependence: dependenceOn(template, 'ours'),
+    tradeDependence: dependenceOn(f, 'theirs'),
+    ourDependence: dependenceOn(f, 'ours'),
     /* Live from here on. Countries rise, fall, and change what they are. */
-    power: template.power,
-    posture: template.posture,
+    power: f.power,
+    posture: findNation(f.key).posture,
+    neighbour: f.neighbour,
+    economy: f.economy,
+    buys: f.buys,
+    sells: f.sells,
   }));
 
-  const treaties: Treaty[] = NATION_TEMPLATES.filter((t) => t.inheritedTreaty).map(
-    (template, i) => ({
-      id: `inherited-${template.key}`,
-      kind: template.inheritedTreaty as TreatyKind,
-      parties: [template.key],
+  const treaties: Treaty[] = foreign
+    .filter((f) => f.inheritedTreaty)
+    .map((f, i) => ({
+      id: `inherited-${f.key}`,
+      kind: f.inheritedTreaty as TreatyKind,
+      parties: [f.key],
       signedTurn: -(12 * (i + 2)),
       signedTerm: 0,
-      obligation: inheritedObligation(template),
+      obligation: inheritedObligation(f),
       dividend: 0.25,
-    }),
-  );
+    }));
 
   return {
     nations,
     treaties,
     /* Somebody joined these before the player was born, and somebody
        declined the ones the country is not in. Both are inherited. */
-    organisations: buildOrganisations(),
+    organisations: buildOrganisations(player),
     resolutions: [],
     /* And the half of the world that is not about this one: who else gets
        on with whom, who is already fighting, and what is going wrong
@@ -133,16 +149,17 @@ export function buildWorld(): World {
   };
 }
 
-function inheritedObligation(template: NationTemplate): string {
-  switch (template.inheritedTreaty) {
+function inheritedObligation(f: ForeignCountry): string {
+  const name = findNation(f.key).name;
+  switch (f.inheritedTreaty) {
     case 'trade':
-      return `Preferential terms with ${template.name}, signed by a previous government.`;
+      return `Preferential terms with ${name}, signed by a previous government.`;
     case 'defence':
-      return `Consultation and basing rights with ${template.name}. Inherited, and load-bearing.`;
+      return `Consultation and basing rights with ${name}. Inherited, and load-bearing.`;
     case 'non_aggression':
-      return `Neither party will use force against the other. ${template.name} has kept it so far.`;
+      return `Neither party will use force against the other. ${name} has kept it so far.`;
     default:
-      return `A standing partnership with ${template.name}, renewed without discussion for years.`;
+      return `A standing partnership with ${name}, renewed without discussion for years.`;
   }
 }
 
@@ -154,13 +171,13 @@ function inheritedObligation(template: NationTemplate): string {
  * precision — it is that the number is DIFFERENT in each direction, so a
  * player can tell leverage from exposure before deciding which they have.
  */
-function dependenceOn(template: NationTemplate, side: 'ours' | 'theirs'): number {
-  const links = template.buys.length + template.sells.length;
+function dependenceOn(f: ForeignCountry, side: 'ours' | 'theirs'): number {
+  const links = f.buys.length + f.sells.length;
   const base = clamp(links / 14, 0.05, 0.6);
   /* The smaller economy depends more on the relationship. Always. */
   return side === 'theirs'
-    ? clamp(base * (1 / Math.max(0.3, template.economy)), 0.02, 0.85)
-    : clamp(base * Math.min(1.4, template.economy), 0.02, 0.85);
+    ? clamp(base * (1 / Math.max(0.3, f.economy)), 0.02, 0.85)
+    : clamp(base * Math.min(1.4, f.economy), 0.02, 0.85);
 }
 
 /* ------------------------------------------------------------------ *
@@ -183,7 +200,7 @@ export function naturalRelations(
   const fit = affinity(playerIdeology, template.ideology);
   return clampRelations(
     fit * RELATIONS_IDEOLOGY_WEIGHT +
-      (template.neighbour ? RELATIONS_NEIGHBOUR_PENALTY : 0) +
+      (nation.neighbour ? RELATIONS_NEIGHBOUR_PENALTY : 0) +
       nation.tradeDependence * RELATIONS_TRADE_WEIGHT,
   );
 }
@@ -289,6 +306,8 @@ export interface DiplomacyInputs {
   playerIdeology: Ideology;
   /** The industries, for the trade dependence that holds relations up. */
   industries: readonly IndustryState[];
+  /** Output, because assessed contributions scale with the ability to pay. */
+  gdp: number;
   turn: number;
 }
 
@@ -353,7 +372,7 @@ export function stepWorld(world: World, inputs: DiplomacyInputs): WorldTick {
    * small per week and compounds over a term, which is the honest shape of
    * multilateralism: nothing a government joins helps it this year.
    */
-  const bodies = stepOrganisations(world.organisations);
+  const bodies = stepOrganisations(world.organisations, inputs.gdp);
 
   /* Influence: what the country can actually get done in a room. Built from
      standing, reputation, the agreements it is part of, and the rooms it is

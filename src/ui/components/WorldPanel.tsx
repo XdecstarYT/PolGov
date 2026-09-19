@@ -130,7 +130,7 @@ export function WorldPanel() {
                   </span>
                   <span className="text-[0.7rem] text-ink-faint">
                     {BLOC_LABELS[template.bloc]} · {POSTURE_LABELS[template.posture]}
-                    {template.neighbour && ' · neighbour'}
+                    {nation.neighbour && ' · neighbour'}
                   </span>
                 </span>
                 <span className="flex items-baseline gap-3 text-xs">

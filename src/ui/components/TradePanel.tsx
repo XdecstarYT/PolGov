@@ -32,6 +32,7 @@ import {
   netExports,
   totalExports,
   totalImports,
+  type IndustryKey,
   type NationKey,
 } from '../../game/index.ts';
 import { Button, EmptyNote, Kicker, Panel, Stat, Tag, money } from './Primitives.tsx';
@@ -132,6 +133,7 @@ export function TradePanel() {
         <ul className="divide-y divide-rule">
           {ordered.map((flow) => {
             const template = findNation(flow.nation);
+            const nation = game.world.nations.find((n) => n.key === flow.nation);
             const hasAgreement = agreements.has(flow.nation);
             const ours = effectiveTariff(flow, nationalRate, hasAgreement);
             const isOpen = open === flow.nation;
@@ -172,8 +174,9 @@ export function TradePanel() {
                 {isOpen && (
                   <div className="ml-5 mt-3 space-y-3">
                     <p className="text-xs leading-relaxed text-ink-faint">
-                      They buy {template.buys.map((k) => findIndustry(k).name).join(', ')} and sell
-                      us {template.sells.map((k) => findIndustry(k).name).join(', ')}.
+                      They buy {(nation?.buys ?? []).map((k: IndustryKey) => findIndustry(k).name).join(', ')}{' '}
+                      and sell us{' '}
+                      {(nation?.sells ?? []).map((k: IndustryKey) => findIndustry(k).name).join(', ')}.
                       {hasAgreement
                         ? ' An agreement holds, so the national rate does not apply to them.'
                         : ` The national rate of ${(nationalRate * 100).toFixed(1)}% applies.`}
@@ -219,7 +222,7 @@ export function TradePanel() {
                       {flow.theirTariff >= 1 && flow.dispute !== 'ours' && (
                         <Button
                           disabled={
-                            !isMember(game.world.organisations, 'trade_body') ||
+                            !isMember(game.world.organisations, 'wto') ||
                             game.politicalCapital < TRADE_COMPLAINT_PC_COST
                           }
                           onClick={() =>

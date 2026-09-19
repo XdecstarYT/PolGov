@@ -60,7 +60,7 @@ function sample(
   let error = 0;
 
   for (let i = 0; i < draws; i += 1) {
-    const a = assess(subject, 'ehlas', intel, world, military, [], 1, new Rng(i + 1));
+    const a = assess(subject, 'russia', intel, world, military, [], 1, new Rng(i + 1));
     const off = Math.abs(a.estimate - a.truth);
     error += off;
     if (off >= 18) wrong += 1;
@@ -186,7 +186,7 @@ describe('the confidence on the paper', () => {
   });
 
   it('can be marked right or wrong, but only later', () => {
-    const a = assess('capability', 'ehlas', excellent(), world, military, [], 1, new Rng(5));
+    const a = assess('capability', 'russia', excellent(), world, military, [], 1, new Rng(5));
     expect(a.verdict).toBe('unknown');
 
     const sound = judge(a, a.estimate + 2);
@@ -199,7 +199,7 @@ describe('the confidence on the paper', () => {
 
   it('adds up to a track record a player can read back', () => {
     expect(trackRecord([])).toBeNull();
-    const base = assess('capability', 'ehlas', excellent(), world, military, [], 1, new Rng(5));
+    const base = assess('capability', 'russia', excellent(), world, military, [], 1, new Rng(5));
     const record = trackRecord([
       { ...base, verdict: 'sound' },
       { ...base, id: 'b', verdict: 'sound' },
@@ -238,7 +238,7 @@ describe('operations', () => {
 
   it('can fail and surface at the same time, which nobody plans for', () => {
     /* Rolled separately on purpose: the worst outcome has to be reachable. */
-    let intel = launch(buildIntelligence(), 'sabotage', 'ehlas', 1);
+    let intel = launch(buildIntelligence(), 'sabotage', 'russia', 1);
     const template = findOperation('sabotage');
     let sawExposed = false;
     let sawFailed = false;
@@ -267,7 +267,7 @@ describe('operations', () => {
 
   it('fix the exposure risk at launch, so a successor pays for it', () => {
     const careless: Intelligence = { ...buildIntelligence(), oversight: 5 };
-    const launched = launch(careless, 'intercept', 'ehlas', 10);
+    const launched = launch(careless, 'intercept', 'russia', 10);
     const operation = launched.operations[0]!;
     /* The number travels with the operation. Tightening oversight later
        does not un-authorise what is already running. */
@@ -313,7 +313,7 @@ describe('the week', () => {
   });
 
   it('marks old assessments once the answer is visible', () => {
-    const a = assess('capability', 'ehlas', excellent(), world, military, [], 1, new Rng(5));
+    const a = assess('capability', 'russia', excellent(), world, military, [], 1, new Rng(5));
     const intel: Intelligence = { ...buildIntelligence(), assessments: [a] };
     const early = stepIntelligence(intel, {
       cover: 1,
@@ -371,14 +371,14 @@ describe('through the turn engine', () => {
     const first = applyIntent(state, {
       type: 'commission_assessment',
       subject: 'intentions',
-      nation: 'ehlas',
+      nation: 'russia',
     });
     expect(first.error).toBeUndefined();
     expect(first.state.intelligence.assessments).toHaveLength(1);
 
     const again = applyIntent(
       { ...first.state, politicalCapital: 200 },
-      { type: 'commission_assessment', subject: 'intentions', nation: 'ehlas' },
+      { type: 'commission_assessment', subject: 'intentions', nation: 'russia' },
     );
     expect(again.error).toContain('same');
   });
@@ -388,7 +388,7 @@ describe('through the turn engine', () => {
     const result = applyIntent(state, {
       type: 'commission_assessment',
       subject: 'programme',
-      nation: 'astrun',
+      nation: 'united_states',
     });
     const assessment = result.state.intelligence.assessments[0]!;
     const entry = result.state.logs
@@ -433,7 +433,7 @@ describe('through the turn engine', () => {
 
   it('knows the truth it is estimating, so the estimate has something to be wrong about', () => {
     for (const template of SUBJECT_TEMPLATES) {
-      const truth = truthOf(template.key, 'ehlas', world, military, []);
+      const truth = truthOf(template.key, 'russia', world, military, []);
       expect(truth).toBeGreaterThanOrEqual(0);
       expect(truth).toBeLessThanOrEqual(100);
     }

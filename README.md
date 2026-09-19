@@ -1,8 +1,10 @@
 # Statecraft
 
-A turn-based political simulation set in the fictional parliamentary democracy
-of **Verdana**. You lead a party: win elections, form a government, hold a
-coalition together, pass an agenda, and manage a budget that will not balance.
+A turn-based political simulation set in a parliamentary democracy inside the
+real modern world. You lead a party: win elections, form a government, hold a
+coalition together, pass an agenda, and manage a budget that will not balance
+— with thirty-six real states outside the window, in the alliances, trade
+blocs and institutions they are actually in.
 
 The fantasy is the desk, not the battlefield. Each week you read a briefing,
 make three to six consequential decisions, and press **END TURN** to watch the
@@ -158,10 +160,16 @@ docs/ENGINE-3.md   World and geopolitics: the same, for everything outside.
 
 **The world**
 
+- **Real countries, real rooms.** Thirty-six modern states with their own
+  output, industries, borders and memberships, and fourteen real institutions
+  — the UN, the Security Council, the ICC, the WTO, NATO, the EU, the G7 and
+  G20, BRICS, OPEC, the African Union, ASEAN and the two banks. Every
+  relational figure is computed from the capital you govern, so the same
+  world reads correctly from any of them.
 - **Rooms where nobody is in charge.** You may put a resolution; you may not
-  pass one. Twelve governments vote their own interests and each vote comes
-  back with its reason, so a loss tells you which relationships you did not
-  build. Three permanent members hold a veto and Verdana is not one of them.
+  pass one. Every member votes its own interests and each vote comes back
+  with its reason, so a loss tells you which relationships you did not build.
+  Five permanent members hold a veto and most countries are not one of them.
 - **Trade.** Gravity rather than goodwill: size and distance decide most of it
   and policy moves the margin. A tariff shelters one region and is paid at
   every till, and the partner answers six weeks later — long after the
@@ -263,9 +271,20 @@ finished balance pass. The ones most worth revisiting first:
 
 ## Content
 
-Verdana, its parties, its politicians, its press and its crises are entirely
-invented. No real country, party, person, publication or event appears
-anywhere in the game, in hardcoded content or in anything the AI generates.
+The countries are real; the people are not.
+
+The world table holds thirty-six real modern states with approximate real
+figures — output, population, debt, defence burden, the industries they trade,
+who they border, which institutions they belong to. It holds no named living
+politician, no real political party, no real publication and no real event,
+and neither does anything the AI generates. Offices, not people: partly
+because putting invented words in a real person's mouth is a different thing
+from modelling a country, and partly because a run lasts sixteen years and
+incumbents do not.
+
+The parties, politicians, press and crises inside the country you govern are
+entirely invented, and Verdana — a fictional mid-sized democracy — remains in
+the roster as the one place with nothing real to get wrong.
 
 Policy is written in the abstract, and every bill has a real benefit against a
 real cost — the `tradeoff` field is required on every one. The ideology axes

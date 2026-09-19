@@ -75,16 +75,16 @@ function simulate(
 
 describe('countries have relationships with each other', () => {
   it('reads a pair the same way round either way', () => {
-    expect(pairKey('astrun', 'holm')).toBe(pairKey('holm', 'astrun'));
+    expect(pairKey('united_states', 'new_zealand')).toBe(pairKey('new_zealand', 'united_states'));
   });
 
   it('puts bloc first, because alignment predicts more than anything else', () => {
-    const sameBloc = NATION_TEMPLATES.filter((n) => n.bloc === 'northern');
+    const sameBloc = NATION_TEMPLATES.filter((n) => n.bloc === 'western');
     expect(sameBloc.length).toBeGreaterThan(1);
     const within = naturalPair(sameBloc[0]!.key, sameBloc[1]!.key);
 
     const other = NATION_TEMPLATES.find(
-      (n) => n.bloc !== 'northern' && n.bloc !== 'unaligned',
+      (n) => n.bloc !== 'western' && n.bloc !== 'non_aligned',
     )!;
     const across = naturalPair(sameBloc[0]!.key, other.key);
     expect(within).toBeGreaterThan(across);
@@ -104,9 +104,9 @@ describe('countries have relationships with each other', () => {
 
   it('names who counts as a friend, for the votes that turn on it', () => {
     const pairs = buildPairs().map((p) => ({ ...p, standing: 70 }));
-    const allies = alliesOf(pairs, 'astrun');
+    const allies = alliesOf(pairs, 'united_states');
     expect(allies.length).toBeGreaterThan(0);
-    expect(allies).not.toContain('astrun');
+    expect(allies).not.toContain('united_states');
   });
 
   it('drifts slowly, because nothing this government does is driving them', () => {
@@ -198,21 +198,40 @@ describe('things that were not aimed here', () => {
     expect(silent.length).toBeGreaterThan(2);
   });
 
-  it('arrives at about one a year and never more than three at once', () => {
-    const run = simulate(TURNS_PER_YEAR * 16, 11);
-    const started = run.events.length;
-    expect(started).toBeGreaterThan(6);
+  it('arrives a few times a decade, and never more than three at once', () => {
+    /*
+     * A rate, not a count. One seed of a stochastic process says nothing —
+     * an earlier version of this test asserted a threshold that one seed
+     * happened to clear, which is a test of the seed. Five runs of sixteen
+     * years measure the distribution instead.
+     *
+     * The band matters both ways. Too few and the world outside is
+     * scenery; too many and there is always something running, which is
+     * the failure this system was rebalanced to fix — a permanent
+     * emergency reads as no emergency at all.
+     */
+    const seeds = [3, 5, 7, 11, 13];
+    const counts = seeds.map((seed) => simulate(TURNS_PER_YEAR * 16, seed, 45).events.length);
+    const mean = counts.reduce((sum, c) => sum + c, 0) / counts.length;
+
+    expect(mean).toBeGreaterThan(2);
+    expect(mean).toBeLessThan(12);
+    /* And no run of sixteen years passes without the world doing anything. */
+    for (const count of counts) expect(count).toBeGreaterThan(0);
     expect(GLOBAL_EVENT_BASE_RISK).toBeLessThan(0.05);
 
     /* Three at once is the cap, so a bad year is bad and not absurd. */
-    let mostAtOnce = 0;
-    for (let week = 1; week <= TURNS_PER_YEAR * 16; week += 1) {
-      const live = run.events.filter(
-        (e) => e.startedTurn <= week && week < e.startedTurn + findGlobalEvent(e.key).weeks,
-      ).length;
-      mostAtOnce = Math.max(mostAtOnce, live);
+    for (const seed of seeds) {
+      const run = simulate(TURNS_PER_YEAR * 16, seed, 45);
+      let mostAtOnce = 0;
+      for (let week = 1; week <= TURNS_PER_YEAR * 16; week += 1) {
+        const live = run.events.filter(
+          (e) => e.startedTurn <= week && week < e.startedTurn + findGlobalEvent(e.key).weeks,
+        ).length;
+        mostAtOnce = Math.max(mostAtOnce, live);
+      }
+      expect(mostAtOnce).toBeLessThanOrEqual(3);
     }
-    expect(mostAtOnce).toBeLessThanOrEqual(3);
   });
 
   it('sums through channels that already exist', () => {
@@ -271,17 +290,29 @@ describe('sixteen years of it', () => {
      * account for it.
      */
     const start = buildPairs();
-    const end = simulate(TURNS_PER_YEAR * 16, 5, 55);
+    const seeds = [3, 5, 7];
 
-    const moved = end.pairs.filter((pair) => {
-      const before = findPair(start, pair.a, pair.b)!;
-      return Math.abs(pair.standing - before.standing) > 8;
-    });
-    expect(moved.length).toBeGreaterThan(0);
+    let reports = 0;
+    let events = 0;
+    for (const seed of seeds) {
+      const end = simulate(TURNS_PER_YEAR * 16, seed, 55);
 
-    /* And things happened, to people who never mentioned this country. */
-    expect(end.reports.length).toBeGreaterThan(3);
-    expect(end.events.length).toBeGreaterThan(3);
+      /* Every run redraws the map, whatever else it does or does not do. */
+      const moved = end.pairs.filter((pair) => {
+        const before = findPair(start, pair.a, pair.b)!;
+        return Math.abs(pair.standing - before.standing) > 8;
+      });
+      expect(moved.length).toBeGreaterThan(0);
+
+      reports += end.reports.length;
+      events += end.events.length;
+    }
+
+    /* And things happened, to people who never mentioned this country.
+       Summed across seeds, because a quiet sixteen years is a legitimate
+       outcome and a quiet half-century is not. */
+    expect(reports).toBeGreaterThan(seeds.length);
+    expect(events).toBeGreaterThan(seeds.length);
   });
 });
 
@@ -339,14 +370,14 @@ describe('through the turn engine', () => {
     expect(quiet.length).toBeGreaterThan(0);
 
     const war: ForeignWar = {
-      a: 'astrun',
-      b: 'ehlas',
+      a: 'united_states',
+      b: 'russia',
       since: 1,
       expected: 100,
       ended: false,
       endedTurn: null,
     };
-    expect(describeWorld([war], [], 50)).toContain(findNation('astrun').name);
+    expect(describeWorld([war], [], 50)).toContain(findNation('united_states').name);
     expect(describeWorld([war], [], 50)).toContain('Nobody here voted on it');
   });
 });

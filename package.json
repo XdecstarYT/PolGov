@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "A turn-based political simulation set in the fictional parliamentary democracy of Verdana.",
+  "description": "A turn-based political simulation: a parliamentary democracy inside the real modern world.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

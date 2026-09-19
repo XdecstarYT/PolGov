@@ -22,6 +22,7 @@ import {
   admissionCheck,
   countTheRoom,
   describeOutcome,
+  duesOf,
   findNation,
   findOrganisation,
   isMember,
@@ -94,7 +95,7 @@ export function OrganisationsPanel() {
                       <Tag tone="warn">{template.vetoHolders.length} vetoes</Tag>
                     )}
                     {state.member ? <Tag tone="gain">member</Tag> : <Tag>outside</Tag>}
-                    <span className="tnum text-xs text-ink-soft">{money(template.dues)}/yr</span>
+                    <span className="tnum text-xs text-ink-soft">{money(duesOf(template.key, game.economy.gdp))}/yr</span>
                   </span>
                 </button>
 

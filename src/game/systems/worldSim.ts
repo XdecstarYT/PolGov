@@ -38,6 +38,7 @@ import {
   POWER_DRIFT_RATE,
   TURNS_PER_YEAR,
 } from '../balance.ts';
+import { shareBorder } from '../content/world/derive.ts';
 import {
   GLOBAL_EVENT_TEMPLATES,
   findGlobalEvent,
@@ -90,12 +91,14 @@ export function naturalPair(
   const second = { ...otherTemplate, posture: live?.get(b) ?? otherTemplate.posture };
 
   let standing = 0;
-  if (first.bloc === second.bloc && first.bloc !== 'unaligned') standing += 38;
-  else if (first.bloc !== 'unaligned' && second.bloc !== 'unaligned') standing -= 22;
+  if (first.bloc === second.bloc && first.bloc !== 'non_aligned') standing += 38;
+  else if (first.bloc !== 'non_aligned' && second.bloc !== 'non_aligned') standing -= 22;
 
   /* Neighbours trade most and fight most. Both are true and the second is
-     what makes a border a fact about a relationship rather than a map. */
-  if (first.neighbour && second.neighbour) standing -= 8;
+     what makes a border a fact about a relationship rather than a map.
+     Asked of the border itself rather than of either country's view of the
+     player, so that two foreign countries can be compared without one. */
+  if (shareBorder(a, b)) standing -= 8;
 
   const distance =
     Math.abs(first.ideology.economic - second.ideology.economic) +

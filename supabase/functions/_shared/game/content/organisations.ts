@@ -1,34 +1,39 @@
 /**
  * organisations.ts — the rooms where nobody is in charge.
  *
- * The mechanic these exist for is the vote you cannot control.
+ * Real institutions, named as they are: the General Assembly, the Security
+ * Council, the International Court, the WTO, NATO, the European Union and
+ * the development banks. Membership is not written here — it is read off
+ * `world/countries.ts`, where each state carries the list of what it
+ * belongs to, so adding a country to the world puts it in the right rooms
+ * without anybody editing a second file.
  *
- * A player can propose a resolution. They cannot pass it. Every other member
- * votes by its own interests — its bloc, its trade, its relations with the
- * proposer, its view of the question — and a government that has not spent
- * the preceding years building relationships will find that being right is
- * not sufficient and is sometimes not even relevant. That is what
- * multilateralism is, and a game that let the player simply buy outcomes in
- * these rooms would be modelling something else.
+ * The mechanic these exist for is the vote the player cannot control.
  *
- * The second mechanic is the veto. One member of the Council can stop
- * anything, and Verdana is not one of them. A great deal of a middling
- * country's foreign policy is finding out what can be done without the
- * permission of people who will not give it.
+ * A government can propose a resolution. It cannot pass one. Every other
+ * member votes by its own interests — its alignment, its trade, its
+ * relations with the proposer, its view of the question — and a government
+ * that has not spent the preceding years building relationships will find
+ * that being right is not sufficient and is sometimes not relevant. That is
+ * what multilateralism is, and a game that let the player simply buy
+ * outcomes in these rooms would be modelling something else.
+ *
+ * The second mechanic is the veto. Five states hold a permanent seat on the
+ * Council and can stop anything on their own. Most countries are not one of
+ * them, and a great deal of a middling power's foreign policy is finding
+ * out what can be done without the permission of people who will not give
+ * it.
  *
  * Membership costs money and constrains action. It is not a bonus.
  */
 
+import {
+  COUNTRY_TEMPLATES,
+  type InstitutionKey,
+} from './world/countries.ts';
 import type { NationKey } from './nations.ts';
 
-export type OrganisationKey =
-  | 'assembly'
-  | 'council'
-  | 'court'
-  | 'trade_body'
-  | 'northern_pact'
-  | 'meridian_union'
-  | 'development_bank';
+export type OrganisationKey = InstitutionKey;
 
 export type OrganisationKind =
   | 'general_assembly'
@@ -37,7 +42,8 @@ export type OrganisationKind =
   | 'trade_organisation'
   | 'defence_alliance'
   | 'economic_union'
-  | 'development_bank';
+  | 'development_bank'
+  | 'forum';
 
 export interface OrganisationTemplate {
   key: OrganisationKey;
@@ -46,163 +52,306 @@ export interface OrganisationTemplate {
   blurb: string;
   /** What belonging actually obliges — stated, not implied. */
   obligation: string;
-  /** Founding members other than Verdana. */
-  members: NationKey[];
   /** Members who can stop anything on their own. */
   vetoHolders: NationKey[];
-  /** Does Verdana begin inside it? */
-  memberAtStart: boolean;
-  /** ₡bn a year in dues. */
-  dues: number;
+  /**
+   * Who is in the room.
+   *
+   * Derived from the country table at module load rather than written
+   * here, so adding a state to the world puts it in the right rooms
+   * without anybody remembering to edit a second file.
+   */
+  members: NationKey[];
+  /** USD bn a year in dues and assessed contributions, as a share of output. */
+  duesShare: number;
   /** Political capital to apply for membership. */
   applicationCost: number;
   /** Relations with every member required before an application is heard. */
   entryRelations: number;
-  /** What it does for the country while it is a member. */
+  /** What it does for a member while it is one. */
   benefit: {
-    /** Points of influence a month. */
     influence?: number;
-    /** Points of reputation a month. */
     reputation?: number;
-    /** ₡bn a year of concessional finance. */
     finance?: number;
-    /** Points of tension it takes out of the world a month. */
     stability?: number;
   };
+  /** Whether a country can apply at all, or is only admitted by geography. */
+  open: boolean;
 }
 
-export const ORGANISATION_TEMPLATES: OrganisationTemplate[] = [
+/** The five permanent members, which is a fact rather than a judgement. */
+const PERMANENT: NationKey[] = [
+  'united_states',
+  'united_kingdom',
+  'france',
+  'russia',
+  'china',
+];
+
+const ORGANISATION_BASE: Omit<OrganisationTemplate, 'members'>[] = [
   {
-    key: 'assembly',
-    name: 'Assembly of States',
+    key: 'un',
+    name: 'United Nations General Assembly',
     kind: 'general_assembly',
     blurb:
-      'Every recognised state, one vote each, and a great deal of speaking. The only room where Holm and Astrun are formally equal.',
+      'Every recognised state, one vote each, and a great deal of speaking. The only room where the largest and the smallest are formally equal.',
     obligation:
-      'Attendance, dues, and a vote on every question — including the ones where abstaining costs more than either side.',
-    members: [
-      'astrun',
-      'belhaven',
-      'corvane',
-      'dunmarch',
-      'ehlas',
-      'fenwick',
-      'garda',
-      'holm',
-      'iskerry',
-      'jorvik',
-      'kestran',
-      'lorne',
-    ],
+      'Dues, attendance, and a vote on every question — including the ones where abstaining costs more than either side.',
     vetoHolders: [],
-    memberAtStart: true,
-    dues: 9.6,
+    duesShare: 0.00261,
     applicationCost: 6,
     entryRelations: -100,
     benefit: { influence: 0.12, reputation: 0.04 },
+    open: true,
   },
   {
-    key: 'council',
-    name: 'Standing Council',
+    key: 'security_council',
+    name: 'UN Security Council',
     kind: 'security_council',
     blurb:
-      'Fifteen seats, four permanent, and a veto. Verdana has never held one of the four and is unlikely to.',
+      'Fifteen seats, five permanent, and a veto. Resolutions here bind in a way nothing else does, and any one of the five can stop all of it.',
     obligation:
       'A rotating seat, if elected. Resolutions bind members, and any permanent member can stop anything.',
-    members: ['astrun', 'ehlas', 'kestran', 'jorvik', 'belhaven', 'dunmarch'],
-    vetoHolders: ['astrun', 'ehlas', 'kestran'],
-    memberAtStart: false,
-    dues: 16.8,
+    vetoHolders: PERMANENT,
+    duesShare: 0.00457,
     applicationCost: 20,
     entryRelations: 25,
     benefit: { influence: 0.55, stability: 0.06 },
+    open: false,
   },
   {
-    key: 'court',
-    name: 'International Court',
+    key: 'icc',
+    name: 'International Criminal Court',
     kind: 'international_court',
     blurb:
-      'Adjudicates disputes between states that have agreed in advance to be bound by the answer.',
+      'Tries individuals for the gravest offences, where the state of nationality will not. Several of the largest powers have never joined.',
     obligation:
-      'Jurisdiction accepted in advance. You will lose a case at some point and will have to comply anyway.',
-    members: ['dunmarch', 'jorvik', 'holm', 'belhaven', 'lorne', 'fenwick'],
+      'Jurisdiction accepted in advance. Some case will eventually concern your own nationals, and the obligation does not have an exception for that.',
     vetoHolders: [],
-    memberAtStart: true,
-    dues: 4.8,
+    duesShare: 0.0013,
     applicationCost: 10,
     entryRelations: 0,
     benefit: { reputation: 0.16, stability: 0.03 },
+    open: true,
   },
   {
-    key: 'trade_body',
-    name: 'Commercial Convention',
+    key: 'wto',
+    name: 'World Trade Organization',
     kind: 'trade_organisation',
     blurb:
-      'Sets the rules on tariffs and settles the arguments about them. Membership is mostly about the arguments.',
+      'Sets the ceilings everybody is bound by and hears the disputes. Whoever exports most has the most to say about what the rules are.',
     obligation:
-      'Tariff ceilings, notified changes, and a dispute procedure you do not control the timing of.',
-    members: ['astrun', 'belhaven', 'dunmarch', 'fenwick', 'jorvik', 'kestran', 'holm'],
+      'Bound tariff ceilings, most-favoured-nation treatment, and a dispute process whose findings you will sometimes lose.',
     vetoHolders: [],
-    memberAtStart: true,
-    dues: 7.2,
+    duesShare: 0.00196,
     applicationCost: 12,
-    entryRelations: 10,
-    benefit: { influence: 0.18, finance: 4.8 },
+    entryRelations: -20,
+    benefit: { influence: 0.18, finance: 0 },
+    open: true,
   },
   {
-    key: 'northern_pact',
-    name: 'Northern Pact',
+    key: 'nato',
+    name: 'NATO',
     kind: 'defence_alliance',
     blurb:
-      'Collective defence among the northern states. Joining is a decision about who your enemies are.',
+      'An attack on one is an attack on all, which is the shortest and most consequential sentence in international law.',
     obligation:
-      'An attack on any member is an attack on all. Also: their quarrels become your agenda, permanently.',
-    members: ['astrun', 'belhaven', 'dunmarch', 'holm'],
-    vetoHolders: ['astrun'],
-    memberAtStart: false,
-    dues: 26.4,
-    applicationCost: 24,
-    entryRelations: 45,
-    benefit: { influence: 0.35, stability: 0.1 },
+      'Mutual defence, a spending target most members have missed for most of the alliance\u2019s history, and forces committed where the alliance decides rather than where you would.',
+    vetoHolders: [],
+    duesShare: 0.00717,
+    applicationCost: 26,
+    entryRelations: 35,
+    benefit: { influence: 0.3, stability: 0.08 },
+    open: true,
   },
   {
-    key: 'meridian_union',
-    name: 'Meridian Economic Union',
+    key: 'eu',
+    name: 'European Union',
     kind: 'economic_union',
     blurb:
-      'A customs union with a common external tariff and a standing argument about who sets it.',
+      'A single market, a shared body of law and a budget. The deepest thing any set of states has agreed to do together, and the hardest to leave.',
     obligation:
-      'A common external tariff you no longer set alone, and rules you did not write on most of what you make.',
-    members: ['jorvik', 'lorne', 'fenwick', 'iskerry'],
+      'Common external tariffs, free movement, a very large body of law adopted rather than negotiated, and a net contribution if you are wealthy.',
     vetoHolders: [],
-    memberAtStart: false,
-    dues: 21.6,
-    applicationCost: 20,
-    entryRelations: 30,
-    benefit: { finance: 19.2, influence: 0.14 },
+    duesShare: 0.00587,
+    applicationCost: 34,
+    entryRelations: 45,
+    benefit: { influence: 0.34, finance: 6, stability: 0.05 },
+    open: true,
   },
   {
-    key: 'development_bank',
-    name: 'Development Bank',
+    key: 'imf',
+    name: 'International Monetary Fund',
     kind: 'development_bank',
     blurb:
-      'Lends to members below the market rate, on conditions the borrower does not set.',
+      'Lends to states that have run out of other options, on terms the borrower did not write. Voting weight follows the size of the contribution.',
     obligation:
-      'Paid-in capital, and conditions attached to anything you borrow. The conditions are the point.',
-    members: ['astrun', 'dunmarch', 'jorvik', 'garda', 'iskerry', 'lorne'],
+      'A quota subscription, surveillance of your own economy, and published findings about it you will not always like.',
     vetoHolders: [],
-    memberAtStart: true,
-    dues: 12.0,
+    duesShare: 0.00326,
     applicationCost: 8,
-    entryRelations: 0,
+    entryRelations: -30,
+    benefit: { finance: 9, reputation: 0.02 },
+    open: true,
+  },
+  {
+    key: 'world_bank',
+    name: 'World Bank',
+    kind: 'development_bank',
+    blurb:
+      'Concessional lending for things that take twenty years to pay back, which is most of what actually develops a country.',
+    obligation:
+      'A capital subscription, and projects appraised by somebody other than your own ministry.',
+    vetoHolders: [],
+    duesShare: 0.00326,
+    applicationCost: 8,
+    entryRelations: -30,
     benefit: { finance: 13.2, reputation: 0.03 },
+    open: true,
+  },
+  {
+    key: 'g7',
+    name: 'G7',
+    kind: 'forum',
+    blurb:
+      'Seven large advanced economies and a communique. No treaty, no secretariat, and a great deal of influence for something that is not an institution at all.',
+    obligation:
+      'A summit a year, a shared position you helped draft and must then defend at home.',
+    vetoHolders: [],
+    duesShare: 0.0008,
+    applicationCost: 30,
+    entryRelations: 55,
+    benefit: { influence: 0.26, reputation: 0.03 },
+    open: false,
+  },
+  {
+    key: 'g20',
+    name: 'G20',
+    kind: 'forum',
+    blurb:
+      'The larger room, and the only standing one where the western and eastern blocs both turn up. Agrees less and represents more.',
+    obligation: 'A summit a year, and a communique that has to survive everybody in the room.',
+    vetoHolders: [],
+    duesShare: 0.0005,
+    applicationCost: 22,
+    entryRelations: 25,
+    benefit: { influence: 0.22, stability: 0.02 },
+    open: false,
+  },
+  {
+    key: 'brics',
+    name: 'BRICS',
+    kind: 'forum',
+    blurb:
+      'A grouping of large economies outside the western institutions, with a development bank and a long argument about what else it is for.',
+    obligation: 'A summit, a bank subscription, and a position that is read as a choice.',
+    vetoHolders: [],
+    duesShare: 0.0006,
+    applicationCost: 20,
+    entryRelations: 20,
+    benefit: { influence: 0.2, finance: 5 },
+    open: true,
+  },
+  {
+    key: 'opec',
+    name: 'OPEC',
+    kind: 'forum',
+    blurb:
+      'Producers agreeing how much not to sell. It works for exactly as long as everybody holds, and somebody never does.',
+    obligation: 'Production quotas set collectively, and the domestic politics of meeting them.',
+    vetoHolders: [],
+    duesShare: 0.0004,
+    applicationCost: 16,
+    entryRelations: 10,
+    benefit: { influence: 0.14, finance: 4 },
+    open: false,
+  },
+  {
+    key: 'african_union',
+    name: 'African Union',
+    kind: 'economic_union',
+    blurb:
+      'Fifty-five states, a continental free trade area and a peace and security council that deploys.',
+    obligation: 'Assessed contributions, and forces available to the continental mandate.',
+    vetoHolders: [],
+    duesShare: 0.0018,
+    applicationCost: 10,
+    entryRelations: 0,
+    benefit: { influence: 0.16, stability: 0.04 },
+    open: false,
+  },
+  {
+    key: 'asean',
+    name: 'ASEAN',
+    kind: 'economic_union',
+    blurb:
+      'Ten states that decide by consensus and do not interfere in each other\u2019s affairs, which is both the strength and the complaint.',
+    obligation: 'Consensus, non-interference, and a free trade area with long exemption lists.',
+    vetoHolders: [],
+    duesShare: 0.0012,
+    applicationCost: 12,
+    entryRelations: 15,
+    benefit: { influence: 0.15, finance: 3, stability: 0.03 },
+    open: false,
   },
 ];
+
+/**
+ * Who is in the room.
+ *
+ * Read off the country table rather than written here, so that adding a
+ * state to the world puts it in the right rooms without anybody having to
+ * remember to edit a second file — and so the two can never disagree.
+ */
+export function membersOfOrganisation(key: OrganisationKey): NationKey[] {
+  return COUNTRY_TEMPLATES.filter(
+    (c) => c.region !== 'nowhere' && c.institutions.includes(key),
+  ).map((c) => c.key);
+}
+
+export const ORGANISATION_TEMPLATES: OrganisationTemplate[] = ORGANISATION_BASE.map(
+  (template) => {
+    const members = membersOfOrganisation(template.key);
+    return {
+      ...template,
+      members,
+      /* A veto is only a veto if you are in the room. */
+      vetoHolders: template.vetoHolders.filter((h) => members.includes(h)),
+    };
+  },
+);
+
+/** Members who can stop anything alone, which for every body but one is nobody. */
+export function vetoHoldersOf(key: OrganisationKey): NationKey[] {
+  const template = findOrganisationTemplate(key);
+  return template.vetoHolders.filter((holder) =>
+    membersOfOrganisation(key).includes(holder),
+  );
+}
+
+function findOrganisationTemplate(key: OrganisationKey): OrganisationTemplate {
+  const found = ORGANISATION_TEMPLATES.find((o) => o.key === key);
+  if (!found) throw new Error(`organisations: unknown organisation ${key}`);
+  return found;
+}
 
 export function findOrganisation(key: OrganisationKey): OrganisationTemplate {
   const found = ORGANISATION_TEMPLATES.find((o) => o.key === key);
   if (!found) throw new Error(`organisations: unknown organisation ${key}`);
   return found;
+}
+
+/**
+ * What belonging costs a country of this size, ₡bn a year.
+ *
+ * Assessed contributions scale with the ability to pay — that is how every
+ * one of these bodies actually bills — so the figure is a share of output
+ * rather than a fixed sum. It is why the same membership is a rounding
+ * error for one member and a line the finance ministry argues about for
+ * another.
+ */
+export function duesOf(key: OrganisationKey, gdp: number): number {
+  return Math.round(findOrganisation(key).duesShare * gdp * 10) / 10;
 }
 
 /* ------------------------------------------------------------------ *
@@ -261,7 +410,7 @@ export const RESOLUTION_TEMPLATES: ResolutionTemplate[] = [
     kind: 'condemnation',
     needsTarget: true,
     title: 'Resolution of Condemnation',
-    organisation: 'assembly',
+    organisation: 'un',
     blurb: 'Formally deplores a named state’s conduct. Binds nobody and is remembered by everybody.',
     proposeCost: 8,
     cost: 0.0,
@@ -273,7 +422,7 @@ export const RESOLUTION_TEMPLATES: ResolutionTemplate[] = [
     kind: 'sanctions',
     needsTarget: true,
     title: 'Multilateral Sanctions',
-    organisation: 'council',
+    organisation: 'security_council',
     blurb: 'Collective economic measures. They work only if everyone holds, and somebody never does.',
     proposeCost: 16,
     cost: 28.8,
@@ -284,7 +433,7 @@ export const RESOLUTION_TEMPLATES: ResolutionTemplate[] = [
   {
     kind: 'peacekeeping',
     title: 'Peacekeeping Mandate',
-    organisation: 'council',
+    organisation: 'security_council',
     blurb: 'Authorises a force to stand between two parties who have agreed to let it.',
     proposeCost: 18,
     cost: 45.6,
@@ -295,7 +444,7 @@ export const RESOLUTION_TEMPLATES: ResolutionTemplate[] = [
   {
     kind: 'humanitarian',
     title: 'Humanitarian Mission',
-    organisation: 'assembly',
+    organisation: 'un',
     blurb: 'Relief, access and a corridor. Cheap, uncontroversial, and it saves lives.',
     proposeCost: 6,
     cost: 19.2,
@@ -307,7 +456,7 @@ export const RESOLUTION_TEMPLATES: ResolutionTemplate[] = [
     kind: 'investigation',
     needsTarget: true,
     title: 'International Investigation',
-    organisation: 'court',
+    organisation: 'icc',
     blurb: 'An independent inquiry with a published finding nobody can pre-agree to.',
     proposeCost: 10,
     cost: 7.2,
@@ -318,7 +467,7 @@ export const RESOLUTION_TEMPLATES: ResolutionTemplate[] = [
   {
     kind: 'aid',
     title: 'Development Programme',
-    organisation: 'development_bank',
+    organisation: 'world_bank',
     blurb: 'Concessional lending to states that need it, on terms they did not set.',
     proposeCost: 8,
     cost: 33.6,
@@ -329,7 +478,7 @@ export const RESOLUTION_TEMPLATES: ResolutionTemplate[] = [
   {
     kind: 'climate',
     title: 'Emissions Convention',
-    organisation: 'assembly',
+    organisation: 'un',
     blurb: 'Binding targets, reported annually. The argument is never about the science.',
     proposeCost: 14,
     cost: 22.8,
@@ -340,7 +489,7 @@ export const RESOLUTION_TEMPLATES: ResolutionTemplate[] = [
   {
     kind: 'trade_rules',
     title: 'Revision of Trade Rules',
-    organisation: 'trade_body',
+    organisation: 'wto',
     blurb: 'Changes the ceilings everyone is bound by. Whoever exports most has the most to say.',
     proposeCost: 12,
     cost: 0.0,
@@ -358,4 +507,5 @@ export const ORGANISATION_KIND_LABELS: Record<OrganisationKind, string> = {
   defence_alliance: 'Defence alliance',
   economic_union: 'Economic union',
   development_bank: 'Development bank',
+  forum: 'Forum',
 };

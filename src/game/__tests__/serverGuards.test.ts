@@ -284,7 +284,7 @@ describe('the snapshot guards everything, not only the first three numbers', () 
         deployments: [
           {
             id: 'x',
-            nation: 'holm',
+            nation: 'new_zealand',
             kind: 'combat',
             commitment: 0.9,
             cost: 10,
@@ -293,7 +293,7 @@ describe('the snapshot guards everything, not only the first three numbers', () 
           },
           {
             id: 'y',
-            nation: 'lorne',
+            nation: 'spain',
             kind: 'combat',
             commitment: 0.9,
             cost: 10,
