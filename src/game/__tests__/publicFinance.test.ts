@@ -22,6 +22,7 @@ import {
   describeRule,
   issueBond,
   justifiedRating,
+  marketAccessHolds,
   marketSpread,
   maturingWithin,
   regionalEquilibrium,
@@ -37,6 +38,9 @@ import {
 import { buildEconomy } from '../systems/economy.ts';
 import { buildRegions } from '../setup.ts';
 import {
+  EMERGENCY_CUT_MAX,
+  MARKET_ACCESS_DEBT_RATIO,
+  SHUTOUT_WEEKS_FATAL,
   FISCAL_RULE_CREDIBILITY_TURNS,
   TURNS_PER_YEAR,
   RATING_REVIEW_TURNS,
@@ -386,5 +390,41 @@ describe('a month of public finance', () => {
 
   it('is deterministic', () => {
     expect(step(base)).toEqual(step(base));
+  });
+});
+
+describe('the one fiscal consequence that is not a matter of degree', () => {
+  /*
+   * Every other one is a wider spread, a worse grade, a bigger interest
+   * line. This is nobody lending at all, which is what a sovereign debt
+   * crisis actually is and why it ends governments rather than
+   * embarrassing them.
+   */
+  it('lends to a good government at any level of debt', () => {
+    expect(marketAccessHolds(9000, 3680, -20, 'AAA')).toBe(true);
+    expect(marketAccessHolds(9000, 3680, -20, 'BBB')).toBe(true);
+  });
+
+  it('lends to a bad government whose debt is not the problem', () => {
+    expect(marketAccessHolds(1500, 3680, -20, 'CCC')).toBe(true);
+  });
+
+  it('asks about direction, so a surplus buys the benefit of the doubt', () => {
+    /* A high debt that is falling is a country everybody lends to. */
+    expect(marketAccessHolds(12000, 3680, 5, 'CCC')).toBe(true);
+    expect(marketAccessHolds(12000, 3680, -5, 'CCC')).toBe(false);
+  });
+
+  it('stops when both halves are true at once', () => {
+    /* A fraction of annual output, like every other ratio here. */
+    expect(MARKET_ACCESS_DEBT_RATIO).toBeGreaterThan(1);
+    expect(MARKET_ACCESS_DEBT_RATIO).toBeLessThan(5);
+    expect(marketAccessHolds(12000, 3680, -30, 'B')).toBe(false);
+  });
+
+  it('counts the weeks, because two years of it is fatal', () => {
+    expect(SHUTOUT_WEEKS_FATAL).toBeGreaterThan(TURNS_PER_YEAR);
+    expect(EMERGENCY_CUT_MAX).toBeGreaterThan(0);
+    expect(EMERGENCY_CUT_MAX).toBeLessThan(0.25);
   });
 });

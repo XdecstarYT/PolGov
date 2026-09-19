@@ -145,6 +145,10 @@ import {
   AGENCY_SCANDAL_APPROVAL,
   CRISIS_BASE_RISK,
   GLOBAL_RESPONSE_PC_DEFAULT,
+  EMERGENCY_CUT_MAX,
+  SHUTOUT_APPROVAL,
+  SHUTOUT_WEEKS_FATAL,
+  LOG_HISTORY_WEEKS,
   IS_TRADE_WEIGHT,
   months,
   OVERSIGHT_PC_COST,
@@ -221,6 +225,7 @@ import {
   cabinetReaction,
   divideOnBudget,
   enactBudget,
+  discretionaryTotal,
   enactedTotal,
   findMinistry,
   indexEntitlements,
@@ -300,6 +305,7 @@ import {
   averageCoupon,
   borrowingCost,
   breachApprovalCost,
+  debtRatio,
   regionalSwing,
   rulesInBreach,
   stepPublicFinance,
@@ -450,11 +456,28 @@ function log(entries: LogEntry[], entry: LogEntry): void {
   entries.push(entry);
 }
 
+/**
+ * This week's page of the journal.
+ *
+ * Keyed on the absolute week rather than the turn number, because the turn
+ * number resets at every election: without this, the second term's first
+ * week appended to the first term's, and the error compounded every term
+ * for the whole run.
+ *
+ * And trimmed, because every intent deep-clones the entire state. A run
+ * that kept every week's entries would clone twenty thousand objects on
+ * every click by the final term, which is a game that gets slower the
+ * longer it is played. Nothing reads further back than a few weeks.
+ */
 function currentLog(state: GameState): LogEntry[] {
-  let existing = state.logs.find((l) => l.turnNumber === state.turnNumber);
+  const week = absoluteWeek(state);
+  let existing = state.logs.find((l) => l.week === week);
   if (!existing) {
-    existing = { turnNumber: state.turnNumber, entries: [] };
+    existing = { turnNumber: state.turnNumber, week, entries: [] };
     state.logs.push(existing);
+    if (state.logs.length > LOG_HISTORY_WEEKS) {
+      state.logs.splice(0, state.logs.length - LOG_HISTORY_WEEKS);
+    }
   }
   return existing.entries;
 }
@@ -1618,6 +1641,87 @@ export function resolveTurn(state: GameState): GameState {
     });
     const beforeRating = next.finance.rating.grade;
     next.finance = tick.finance;
+
+    /*
+     * The one fiscal consequence that is not a matter of degree.
+     *
+     * Every other one is a wider spread, a worse grade, a bigger interest
+     * line. This is nobody lending at all — so the deficit has to be closed
+     * this week rather than over a parliament, which is what a sovereign
+     * debt crisis actually is and why it ends governments rather than
+     * embarrassing them.
+     */
+    if (tick.lostMarketAccess) {
+      log(entries, {
+        kind: 'event',
+        label: 'The market has stopped lending',
+        delta: 0,
+        cause:
+          `Debt is ${(debtRatio(next.debt, next.economy.gdp) * 100).toFixed(0)}% of output and ` +
+          'still ' +
+          'rising, and this week an auction did not clear. The deficit now has to be closed out ' +
+          'of receipts, immediately, whatever the chamber thinks of that.',
+        unit: '',
+      });
+    }
+    if (tick.regainedMarketAccess) {
+      log(entries, {
+        kind: 'event',
+        label: 'The auctions are clearing again',
+        delta: 0,
+        cause:
+          'Somebody bid. Nothing about the debt has become sustainable; the direction of travel ' +
+          'has changed, and that is what was being asked about all along.',
+        unit: '',
+      });
+    }
+    if (!next.finance.marketAccess) {
+      next.approval = clampApproval(next.approval + SHUTOUT_APPROVAL);
+
+      /*
+       * And the part that is not a number on a page. With nobody lending,
+       * the shortfall is closed by cutting what can be cut — which is the
+       * discretionary lines, pro rata, because there is no time to choose
+       * and the statutory ones are law. Quarterly rather than weekly, so
+       * it reads as a decision taken under duress rather than as a grind.
+       */
+      if (fiscal.balance < 0 && absoluteWeek(next) % months(3) === 0) {
+        const shortfall = -fiscal.balance * TURNS_PER_YEAR;
+        const room = discretionaryTotal(next.budget);
+        if (room > 0) {
+          const cut = Math.min(shortfall, room * EMERGENCY_CUT_MAX);
+          const scale = (room - cut) / room;
+          next.budget = {
+            ...next.budget,
+            lines: next.budget.lines.map((line) =>
+              isStatutory(line.service)
+                ? line
+                : { ...line, enacted: line.enacted * scale, proposed: line.proposed * scale },
+            ),
+          };
+          syncSectorsToBudget(next);
+          log(entries, {
+            kind: 'treasury',
+            label: 'Emergency reductions',
+            delta: -cut,
+            cause:
+              `₡${cut.toFixed(0)}bn taken out of every department that is not protected by ` +
+              'statute, pro rata, because there was no time to choose and no money to argue ' +
+              'with. Nobody voted for this and nobody will defend it.',
+            unit: '₡bn',
+          });
+        }
+      }
+      if (next.finance.weeksShutOut >= SHUTOUT_WEEKS_FATAL) {
+        return endRun(
+          next,
+          true,
+          `Two years without access to the markets. Departments have been paid out of receipts ` +
+            'and nothing else, the chamber has stopped pretending this is a policy, and the ' +
+            'government has been replaced by one that will accept the terms.',
+        );
+      }
+    }
 
     if (tick.ratingMoved) {
       const worse =

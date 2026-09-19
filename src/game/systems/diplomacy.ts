@@ -48,6 +48,8 @@ import {
   SUMMIT_COOLDOWN,
   TREATY_MINIMUM_RELATIONS,
   WORLD_HISTORY_LIMIT,
+  TENSION_BASELINE,
+  TENSION_DECAY_RATE,
 } from '../balance.ts';
 import {
   NATION_TEMPLATES,
@@ -370,7 +372,16 @@ export function stepWorld(world: World, inputs: DiplomacyInputs): WorldTick {
   /* And a country inside the institutions is a country other governments
      expect to behave, which is what reputation is. */
   const reputation = clamp(world.reputation + bodies.reputation, 0, 100);
-  const tension = clamp(world.tension - bodies.stability, 0, 100);
+  /*
+   * Tension eases back toward its resting level whenever nothing is feeding
+   * it. Without this it is a one-way ratchet — wars and shocks add, and
+   * nothing ever takes away — and every run arrives at a permanently
+   * maximally dangerous world by the second term, which flattens the whole
+   * engine. Countries do calm down. Slowly, and from wherever they are.
+   */
+  const eased =
+    world.tension + (TENSION_BASELINE - world.tension) * TENSION_DECAY_RATE;
+  const tension = clamp(eased - bodies.stability, 0, 100);
 
   const point: WorldPoint = {
     turn: inputs.turn,

@@ -85,6 +85,26 @@ export function FinancePanel() {
     <Panel title="The public finances" aside={f.rating.grade}>
       <Kicker>Who is lending, and on what terms</Kicker>
 
+      {!f.marketAccess && (
+        <div className="mb-4 border-2 border-loss/60 bg-loss/5 p-3">
+          <p className="font-serif text-[0.98rem] font-semibold text-ink">
+            Nobody is lending to this country.
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-ink-soft">
+            The auctions are not clearing. The deficit has to be closed out of receipts, this
+            week, whatever the chamber thinks of that — so every department not protected by
+            statute is being reduced pro rata each quarter until it is. A government that cannot
+            borrow for two years is a government that is replaced by one which will accept the
+            terms; this one has been shut out for{' '}
+            <span className="tnum">{f.weeksShutOut}</span> weeks.
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+            The way back is a surplus. The market is not asking whether the debt is large; it is
+            asking which direction it is going.
+          </p>
+        </div>
+      )}
+
       <div className="mt-2 flex flex-wrap items-start gap-x-8 gap-y-3">
         <div>
           <div className="label text-ink-faint">Rating</div>

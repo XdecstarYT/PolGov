@@ -53,8 +53,10 @@ export function Report() {
   if (!game) return null;
 
   const log = useMemo(
-    () => game.logs.find((l) => l.turnNumber === game.turnNumber)?.entries ?? [],
-    [game.logs, game.turnNumber],
+    /* The last page written, which is this week's — keyed on the absolute
+       week, because the turn number resets at every election. */
+    () => game.logs[game.logs.length - 1]?.entries ?? [],
+    [game.logs],
   );
 
   const netApproval = sumOf(log, 'approval');

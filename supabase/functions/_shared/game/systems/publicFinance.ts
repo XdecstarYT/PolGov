@@ -44,6 +44,7 @@ import {
   SPREAD_FREE_DEBT_RATIO,
   SPREAD_PER_DEBT_POINT,
   SPREAD_PER_DEFICIT_POINT,
+  MARKET_ACCESS_DEBT_RATIO,
 } from '../balance.ts';
 import { TURNS_PER_YEAR } from '../balance.ts';
 import type {
@@ -532,8 +533,39 @@ export function buildPublicFinance(
     reserveFund: 0,
     reserveContribution: 0,
     regional: buildRegionalBudgets(regions, nationalRevenue),
+    /* Somebody will lend to this country. For now. */
+    marketAccess: true,
+    weeksShutOut: 0,
     history: [],
   };
+}
+
+/**
+ * Will anybody lend to this country at all?
+ *
+ * Every other fiscal consequence in this engine is a matter of degree: a
+ * wider spread, a worse grade, a bigger interest line. This one is not.
+ * Below it a government borrows expensively; at it a government does not
+ * borrow, and the deficit has to be closed this week rather than over a
+ * parliament — which is what a sovereign debt crisis actually is, and why
+ * it ends governments rather than embarrassing them.
+ *
+ * It takes BOTH a debt the market cannot see being repaid and a deficit
+ * still being run, because a high debt that is falling is a country
+ * everybody lends to and a modest debt rising fast is not.
+ */
+export function marketAccessHolds(
+  debt: number,
+  gdp: number,
+  turnBalance: number,
+  grade: CreditGrade,
+): boolean {
+  if (grade !== 'CCC' && grade !== 'B') return true;
+  const ratio = debtRatio(debt, gdp);
+  if (ratio < MARKET_ACCESS_DEBT_RATIO) return true;
+  /* A surplus buys the benefit of the doubt at any level of debt, because
+     the question the market is asking is about direction. */
+  return turnBalance >= 0;
 }
 
 /* ------------------------------------------------------------------ *
@@ -556,6 +588,10 @@ export interface FinanceTick {
   ratingMoved: boolean;
   /** Rules newly in breach this month. */
   newBreaches: FiscalRuleKind[];
+  /** True on the week the market stopped lending. */
+  lostMarketAccess: boolean;
+  /** True on the week it came back. */
+  regainedMarketAccess: boolean;
 }
 
 /**
@@ -625,6 +661,10 @@ export function stepPublicFinance(
   /* 7. The regions, funded out of national revenue. */
   const regional = stepRegionalBudgets(finance.regional, regions, nationalRevenue);
 
+  /* 8. And the question underneath all of it. */
+  const marketAccess = marketAccessHolds(debt, economy.gdp, turnBalance, rating.grade);
+  const weeksShutOut = marketAccess ? 0 : finance.weeksShutOut + 1;
+
   const point: FiscalPoint = {
     turn,
     debtRatio: debtRatio(debt, economy.gdp),
@@ -643,8 +683,12 @@ export function stepPublicFinance(
       reserveFund: finance.reserveFund + reserveReturn + reserveContributed,
       reserveContribution: finance.reserveContribution,
       regional,
+      marketAccess,
+      weeksShutOut,
       history: [...finance.history, point].slice(-120),
     },
+    lostMarketAccess: finance.marketAccess && !marketAccess,
+    regainedMarketAccess: !finance.marketAccess && marketAccess,
     matured: maturedPrincipal,
     coupons,
     reserveReturn,

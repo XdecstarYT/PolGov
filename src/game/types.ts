@@ -396,7 +396,17 @@ export interface LogEntry {
 }
 
 export interface TurnLog {
+  /** The week within the term, which is what the player is shown. */
   turnNumber: number;
+  /**
+   * Weeks since the run began, which is what identifies it.
+   *
+   * The turn number resets at every election, so two different weeks in two
+   * different terms share one — and a log keyed on that would have had the
+   * second term's first week appending to the first term's, compounding
+   * every term for the whole run.
+   */
+  week: number;
   entries: LogEntry[];
 }
 
@@ -731,6 +741,17 @@ export interface PublicFinance {
   /** Standing monthly contribution to the reserve fund, ₡bn. */
   reserveContribution: number;
   regional: RegionalBudget[];
+  /**
+   * Whether anybody will lend to this country at all.
+   *
+   * The one fiscal consequence that is not a matter of degree. Below it the
+   * government borrows expensively; at it the government does not borrow,
+   * and the deficit has to be closed this week rather than over a
+   * parliament — which is what a sovereign debt crisis actually is.
+   */
+  marketAccess: boolean;
+  /** Weeks without it. Long enough and the government does not survive. */
+  weeksShutOut: number;
   /** Rolling record of the headline fiscal ratios. */
   history: FiscalPoint[];
 }

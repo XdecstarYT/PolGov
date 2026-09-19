@@ -1871,3 +1871,58 @@ export const GLOBAL_EVENT_BASE_RISK = 0.022;
 
 /** Political capital to respond to something that started somewhere else. */
 export const GLOBAL_RESPONSE_PC_DEFAULT = 14;
+
+/**
+ * Where the world settles when nothing is happening to it.
+ *
+ * Tension was a one-way ratchet: wars and shocks added to it and nothing
+ * ever took away, so every run reached a permanently maximally dangerous
+ * world by the second term and the whole engine flattened. Countries do
+ * calm down — slowly, and from wherever they are.
+ */
+/**
+ * The debt ratio past which a bottom-rated government stops being lent to.
+ *
+ * Twice annual output — the ratio is a fraction here, as everywhere else in
+ * the finance system — and only when the deficit is still being
+ * run. A high debt that is falling is a country everybody lends to; a
+ * modest debt rising fast is not. The question the market asks is about
+ * direction, which is why both conditions are required.
+ */
+export const MARKET_ACCESS_DEBT_RATIO = 2.0;
+
+/**
+ * How long a government survives without anybody lending to it.
+ *
+ * Two years. Long enough to be a crisis the player can govern through, short
+ * enough that it is not a permanent state of the world — and the whole time
+ * the deficit has to be closed out of receipts, which is the punishment and
+ * is quite bad enough on its own.
+ */
+export const SHUTOUT_WEEKS_FATAL = 104;
+
+/** What losing market access costs in approval, per week, while it lasts. */
+export const SHUTOUT_APPROVAL = -0.22;
+
+/**
+ * The most a forced reduction takes out of the discretionary budget at once.
+ *
+ * A twelfth, quarterly. Enough that the country notices immediately and the
+ * gap closes over a year or two; not so much that a single bad quarter
+ * dismantles the state, which would be a different game.
+ */
+export const EMERGENCY_CUT_MAX = 0.085;
+
+export const TENSION_BASELINE = 28;
+export const TENSION_DECAY_RATE = 0.011;
+
+/**
+ * How many weeks of the journal are kept.
+ *
+ * Every intent deep-clones the whole state, so a run that kept every week's
+ * entries would be cloning twenty thousand objects on every click by the
+ * final term — a game that gets slower the longer it is played. Nothing
+ * reads further back than the last few weeks: the report shows this one and
+ * the event weighting looks at three.
+ */
+export const LOG_HISTORY_WEEKS = 12;
