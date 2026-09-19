@@ -44,6 +44,7 @@ import { PartyRoom } from '../components/PartyRoom.tsx';
 import { BillProcedure, ChamberPanel } from '../components/ChamberPanel.tsx';
 import { PolicyLifecycle, PolicyOpinionSummary } from '../components/PolicyPanel.tsx';
 import { CampaignRoom } from '../components/CampaignRoom.tsx';
+import { DraftingDesk } from '../components/DraftingDesk.tsx';
 import { benchInk } from '../bench.ts';
 
 export function Agenda() {
@@ -100,6 +101,7 @@ export function Agenda() {
       {campaign && <CampaignRoom />}
 
       <PolicyDesk />
+      <DraftingDesk />
       <ChamberPanel />
       <PolicyLifecycle />
       <PartyRoom />

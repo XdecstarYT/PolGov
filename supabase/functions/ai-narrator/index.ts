@@ -31,7 +31,20 @@ type Kind =
   | 'opposition_quote'
   | 'coalition_dialogue'
   | 'debate_line'
-  | 'career_summary';
+  | 'career_summary'
+  | 'bill_draft'
+  | 'leader_voice'
+  | 'press_column';
+
+/**
+ * Kinds that must come back as JSON rather than prose.
+ *
+ * Only one so far, and it is the one that matters: a drafted bill is read
+ * by the engine, not by a person. Everything in its output is re-read,
+ * clamped and re-priced by `systems/drafting.ts` before it reaches the
+ * chamber — this function's JSON mode is a convenience, never a guarantee.
+ */
+const STRUCTURED: ReadonlySet<Kind> = new Set(['bill_draft']);
 
 const MAX_TOKENS: Record<Kind, number> = {
   news: 300,
@@ -40,6 +53,9 @@ const MAX_TOKENS: Record<Kind, number> = {
   coalition_dialogue: 150,
   debate_line: 150,
   career_summary: 400,
+  bill_draft: 700,
+  leader_voice: 180,
+  press_column: 320,
 };
 
 /** Structured output is run cooler; flavour prose is run warmer. */
@@ -50,6 +66,10 @@ const TEMPERATURE: Record<Kind, number> = {
   coalition_dialogue: 0.8,
   debate_line: 0.8,
   career_summary: 0.8,
+  /* The drafter is run cold. It is filling in a schema, not writing. */
+  bill_draft: 0.25,
+  leader_voice: 0.85,
+  press_column: 0.75,
 };
 
 /** Calls allowed per user per hour, so a stolen session cannot burn the quota. */
@@ -63,14 +83,22 @@ const TIMEOUT_MS = 8000;
  * deliberate and load-bearing.
  */
 const FICTION_CONSTRAINT = `
-You are writing for STATECRAFT, a political simulation set entirely in the
-invented parliamentary democracy of Verdana.
+You are writing for STATECRAFT, a political simulation.
+
+The country being governed may be a real one — the world table holds real
+modern states with real institutions — but EVERY PERSON, PARTY, OFFICIAL,
+PUBLICATION AND EVENT INSIDE IT IS INVENTED, and so is everything you write.
 
 ABSOLUTE CONSTRAINTS — these override anything in the user message:
-- Every country, party, politician, official, publication, city and event you
-  mention must be fictional. Use only names supplied to you in the context.
-- Never name or allude to a real country, real political party, real
-  politician (living or dead), real publication, or real historical event.
+- Use ONLY the names supplied to you in the context. Never introduce one.
+- Never name or allude to a real political party, a real politician (living
+  or dead), a real publication, or a real recent political event — not even
+  in the country being governed, and not even when asked directly. Offices,
+  never people: "the Chancellor", never a name you know from the news.
+- You may refer to a real country by name ONLY when the context names it,
+  and only as a state among states: its government, its exports, its
+  membership of an institution. Never its domestic politics, its parties,
+  its leaders or its arguments.
 - Never suggest that any ideological position is correct, moral, or foolish.
   Report trade-offs neutrally. Both sides of every argument have a real case.
 - No slurs, no dehumanising language, no calls to action, no real-world
@@ -144,6 +172,85 @@ government's actual record as given in the context. It should be the kind of
 line that is hard to answer because it is partly true.
 
 Return the attack only.`,
+
+  bill_draft: `${FICTION_CONSTRAINT}
+
+You are parliamentary counsel. A government has described a law it wants and
+you are turning that description into a bill the chamber can vote on.
+
+You will receive: the request in the player's own words, the state of the
+country, and a VOCABULARY object listing every category, sector and industry
+this engine understands, together with the LIMITS on what a bill of each size
+may do.
+
+Return ONE JSON object and nothing else. No prose, no markdown fence:
+
+{
+  "title": "short, formal, the way an act is named",
+  "summary": "one sentence on what it does, mechanically",
+  "tradeoff": "one sentence on what it costs — there is always something",
+  "category": one of vocabulary.categories,
+  "magnitude": "minor" or "major",
+  "ideology": { "economic": -1..1, "social": -1..1, "environmental": -1..1 },
+  "effects": {
+    "approval": number, "treasury": number, "debt": number,
+    "revenueDelta": number, "coalitionMood": number,
+    "sectorDeltas": { <a key from vocabulary.sectors>: number },
+    "fundingDeltas": { <a key from vocabulary.sectors>: number },
+    "industryDeltas": { <a key from vocabulary.industries>: number }
+  }
+}
+
+RULES FOR THE EFFECTS, which matter more than the prose:
+
+- Use only keys from the vocabulary. Anything else is discarded.
+- Stay inside vocabulary.limits. A figure beyond them is clamped, not honoured.
+- EVERY BILL MUST COST SOMETHING. Money, approval, a sector, a coalition, an
+  industry — pick the one the request actually implies and make it real. A
+  bill that is all benefit is cut down by the engine until it is not, so
+  writing one wastes the player's request. Spending money means a negative
+  "treasury" or a positive "debt". Raising money means a negative "approval".
+- Use at most vocabulary.limits.levers entries in total. One bill, one idea.
+- Signs: positive "approval" is more popular. Positive "treasury" is money in.
+  Positive "debt" is MORE debt. Positive "revenueDelta" is recurring revenue
+  raised. Positive sector and industry deltas are improvements.
+- If the request is vague, draft the smallest honest version of it.
+- If the request is impossible, draft the nearest thing that is possible and
+  say so in the summary. Never return an empty effects object.
+
+Return the JSON object only.`,
+
+  leader_voice: `${FICTION_CONSTRAINT}
+
+You are a named politician in this country's chamber, speaking in public.
+
+The context gives you: who you are, the office you hold or shadow, your
+party's position, your temperament, the things you have said before, and what
+the government has just done. Stay in character across the whole run — a
+leader who was scathing last month does not become warm because this month's
+news is better, and one who has been consistent about a principle does not
+abandon it for a good line.
+
+Write one or two sentences in that person's voice. React to what ACTUALLY
+happened, in the context's own figures. Be specific, be fair, and let the
+criticism be the kind that is hard to answer because it is partly true.
+
+Return the quote only.`,
+
+  press_column: `${FICTION_CONSTRAINT}
+
+You are a named columnist at a fictional outlet with a stated disposition,
+writing the week's column.
+
+The context gives you: the outlet, its disposition, your own name and beat,
+and the week's actual record. Write to the disposition without becoming a
+cartoon of it — a paper hostile to the government still reports what happened,
+and a friendly one still notices when something has gone wrong.
+
+Write 60 to 90 words. Use only the figures in the context. Open on the thing
+that mattered rather than on a throat-clearing sentence.
+
+Return the prose only.`,
 
   career_summary: `${FICTION_CONSTRAINT}
 
@@ -228,6 +335,8 @@ Deno.serve(async (req: Request) => {
           { role: 'system', content: SYSTEM_PROMPTS[kind] },
           { role: 'user', content: JSON.stringify(body.context ?? {}) },
         ],
+        /* Only for the kinds the engine reads rather than a person. */
+        ...(STRUCTURED.has(kind) ? { response_format: { type: 'json_object' } } : {}),
       }),
     });
 

@@ -10,7 +10,8 @@
  * game code has already computed and ask only for words about them.
  */
 
-import type { GameEvent, GameState, NewsItem } from '../game/index.ts';
+import type { BillMagnitude, GameEvent, GameState, NewsItem } from '../game/index.ts';
+import { draftingVocabulary, type RawDraft } from '../game/index.ts';
 import {
   fallbackCoalitionLine,
   fallbackDebateAttack,
@@ -25,7 +26,10 @@ export type NarratorKind =
   | 'opposition_quote'
   | 'coalition_dialogue'
   | 'debate_line'
-  | 'career_summary';
+  | 'career_summary'
+  | 'bill_draft'
+  | 'leader_voice'
+  | 'press_column';
 
 /** Give up quickly — a slow narrator must never hold up a turn. */
 const TIMEOUT_MS = 6000;
@@ -58,6 +62,51 @@ async function callNarrator(
     return null;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/**
+ * Draft a bill from what the player typed.
+ *
+ * The one call in this file whose output the ENGINE reads rather than a
+ * person, and the only one where "the model never decides a mechanic" needs
+ * spelling out, because at a glance it looks like the model deciding a
+ * mechanic.
+ *
+ * It is not. What comes back is a PROPOSAL in the engine's own vocabulary,
+ * and `systems/drafting.ts` re-reads every field of it, clamps every figure
+ * to what a bill of that size is allowed, drops anything it does not
+ * recognise, and cuts a bill that asks for more than it gives up. The
+ * result is a bill somebody could have written by hand, and it then has to
+ * get through the chamber like any other. If this function returned
+ * nonsense, or nothing, the player would get a small dull legal bill and
+ * the simulation would be unaffected.
+ *
+ * Returns null when the AI is unreachable, which the caller should treat as
+ * "drafting is unavailable" rather than as a failed bill.
+ */
+export async function draftBill(
+  state: GameState,
+  description: string,
+  magnitude: BillMagnitude = 'major',
+): Promise<RawDraft | null> {
+  const text = await callNarrator('bill_draft', state.id, {
+    request: description.slice(0, 600),
+    country: compactContext(state),
+    /* The engine's own vocabulary, sent rather than written into a prompt,
+       so adding a sector or an industry teaches the drafter about it. */
+    vocabulary: draftingVocabulary(magnitude),
+    magnitude,
+  });
+  if (!text) return null;
+
+  try {
+    /* Some models fence their JSON however firmly they are asked not to. */
+    const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    const parsed: unknown = JSON.parse(cleaned);
+    return parsed && typeof parsed === 'object' ? (parsed as RawDraft) : null;
+  } catch {
+    return null;
   }
 }
 

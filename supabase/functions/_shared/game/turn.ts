@@ -168,9 +168,12 @@ import {
   TOTAL_SEATS,
   WITHDRAWAL_RELATIONS,
   WITHDRAWAL_REPUTATION,
+  DRAFT_BILL_PC_COST,
+  DRAFT_BILL_LIMIT,
 } from './balance.ts';
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
 import { duesTotal } from './systems/organisations.ts';
+import { readDraft, type RawDraft } from './systems/drafting.ts';
 import { driftPower, globalEffects, stepWorldSim } from './systems/worldSim.ts';
 import { findGlobalEvent } from './content/globalEvents.ts';
 import {
@@ -362,6 +365,17 @@ export type Intent =
   | { type: 'advance_phase' }
   | { type: 'resolve_event'; eventId: string; choiceIndex: number }
   | { type: 'propose_bill'; billId: string; whipSteps: number }
+  /**
+   * A bill the player wrote, drafted by a model and priced by the engine.
+   *
+   * The payload is DATA, not a decision: `draft` is whatever the model
+   * returned, relayed through a client, and `readDraft` re-reads every
+   * field of it against the engine's own vocabulary and envelope before
+   * anything reaches the chamber. A forged draft can only produce a legal
+   * bill somebody could have written by hand, which is why this intent is
+   * safe to accept from a client at all.
+   */
+  | { type: 'draft_bill'; description: string; draft: RawDraft }
   | { type: 'withdraw_bill'; billId: string }
   | { type: 'public_address' }
   | { type: 'coalition_concession'; partyId: string }
@@ -2699,6 +2713,8 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleResolveEvent(state, intent.eventId, intent.choiceIndex);
     case 'propose_bill':
       return handleProposeBill(state, intent.billId, intent.whipSteps);
+    case 'draft_bill':
+      return handleDraftBill(state, intent.description, intent.draft);
     case 'withdraw_bill':
       return handleWithdrawBill(state, intent.billId);
     case 'public_address':
@@ -2937,6 +2953,69 @@ function handleResolveEvent(
   event.chosenIndex = choiceIndex;
   event.resolved = true;
   next.career.eventsResolved += 1;
+  return ok(next);
+}
+
+/**
+ * Put a bill of the government's own on the order paper.
+ *
+ * The model wrote the words and proposed the mechanism; everything from
+ * here is the engine. `readDraft` re-reads every field against the
+ * vocabulary, clamps every figure to the envelope a bill of that size is
+ * allowed, drops anything it does not recognise, and cuts a bill that asks
+ * for more than it gives up. Then it is an ordinary bill: it has to be
+ * tabled, whipped, argued over and voted on like any other, and the
+ * chamber does not care who wrote it.
+ *
+ * Everything the engine changed is attached to the bill and shown, because
+ * a drafting feature that quietly rewrote what somebody typed would be
+ * worse than one that refused.
+ */
+function handleDraftBill(
+  state: GameState,
+  description: string,
+  draft: RawDraft,
+): IntentResult {
+  if (state.phase !== 'agenda') return reject(state, 'Bills are drafted during the agenda.');
+
+  const asked = typeof description === 'string' ? description.trim() : '';
+  if (asked.length < 12) {
+    return reject(state, 'Say what the bill should do — a sentence at least.');
+  }
+
+  const own = state.bills.filter(
+    (b) => b.drafted && (b.status === 'available' || b.status === 'proposed'),
+  );
+  if (own.length >= DRAFT_BILL_LIMIT) {
+    return reject(
+      state,
+      `There are already ${DRAFT_BILL_LIMIT} bills of this government's own on the paper.`,
+    );
+  }
+
+  if (state.politicalCapital < DRAFT_BILL_PC_COST) {
+    return reject(state, 'Not enough political capital to have a bill drafted.');
+  }
+
+  const next = clone(state);
+  spendPc(next, DRAFT_BILL_PC_COST);
+
+  const { bill } = readDraft(draft ?? {}, `drafted-${absoluteWeek(next)}-${own.length + 1}`, asked);
+  next.bills = [...next.bills, bill];
+
+  const entries = currentLog(next);
+  log(entries, {
+    kind: 'note',
+    label: `Drafted — ${bill.title}`,
+    delta: -DRAFT_BILL_PC_COST,
+    cause:
+      `${bill.summary} ${bill.tradeoff}` +
+      (bill.draftNotes && bill.draftNotes.length > 0
+        ? ` Counsel made ${bill.draftNotes.length} change${bill.draftNotes.length > 1 ? 's' : ''} on the way in.`
+        : ''),
+    unit: 'PC',
+  });
+
   return ok(next);
 }
 

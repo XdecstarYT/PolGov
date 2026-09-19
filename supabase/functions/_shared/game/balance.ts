@@ -1928,3 +1928,20 @@ export const TENSION_DECAY_RATE = 0.011;
  * the event weighting looks at three.
  */
 export const LOG_HISTORY_WEEKS = 12;
+
+/* ------------------------------------------------------------------ *
+ * Drafting a bill
+ * ------------------------------------------------------------------ */
+
+/**
+ * What it costs to put a bill of the player's own on the order paper.
+ *
+ * More than tabling one that was already drafted, because somebody has to
+ * write it: parliamentary counsel, a committee clerk, and a fortnight of
+ * the leader's own political capital spent on an idea nobody asked for.
+ * The cost is paid when the bill is drafted, and tabling it costs again.
+ */
+export const DRAFT_BILL_PC_COST = 8;
+
+/** How many bills of their own one government may have on the paper at once. */
+export const DRAFT_BILL_LIMIT = 3;

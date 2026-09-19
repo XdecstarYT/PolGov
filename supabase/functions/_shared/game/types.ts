@@ -257,6 +257,26 @@ export interface Bill {
   takesEffectOn?: number | null;
   /** True once the delayed effects have been applied. */
   inEffect?: boolean;
+
+  /**
+   * Written by the player rather than chosen from the order paper.
+   *
+   * Marked permanently, because a bill somebody drafted at the desk is a
+   * different object from one the game supplied, and the journal, the
+   * chamber and the record should all say so.
+   */
+  drafted?: boolean;
+  /** What the player asked for, in their own words. */
+  draftPrompt?: string;
+  /**
+   * Everything the engine changed on the way in — clamps, drops, and the
+   * cut applied to a bill that asked for more than it gave up.
+   *
+   * Shown to the player rather than applied quietly. A drafting feature
+   * that silently rewrote what somebody typed would be worse than one that
+   * refused.
+   */
+  draftNotes?: string[];
 }
 
 /** A commitment made in a manifesto, and whether it was honoured. */
