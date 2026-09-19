@@ -1105,6 +1105,14 @@ export interface Budget {
   division: { for: number; against: number; abstain: number } | null;
   /** Budgets lost in a row. Two is a government in serious trouble. */
   defeats: number;
+  /**
+   * Opposition parties that have agreed to abstain on this budget.
+   *
+   * Confidence and supply: the only way a minority government ever passes
+   * one, and the reason being in a minority is a hard position rather than
+   * a lost one. The agreement lasts a year.
+   */
+  supply: string[];
   /** The turn the current budget was enacted. */
   enactedTurn: number;
 }

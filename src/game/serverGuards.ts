@@ -69,6 +69,7 @@ export const ALLOWED_INTENT_TYPES: ReadonlySet<Intent['type']> = new Set([
   'set_budget_line',
   'set_capital_share',
   'present_budget',
+  'secure_supply',
 ]);
 
 /** Cap the journal so one request cannot ask for unbounded computation. */

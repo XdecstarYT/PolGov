@@ -1501,3 +1501,25 @@ export const CAPITAL_TO_CONDITION = 0.035;
  * decision, and the argument is always about the remaining fifth.
  */
 export const STATUTORY_SERVICES = ['pensions', 'welfare', 'disability'] as const;
+
+/* ------------------------------------------------------------------ *
+ * Supply
+ * ------------------------------------------------------------------ */
+
+/**
+ * What it costs to buy a budget through a chamber you do not control.
+ *
+ * A minority government that could never pass a budget would simply be a
+ * losing position rather than a hard one, so there has to be a way through
+ * — and in real parliaments there is exactly one: confidence and supply. An
+ * opposition party agrees to abstain on the budget, for a year, in return
+ * for something. The price is their seats and their distance from you, and
+ * it is paid partly in capital and partly in your own party's patience,
+ * because nothing annoys a backbench like watching the other side get paid.
+ */
+export const SUPPLY_PC_BASE = 8;
+export const SUPPLY_PC_PER_SEAT = 0.45;
+/** Multiplier on the capital cost per unit of ideological distance. */
+export const SUPPLY_DISTANCE_COST = 0.85;
+/** What a deal with the other side costs in your own party's cohesion. */
+export const SUPPLY_COHESION_COST = -3.5;

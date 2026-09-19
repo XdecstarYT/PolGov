@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyIntent, applyIntents, beginTurn, isBudgetTurn, isCampaignTurn, resolveTurn } from '../turn.ts';
 import { createStandardGame } from '../setup.ts';
+import { sectorsFromBudget } from '../systems/budgetProcess.ts';
 import {
   BUDGET_TURN_INTERVAL,
   CAMPAIGN_START_TURN,
@@ -155,27 +156,46 @@ describe('political capital is a hard constraint', () => {
 });
 
 describe('the budget is only open on budget turns', () => {
-  it('refuses funding changes on a locked turn, and an emergency budget reopens it', () => {
+  it('refuses funding changes once the season closes, and an emergency budget reopens it', () => {
     let state = governing();
-    // Advance to turn 2, which is not a budget turn.
-    state = applyIntent(state, { type: 'advance_phase' }).state;
-    for (const event of state.events.filter((e) => !e.resolved)) {
-      state = applyIntent(state, { type: 'resolve_event', eventId: event.id, choiceIndex: 0 }).state;
+    /* Out past the deadline, when the estimates are settled for the year. */
+    while (state.turnNumber <= BUDGET_TURN_INTERVAL && state.status === 'active') {
+      const from = state.turnNumber;
+      let guard = 0;
+      while (state.turnNumber === from && guard < 12) {
+        guard += 1;
+        for (const event of state.events.filter((e) => !e.resolved)) {
+          state = applyIntent(state, {
+            type: 'resolve_event',
+            eventId: event.id,
+            choiceIndex: 0,
+          }).state;
+        }
+        state = applyIntent(state, { type: 'advance_phase' }).state;
+      }
     }
-    state = applyIntent(state, { type: 'advance_phase' }).state;
-    state = applyIntent(state, { type: 'advance_phase' }).state;
-    state = applyIntent(state, { type: 'advance_phase' }).state; // -> report
-    state = applyIntent(state, { type: 'advance_phase' }).state; // -> turn 2 briefing
-    expect(state.turnNumber).toBe(2);
+    expect(state.turnNumber).toBeGreaterThan(BUDGET_TURN_INTERVAL);
 
     state = { ...state, politicalCapital: 100, phase: 'budget' };
     const blocked = applyIntent(state, { type: 'set_funding', sector: 'health', amount: 40 });
     expect(blocked.error).toBeTruthy();
 
     state = applyIntent(state, { type: 'emergency_budget' }).state;
+    const before = state.sectors.find((s) => s.key === 'health')!.funding;
     const allowed = applyIntent(state, { type: 'set_funding', sector: 'health', amount: 40 });
     expect(allowed.error).toBeUndefined();
-    expect(allowed.state.sectors.find((s) => s.key === 'health')!.funding).toBe(40);
+
+    /*
+     * It moves, but not to forty. Most of the health sector is disability
+     * payments, which are set in law rather than appropriated, so a
+     * chancellor who says "health goes to forty" finds out that the floor is
+     * whatever the statute already owes. The sector is still a summary of
+     * the lines, so the figure that comes back is the one the lines add to.
+     */
+    const after = allowed.state.sectors.find((s) => s.key === 'health')!.funding;
+    expect(after).toBeLessThan(before);
+    expect(after).toBeGreaterThan(40);
+    expect(after).toBeCloseTo(sectorsFromBudget(allowed.state.budget).health, 6);
   });
 
   it('rejects funding outside the permitted range', () => {

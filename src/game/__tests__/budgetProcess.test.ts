@@ -43,7 +43,9 @@ import {
   sectorsFromBudget,
   serviceFunding,
   statutoryTotal,
+  supplyCost,
 } from '../systems/budgetProcess.ts';
+import { Rng } from '../rng.ts';
 import type { Budget, GameState, Party } from '../types.ts';
 
 const budget = () => buildBudget(buildSectors());
@@ -320,11 +322,83 @@ describe('the division', () => {
     expect(division.for + division.against + division.abstain).toBe(TOTAL_SEATS);
   });
 
-  it('cannot be whipped out of, because everybody already knows how they vote', () => {
-    /* There is no whip parameter. This asserts the absence deliberately: a
-       budget is a confidence matter, and if whipping were ever added here it
-       would make the vote unloseable, which is the one thing it must not be. */
-    expect(divideOnBudget).toHaveLength(3);
+  it('is an estimate the whips can be wrong about', () => {
+    const parties = government();
+    const ministries = assignMinistries(budget().ministries, parties);
+    const key = ministries.find((m) => m.heldBy === 'partner')!.key;
+    const cut = moveMinistry({ ...budget(), ministries }, key, 0.75);
+
+    /* Without a generator the answer is the central estimate — the whips'
+       count, which is what the player is shown before deciding to go. */
+    const count = divideOnBudget(cut, parties, TOTAL_SEATS);
+    const drawn = Array.from({ length: 200 }, (_, i) =>
+      divideOnBudget(cut, parties, TOTAL_SEATS, new Rng(i + 1)).for,
+    );
+
+    /* A whips' count is people asking other people how they intend to vote,
+       so the division lands around it rather than on it. */
+    expect(new Set(drawn).size).toBeGreaterThan(1);
+    const mean = drawn.reduce((sum, x) => sum + x, 0) / drawn.length;
+    expect(mean).toBeCloseTo(count.for, 0);
+  });
+
+  it('is decided before the day, not on it', () => {
+    /*
+     * There is no whip argument and no way to spend on the division itself.
+     * A budget is a confidence matter: everybody already knows how they are
+     * voting, and what decided it was what was done to their departments in
+     * the weeks before. If this ever became buyable on the day the vote
+     * would stop being loseable, which is the one thing it must not be.
+     */
+    const parties = government();
+    const ministries = assignMinistries(budget().ministries, parties);
+    const cut = moveMinistry({ ...budget(), ministries }, 'health', 0.75);
+    const twice = [
+      divideOnBudget(cut, parties, TOTAL_SEATS, new Rng(99)),
+      divideOnBudget(cut, parties, TOTAL_SEATS, new Rng(99)),
+    ];
+    expect(twice[0]).toEqual(twice[1]);
+  });
+
+  it('lets a minority government buy its way through', () => {
+    /* The player alone, forty seats short, facing an opposition that would
+       vote it down on principle. */
+    const parties: Party[] = [
+      party({ id: 'player', isPlayer: true, inCoalition: true, seats: 70 }),
+      party({ id: 'abstainer', shortName: 'Abstainer', seats: 50 }),
+      party({ id: 'opposition', shortName: 'Opposition', seats: TOTAL_SEATS - 120 }),
+    ];
+    const base = { ...budget(), ministries: assignMinistries(budget().ministries, parties) };
+
+    expect(divideOnBudget(base, parties, TOTAL_SEATS).passed).toBe(false);
+
+    /* Confidence and supply: they do not vote for it, they leave the room. */
+    const withSupply = { ...base, supply: ['abstainer'] };
+    const division = divideOnBudget(withSupply, parties, TOTAL_SEATS);
+    expect(division.passed).toBe(true);
+    expect(division.against).toBe(TOTAL_SEATS - 120);
+    expect(division.abstain).toBe(50);
+  });
+
+  it('charges more for a party that has spent the year attacking you', () => {
+    const player = party({
+      id: 'player',
+      isPlayer: true,
+      ideology: { economic: -0.6, social: 0.5, environmental: 0.4 },
+    });
+    const near = party({
+      id: 'near',
+      seats: 30,
+      ideology: { economic: -0.5, social: 0.4, environmental: 0.3 },
+    });
+    const far = party({
+      id: 'far',
+      seats: 30,
+      ideology: { economic: 0.8, social: -0.6, environmental: -0.4 },
+    });
+    expect(supplyCost(far, player)).toBeGreaterThan(supplyCost(near, player));
+    /* And more for a bigger one, because seats are what they are selling. */
+    expect(supplyCost({ ...near, seats: 60 }, player)).toBeGreaterThan(supplyCost(near, player));
   });
 });
 

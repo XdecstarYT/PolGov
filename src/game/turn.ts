@@ -128,6 +128,7 @@ import {
   BUDGET_DEFEAT_PC,
   BUDGET_LINE_PC_COST,
   BUDGET_PRESENT_PC_COST,
+  SUPPLY_COHESION_COST,
   MAINTENANCE_LEVEL_MAX,
   MAX_TREATIES,
   STATE_VISIT_APPROVAL,
@@ -156,6 +157,8 @@ import {
   rejectBudget,
   sectorsFromBudget,
   serviceFunding,
+  setSectorFunding,
+  supplyCost,
 } from './systems/budgetProcess.ts';
 import {
   TREATY_LABELS,
@@ -272,6 +275,7 @@ export type Intent =
   | { type: 'set_budget_line'; service: ServiceKey; amount: number }
   | { type: 'set_capital_share'; service: ServiceKey; share: number }
   | { type: 'present_budget' }
+  | { type: 'secure_supply'; partyId: string }
   | { type: 'set_maintenance'; level: number }
   | { type: 'start_project'; asset: InfrastructureKey; units: number }
   | { type: 'cancel_project'; projectId: string }
@@ -400,8 +404,16 @@ export function isCampaignTurn(turnNumber: number): boolean {
   return turnNumber >= CAMPAIGN_START_TURN;
 }
 
+/**
+ * Is the document open?
+ *
+ * During the season, because that is when a budget is written. Outside it,
+ * only after an emergency budget has been bought — and what that buys is a
+ * supplementary estimate, which takes effect immediately rather than
+ * waiting for a vote nobody has scheduled.
+ */
 export function canEditBudget(state: GameState): boolean {
-  return isBudgetTurn(state.turnNumber) || state.budgetUnlocked;
+  return isBudgetSeason(state.turnNumber) || state.budgetUnlocked;
 }
 
 function spendPc(state: GameState, amount: number): boolean {
@@ -1969,6 +1981,8 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleSetCapitalShare(state, intent.service, intent.share);
     case 'present_budget':
       return handlePresentBudget(state);
+    case 'secure_supply':
+      return handleSecureSupply(state, intent.partyId);
     case 'set_maintenance':
       return handleSetMaintenance(state, intent.level);
     case 'start_project':
@@ -2343,13 +2357,32 @@ function handleSetFunding(
   if (!canEditBudget(state)) {
     return reject(state, 'The budget is fixed this turn. Call an emergency budget to reopen it.');
   }
-  if (!Number.isFinite(amount) || amount < 0 || amount > 120) {
-    return reject(state, 'Funding must be between ₡0bn and ₡120bn per turn.');
+  if (!Number.isFinite(amount) || amount < 0 || amount > 1200) {
+    return reject(state, 'Funding must be between ₡0bn and ₡1,200bn a year.');
   }
 
+  /*
+   * In season this is a proposal like any other line and waits for the
+   * chamber. Out of season it is a supplementary estimate, which takes
+   * effect at once — and that immediacy is what the emergency budget's
+   * political capital actually bought.
+   */
+  const supplementary = !isBudgetSeason(state.turnNumber);
+
   const next = clone(state);
-  const sector = findSector(next.sectors, sectorKey);
-  sector.funding = Math.round(amount * 10) / 10;
+  /*
+   * Write through to the lines. The five figures are a summary of the
+   * twenty, so setting one has to move what it summarises — otherwise the
+   * next time the document is read the sector would snap back to whatever
+   * the lines say, and the player would have been lied to.
+   */
+  next.budget = setSectorFunding(
+    next.budget,
+    sectorKey,
+    Math.round(amount * 10) / 10,
+    supplementary ? 'enacted' : 'proposed',
+  );
+  if (supplementary) syncSectorsToBudget(next);
   return ok(next);
 }
 
@@ -2778,7 +2811,9 @@ function handlePresentBudget(state: GameState): IntentResult {
     });
   }
 
-  const division = divideOnBudget(next.budget, next.parties, TOTAL_SEATS);
+  const rng = new Rng(next.rngState);
+  const division = divideOnBudget(next.budget, next.parties, TOTAL_SEATS, rng);
+  next.rngState = rng.state;
   next.budget = { ...next.budget, division };
 
   if (division.passed) {
@@ -2821,6 +2856,60 @@ function handlePresentBudget(state: GameState): IntentResult {
     });
   }
 
+  return ok(next);
+}
+
+/**
+ * Buy a budget through a chamber you do not control.
+ *
+ * Confidence and supply: an opposition party agrees to walk out of the
+ * division rather than vote in it, for one budget, in return for capital
+ * spent and a good deal of explaining. It is the only route a minority
+ * government has, which is what makes being in a minority a hard position
+ * rather than a lost one.
+ *
+ * The cost is their seats and their distance from you. The other cost is
+ * paid to your own side, because nothing annoys a backbench like watching
+ * the other lot get paid for doing nothing.
+ */
+function handleSecureSupply(state: GameState, partyId: string): IntentResult {
+  if (!isBudgetSeason(state.turnNumber)) {
+    return reject(state, 'Supply is negotiated while the budget is being written.');
+  }
+  if (state.budget.stage === 'presented') {
+    return reject(state, 'The budget is before the chamber. It is too late to deal.');
+  }
+
+  const party = state.parties.find((p) => p.id === partyId);
+  if (!party) return reject(state, 'No such party.');
+  if (party.isPlayer || party.inCoalition) {
+    return reject(state, 'They are already in the government. Their votes are not for sale.');
+  }
+  if (state.budget.supply.includes(partyId)) {
+    return reject(state, `${party.shortName} has already agreed to stand aside.`);
+  }
+
+  const cost = supplyCost(party, playerParty(state.parties));
+  if (state.politicalCapital < cost) {
+    return reject(state, `${party.shortName} wants ${cost} PC to stay out of the division.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, cost);
+  next.budget = { ...next.budget, supply: [...next.budget.supply, partyId] };
+  next.partyInternals.cohesion = clampMood(next.partyInternals.cohesion + SUPPLY_COHESION_COST);
+
+  log(entries, {
+    kind: 'coalition',
+    label: `Supply agreed with ${party.shortName}`,
+    delta: -cost,
+    cause:
+      `${party.name} will leave the chamber rather than vote on the budget. They have not ` +
+      'joined the government, they have not endorsed a word of it, and they will say so ' +
+      'at length. Your own benches have noticed what it cost.',
+    unit: 'PC',
+  });
   return ok(next);
 }
 
@@ -4189,10 +4278,17 @@ function handleFormGovernment(state: GameState): IntentResult {
     party.cabinetDemand = demand.cabinetPosts;
     party.redLines = demand.redLines;
 
-    /* Honouring the sector floor is a commitment, so fund it on day one. */
+    /* Honouring the sector floor is a commitment, so fund it on day one —
+       in the lines, which is where the money actually is. */
     const sector = findSector(next.sectors, demand.sectorFloor.sector);
     if (sector.funding < demand.sectorFloor.amount) {
-      sector.funding = demand.sectorFloor.amount;
+      next.budget = setSectorFunding(
+        next.budget,
+        demand.sectorFloor.sector,
+        demand.sectorFloor.amount,
+        'enacted',
+      );
+      syncSectorsToBudget(next);
     }
   }
 

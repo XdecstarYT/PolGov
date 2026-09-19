@@ -41,8 +41,12 @@ import {
   MINISTRY_RISE_MOOD,
   SECTOR_BASELINE_FUNDING,
   STATUTORY_SERVICES,
+  SUPPLY_DISTANCE_COST,
+  SUPPLY_PC_BASE,
+  SUPPLY_PC_PER_SEAT,
   TURNS_PER_YEAR,
 } from '../balance.ts';
+import type { Rng } from '../rng.ts';
 import {
   MINISTRY_TEMPLATES,
   findMinistry,
@@ -121,6 +125,7 @@ export function buildBudget(sectors: readonly Sector[], turn = 0): Budget {
     })),
     division: null,
     defeats: 0,
+    supply: [],
     enactedTurn: turn,
   };
 }
@@ -414,9 +419,11 @@ export function divideOnBudget(
   budget: Budget,
   parties: readonly Party[],
   totalSeats: number,
+  rng?: Rng,
 ): BudgetDivision {
   const reactions = cabinetReaction(budget, parties);
   const rebels: { partyId: string; seats: number }[] = [];
+  const supply = new Set(budget.supply);
 
   let ayes = 0;
   let noes = 0;
@@ -424,7 +431,9 @@ export function divideOnBudget(
   for (const party of parties) {
     const inGovernment = party.isPlayer || party.inCoalition;
     if (!inGovernment) {
-      noes += party.seats;
+      /* A party that has agreed supply walks out rather than votes. That is
+         what confidence and supply buys: not their votes, their absence. */
+      if (!supply.has(party.id)) noes += party.seats;
       continue;
     }
 
@@ -434,7 +443,14 @@ export function divideOnBudget(
       .filter((r) => r.heldBy === party.id || (party.isPlayer && r.heldBy === null))
       .reduce((max, r) => Math.max(max, r.rebellion), 0);
 
-    const rebelSeats = Math.round(party.seats * worst);
+    /*
+     * Without a generator this returns the central estimate — which is what
+     * the whips' count is, and what the player is shown before the vote.
+     * The division itself is drawn around it, because a whips' count is an
+     * estimate made by people asking other people how they intend to vote.
+     */
+    const share = worst > 0 && rng ? Math.max(0, worst + jitter(rng) * REBELLION_NOISE) : worst;
+    const rebelSeats = Math.round(party.seats * share);
     if (rebelSeats > 0) rebels.push({ partyId: party.id, seats: rebelSeats });
     ayes += party.seats - rebelSeats;
     noes += rebelSeats;
@@ -442,6 +458,33 @@ export function divideOnBudget(
 
   const abstain = Math.max(0, totalSeats - ayes - noes);
   return { for: ayes, against: noes, abstain, passed: ayes > noes, rebels };
+}
+
+/** How far a whips' count can be out, as a share of the seats in question. */
+const REBELLION_NOISE = 0.22;
+
+/** Symmetric in [-1, 1], concentrated near nothing much happening. */
+function jitter(rng: Rng): number {
+  return rng.next() + rng.next() - 1;
+}
+
+/**
+ * What an opposition party wants for staying out of the division.
+ *
+ * Their seats, because that is what they are selling, and their distance
+ * from you, because a party that agrees with you is cheaper to buy than one
+ * that has spent the year saying you are ruining the country.
+ */
+export function supplyCost(party: Party, player: Party): number {
+  const distance =
+    Math.abs(party.ideology.economic - player.ideology.economic) +
+    Math.abs(party.ideology.social - player.ideology.social) +
+    Math.abs(party.ideology.environmental - player.ideology.environmental);
+
+  return Math.round(
+    SUPPLY_PC_BASE +
+      party.seats * SUPPLY_PC_PER_SEAT * (1 + distance * SUPPLY_DISTANCE_COST),
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -464,6 +507,8 @@ export function enactBudget(budget: Budget, turn: number): Budget {
     stage: 'enacted',
     enactedTurn: turn,
     defeats: 0,
+    /* The agreement was for one budget. Next year they will want paying again. */
+    supply: [],
     lines: budget.lines.map((line) => ({
       ...line,
       enacted: line.proposed,
@@ -540,6 +585,7 @@ export function lapseBudget(budget: Budget, turn: number): Budget {
     enactedTurn: turn,
     defeats: budget.defeats + 1,
     division: null,
+    supply: [],
     lines: budget.lines.map((line) => ({
       ...line,
       proposed: line.enacted,
@@ -572,6 +618,55 @@ export function sectorsFromBudget(budget: Budget): Record<SectorKey, number> {
     out[findService(line.service).sector] += line.enacted;
   }
   return out;
+}
+
+/**
+ * Move a whole sector at once, and let the lines follow.
+ *
+ * The five sector figures are still a legitimate control — a chancellor does
+ * say "health goes up four per cent" before anybody works out what that
+ * means for each service — but they are not a separate account. Setting one
+ * scales the lines underneath it, pro rata and only the ones that are
+ * actually a decision, so the document and the summary cannot disagree.
+ */
+export function setSectorFunding(
+  budget: Budget,
+  sector: SectorKey,
+  amount: number,
+  /*
+   * Which column it lands in. A change made while the budget is being
+   * written is a proposal and waits for the chamber; a supplementary
+   * estimate voted out of season is money being spent today, which is what
+   * makes an emergency budget worth what it costs.
+   */
+  into: 'proposed' | 'enacted' = 'proposed',
+): Budget {
+  const inSector = budget.lines.filter((l) => findService(l.service).sector === sector);
+  const fixed = inSector
+    .filter((l) => isStatutory(l.service))
+    .reduce((sum, l) => sum + l.enacted, 0);
+  const movable = inSector
+    .filter((l) => !isStatutory(l.service))
+    .reduce((sum, l) => sum + l.enacted, 0);
+
+  /* Statutory spending in this sector is already owed, so only what is left
+     can be moved — and if there is nothing movable, nothing moves. */
+  const target = Math.max(fixed, amount);
+  if (movable <= 0) return budget;
+  const scale = (target - fixed) / movable;
+
+  return {
+    ...budget,
+    stage: into === 'proposed' ? 'drafting' : budget.stage,
+    lines: budget.lines.map((line) => {
+      if (findService(line.service).sector !== sector) return line;
+      if (isStatutory(line.service)) return line;
+      const next = line.enacted * scale;
+      return into === 'enacted'
+        ? { ...line, enacted: next, proposed: next }
+        : { ...line, proposed: next };
+    }),
+  };
 }
 
 /** Service funding straight off the budget, rather than by fixed weight. */
