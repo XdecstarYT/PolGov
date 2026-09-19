@@ -80,7 +80,7 @@ export const GLOBAL_EVENT_TEMPLATES: GlobalEventTemplate[] = [
       'It arrives at every petrol station and in every delivery cost within a month, which makes it an inflation problem before it is an energy problem.',
     weight: 1.0,
     weeks: 40,
-    effects: { inflation: 2.6, growth: -0.9, tension: 5 },
+    effects: { inflation: 1.6, growth: -0.9, tension: 5 },
     response: {
       label: 'Release the strategic reserve',
       cost: 14,
@@ -134,7 +134,7 @@ export const GLOBAL_EVENT_TEMPLATES: GlobalEventTemplate[] = [
       'Through the price of everything they both export, through the shipping that used to go past them, and through every alliance that touches either of them.',
     weight: 0.9,
     weeks: 60,
-    effects: { tension: 16, trade: 0.92, inflation: 1.1, migration: 1.8 },
+    effects: { tension: 16, trade: 0.92, inflation: 0.7, migration: 1.8 },
     response: null,
   },
   {
@@ -165,7 +165,7 @@ export const GLOBAL_EVENT_TEMPLATES: GlobalEventTemplate[] = [
       'Through food, which is the part of inflation that everybody notices and nobody can substitute away from.',
     weight: 0.85,
     weeks: 46,
-    effects: { inflation: 1.9, migration: 1.1, tension: 4 },
+    effects: { inflation: 1.1, migration: 1.1, tension: 4 },
     response: null,
   },
   {
@@ -240,7 +240,7 @@ export const GLOBAL_EVENT_TEMPLATES: GlobalEventTemplate[] = [
       'Through every imported thing, arriving later and costing more, and through the insurance that decides whether anything sails at all.',
     weight: 0.7,
     weeks: 28,
-    effects: { trade: 0.88, inflation: 1.4, tension: 8 },
+    effects: { trade: 0.88, inflation: 0.9, tension: 8 },
     response: null,
   },
   {

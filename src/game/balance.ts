@@ -1863,11 +1863,13 @@ export const FOREIGN_WAR_THRESHOLD = -72;
 /**
  * How often something happens that was not aimed here.
  *
- * About one a year on average, with at most three running at once, which
- * is roughly the rate at which the real world produces things a finance
- * ministry has to write a note about.
+ * One every couple of years. Sized by measurement rather than by intuition:
+ * at one a year, with events running forty to a hundred weeks, something was
+ * ALWAYS running, and since most of them are inflationary the economy sat
+ * under a permanent supply shock and never returned to target. A shock the
+ * country is always having is not a shock; it is the weather.
  */
-export const GLOBAL_EVENT_BASE_RISK = 0.022;
+export const GLOBAL_EVENT_BASE_RISK = 0.010;
 
 /** Political capital to respond to something that started somewhere else. */
 export const GLOBAL_RESPONSE_PC_DEFAULT = 14;
