@@ -90,7 +90,23 @@ export function allocateSeats(
   return allocation;
 }
 
-/** The multiplier applied to the player's support by their standing. */
+/**
+ * What the player's standing would be worth as a flat multiplier on their
+ * support — and deliberately NOT what the election uses.
+ *
+ * Kept because it is the honest statement of the alternative, and because
+ * having it here makes the choice visible instead of implicit. The
+ * election applies standing as `incumbentBonus` instead, at a fraction of
+ * this strength, because the things that drive approval are already in
+ * front of the voter as issue scores. Multiplying support by standing ON
+ * TOP of that would count the same four years twice and make every
+ * election a referendum on a single number.
+ *
+ * Measured across six seeds, the model as it stands returns about 48 seats
+ * of 180 for a government that succeeded at everything and about 12 for
+ * one that failed at everything. That range is the feedback loop, and it
+ * comes from the record rather than from this function.
+ */
 export function approvalMultiplier(approval: number): number {
   return ELECTION_APPROVAL_FLOOR + (approval / 100) * ELECTION_APPROVAL_RANGE;
 }

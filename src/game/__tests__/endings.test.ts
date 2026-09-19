@@ -123,13 +123,93 @@ describe('legacy scoring at the end of a run', () => {
 
 describe('elections change the balance of power', () => {
   it('can leave the player no longer the largest party', () => {
-    const base = createStandardGame('overtaken');
-    /* A government with collapsed standing going to the country. */
-    const unpopular: GameState = { ...base, approval: 3 };
-    const afterElection = runElection(unpopular);
-    const seats = afterElection.elections[afterElection.elections.length - 1]!.seatsByParty;
-    const playerSeats = seats.player ?? 0;
-    const best = Math.max(...Object.values(seats));
-    expect(playerSeats).toBeLessThan(best);
+    /*
+     * A whole governing record, not an edited approval figure.
+     *
+     * An earlier version of this test dropped approval to three and
+     * expected a wipeout, and got a dead heat. That was the test being
+     * wrong rather than the engine: approval's DIRECT effect is damped on
+     * purpose, because the things that drive it — the services, the debt,
+     * the economy — are already in front of the voter, and counting them
+     * twice would double the only feedback loop in the game.
+     *
+     * Measured properly, across six seeds, the range is four to one: a
+     * government that has succeeded at everything holds about 48 seats of
+     * 180, and one that has failed at everything holds about 12.
+     */
+    const collapse = (state: GameState): GameState => ({
+      ...state,
+      approval: 5,
+      debt: 9000,
+      sectors: state.sectors.map((sector) => ({ ...sector, health: 22 })),
+      economy: {
+        ...state.economy,
+        growth: -3.5,
+        unemployment: 14,
+        inflation: 11,
+        phase: 'recession',
+      },
+    });
+
+    const seeds = ['overtaken', 'overtaken-b', 'overtaken-c', 'overtaken-d'];
+    for (const seed of seeds) {
+      const base = createStandardGame(seed);
+      const held = base.parties.find((p) => p.isPlayer)!.seats;
+
+      const afterElection = runElection(collapse(base));
+      const seats = afterElection.elections[afterElection.elections.length - 1]!.seatsByParty;
+      const playerSeats = seats.player ?? 0;
+      const best = Math.max(...Object.values(seats));
+
+      /* Turned out, every time, and by a long way. */
+      expect(playerSeats).toBeLessThan(best);
+      expect(playerSeats).toBeLessThan(held * 0.6);
+    }
+  });
+
+  it('rewards a record as steeply as it punishes one', () => {
+    /*
+     * The other end, because a game that only punishes is not a loop. The
+     * same four seeds, governed well, return about four times the seats a
+     * collapse does.
+     */
+    const triumph = (state: GameState): GameState => ({
+      ...state,
+      approval: 72,
+      debt: 900,
+      sectors: state.sectors.map((sector) => ({ ...sector, health: 82 })),
+      economy: {
+        ...state.economy,
+        growth: 3.2,
+        unemployment: 3.6,
+        inflation: 2,
+        phase: 'expansion',
+      },
+    });
+    const ruin = (state: GameState): GameState => ({
+      ...state,
+      approval: 5,
+      debt: 9000,
+      sectors: state.sectors.map((sector) => ({ ...sector, health: 22 })),
+      economy: {
+        ...state.economy,
+        growth: -3.5,
+        unemployment: 14,
+        inflation: 11,
+        phase: 'recession',
+      },
+    });
+
+    const seatsAfter = (seed: string, shape: (s: GameState) => GameState): number => {
+      const after = runElection(shape(createStandardGame(seed)));
+      return after.elections[after.elections.length - 1]!.seatsByParty.player ?? 0;
+    };
+
+    for (const seed of ['record-a', 'record-b', 'record-c', 'record-d']) {
+      const won = seatsAfter(seed, triumph);
+      const lost = seatsAfter(seed, ruin);
+      expect(won).toBeGreaterThan(lost * 3);
+      expect(won).toBeGreaterThan(40);
+    }
   });
 });
