@@ -135,7 +135,7 @@ export interface Effects {
     growthImpulse: number;
     inflationImpulse: number;
     confidenceImpulse: number;
-    months: number;
+    turns: number;
   };
   /** Multiplier applied to any shock this event would otherwise deliver. */
   shockRelief?: number;
@@ -921,7 +921,7 @@ export interface InfrastructureProject {
   /** ₡bn still to be paid. */
   remainingCost: number;
   /** Months until it opens. */
-  remainingMonths: number;
+  remainingTurns: number;
   /** The turn it was commissioned, and by which term. */
   startedTurn: number;
   startedTerm: number;

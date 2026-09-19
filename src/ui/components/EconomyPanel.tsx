@@ -8,7 +8,7 @@
  * is legible rather than mysterious.
  *
  * The forecast is shown with its own limitation stated. It is produced by
- * running the same monthly step the turn resolution runs, with the month's
+ * running the same monthly step the turn resolution runs, with the week's
  * economic weather set to zero, which makes it the model's honest expectation
  * and guarantees it will be wrong. Saying so is the point: a government that
  * trusted its forecasts would be making a mistake the game wants the player
@@ -90,7 +90,7 @@ function Trace({
         viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
         className="mt-1 w-full touch-none"
         role="img"
-        aria-label={`${label}: ${latest.toFixed(1)} against a normal level of ${reference.toFixed(1)}, over ${points.length} months.`}
+        aria-label={`${label}: ${latest.toFixed(1)} against a normal level of ${reference.toFixed(1)}, over ${points.length} weeks.`}
         onPointerMove={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
           const px = ((event.clientX - rect.left) / rect.width) * SPARK_W;
@@ -143,7 +143,7 @@ function Trace({
       </svg>
       <p className="text-[0.7rem] text-ink-faint tnum">
         {active
-          ? `month ${active.point.turn}: ${active.value.toFixed(1)}`
+          ? `week ${active.point.turn}: ${active.value.toFixed(1)}`
           : `normal is ${reference.toFixed(1)}`}
       </p>
     </div>
@@ -227,7 +227,7 @@ export function EconomyPanel() {
       <div className="mt-3 flex flex-wrap gap-1.5">
         {e.phase === 'recession' && <Tag tone="loss">Recession</Tag>}
         {e.contractionRun > 0 && e.phase !== 'recession' && (
-          <Tag tone="warn">{e.contractionRun} month{e.contractionRun === 1 ? '' : 's'} contracting</Tag>
+          <Tag tone="warn">{e.contractionRun} week{e.contractionRun === 1 ? '' : 's'} contracting</Tag>
         )}
         {e.outputGap > 1.8 && <Tag tone="warn">Running above capacity</Tag>}
         {e.outputGap < -1.8 && <Tag tone="warn">Well below capacity</Tag>}
@@ -241,7 +241,7 @@ export function EconomyPanel() {
 
       {e.history.length < 2 ? (
         <p className="mt-5 text-xs leading-relaxed text-ink-faint">
-          The charts appear once a few months have been resolved. There is nothing to plot from a
+          The charts appear once a few weeks have been resolved. There is nothing to plot from a
           single reading, and a chart of one point would only be pretending otherwise.
         </p>
       ) : (
@@ -319,7 +319,7 @@ export function EconomyPanel() {
 
       <div className="mt-5 rule-engraved border-t pt-4">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="label text-ink-faint">Treasury forecast · {FORECAST_HORIZON} months</span>
+          <span className="label text-ink-faint">Treasury forecast · a year ahead</span>
           {forecast.recessionInHorizon && <Tag tone="warn">Recession in the horizon</Tag>}
         </div>
         <p className="mt-1.5 text-sm text-ink-soft">
@@ -331,7 +331,7 @@ export function EconomyPanel() {
           of it.
         </p>
         <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-          This is produced by running the same month the turn resolution runs, twelve times, with
+          This is produced by running the same week the turn resolution runs, fifty-two times, with
           nothing unusual happening. Something unusual always happens. Treat it as what the model
           believes rather than as what will occur — governments that have confused the two are the
           reason the distinction is printed here.

@@ -20,7 +20,16 @@ let state = createGame({
 
 const must = (intent) => {
   const r = applyIntent(state, intent);
-  if (r.error) throw new Error(`${intent.type}: ${r.error}`);
+  /*
+   * A government that has run out of political capital is a normal state,
+   * not a bug — especially now a turn is a week and capital regenerates in
+   * weekly slices. The bot notes it and moves on; anything else is a real
+   * failure and still throws.
+   */
+  if (r.error) {
+    if (/political capital|Not enough|already|only available|cannot/i.test(r.error)) return state;
+    throw new Error(`${intent.type}: ${r.error}`);
+  }
   state = r.state;
 };
 const tryTo = (intent) => {

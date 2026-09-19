@@ -39,6 +39,7 @@ import {
   INCOME_TAX_DEDUCTION_MAX,
   TAX_CHANGE_MEMORY_MONTHS,
   TAX_PROGRESSIVITY_SHIFT,
+  TURNS_PER_YEAR,
 } from '../balance.ts';
 import type { SegmentKey } from '../content/segments.ts';
 import type { SectorKey, TaxCode } from '../types.ts';
@@ -117,27 +118,28 @@ export function incomeReliefFactor(code: TaxCode): number {
   return Math.max(0.3, 1 - fromDeductions - fromCredits);
 }
 
-/** Total government receipts for a month, ₡bn. */
-export function monthlyReceipts(code: TaxCode, gdp: number): number {
+/** Total government receipts for one turn, ₡bn. */
+export function turnReceipts(code: TaxCode, gdp: number): number {
   let annual = gdp * NON_TAX_RECEIPTS_SHARE;
   for (const template of TAX_TEMPLATES) {
     const raw = instrumentYield(template, code.rates[template.key], gdp);
     annual += template.key === 'income' ? raw * incomeReliefFactor(code) : raw;
   }
-  return annual / 12;
+  return annual / TURNS_PER_YEAR;
 }
 
-/** Every instrument's monthly contribution, largest first. */
+/** Every instrument's contribution this turn, largest first. */
 export function receiptsBreakdown(
   code: TaxCode,
   gdp: number,
-): { template: TaxTemplate; rate: number; monthly: number; pastPeak: boolean }[] {
+): { template: TaxTemplate; rate: number; perTurn: number; pastPeak: boolean }[] {
   return TAX_TEMPLATES.map((template) => {
     const rate = code.rates[template.key];
     const raw = instrumentYield(template, rate, gdp);
-    const monthly = (template.key === 'income' ? raw * incomeReliefFactor(code) : raw) / 12;
-    return { template, rate, monthly, pastPeak: isPastPeak(template, rate) };
-  }).sort((a, b) => b.monthly - a.monthly);
+    const perTurn =
+      (template.key === 'income' ? raw * incomeReliefFactor(code) : raw) / TURNS_PER_YEAR;
+    return { template, rate, perTurn, pastPeak: isPastPeak(template, rate) };
+  }).sort((a, b) => b.perTurn - a.perTurn);
 }
 
 /**
@@ -150,7 +152,9 @@ export function receiptsBreakdown(
 export function marginalYield(template: TaxTemplate, rate: number, gdp: number): number {
   const step = 0.01;
   const up = Math.min(template.maxRate, rate + step);
-  return (instrumentYield(template, up, gdp) - instrumentYield(template, rate, gdp)) / 12;
+  return (
+    (instrumentYield(template, up, gdp) - instrumentYield(template, rate, gdp)) / TURNS_PER_YEAR
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -223,8 +227,8 @@ export function incidenceBySegment(code: TaxCode, gdp: number): Partial<Record<S
  * way would quietly invert every segment weight that reads it.
  */
 export function taxBurdenScore(code: TaxCode, gdp: number): number {
-  const inherited = monthlyReceipts(buildTaxCode(), gdp);
-  const now = monthlyReceipts(code, gdp);
+  const inherited = turnReceipts(buildTaxCode(), gdp);
+  const now = turnReceipts(code, gdp);
   const delta = inherited > 0 ? (now - inherited) / inherited : 0;
   return clamp(66 - delta * 130, 0, 100);
 }

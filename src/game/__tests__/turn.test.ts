@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { applyIntent, applyIntents, beginTurn, isBudgetTurn, isCampaignTurn, resolveTurn } from '../turn.ts';
 import { createStandardGame } from '../setup.ts';
-import { PC_COSTS, TURNS_PER_TERM } from '../balance.ts';
+import {
+  BUDGET_TURN_INTERVAL,
+  CAMPAIGN_START_TURN,
+  CAMPAIGN_WEEKS,
+  PC_COSTS,
+  TURNS_PER_TERM,
+} from '../balance.ts';
 import type { GameState, Intent } from '../index.ts';
 
 /** A game that has taken office, so tests start at a normal briefing. */
@@ -62,17 +68,23 @@ describe('turn state machine', () => {
     expect(result.error).toBeTruthy();
   });
 
-  it('identifies budget turns every third turn, starting at turn 1', () => {
+  it('identifies budget turns quarterly, starting at turn 1', () => {
     expect(isBudgetTurn(1)).toBe(true);
     expect(isBudgetTurn(2)).toBe(false);
-    expect(isBudgetTurn(3)).toBe(false);
-    expect(isBudgetTurn(4)).toBe(true);
+    expect(isBudgetTurn(13)).toBe(false);
+    /* Thirteen weeks on: the start of the next quarter. A government that
+       could rewrite its spending every week would never have to live with
+       a decision. */
+    expect(isBudgetTurn(1 + BUDGET_TURN_INTERVAL)).toBe(true);
   });
 
-  it('identifies the campaign run-up as the last two turns of a term', () => {
-    expect(isCampaignTurn(10)).toBe(false);
-    expect(isCampaignTurn(11)).toBe(true);
+  it('identifies the campaign run-up as the last eight weeks of a term', () => {
+    expect(isCampaignTurn(CAMPAIGN_START_TURN - 1)).toBe(false);
+    expect(isCampaignTurn(CAMPAIGN_START_TURN)).toBe(true);
     expect(isCampaignTurn(TURNS_PER_TERM)).toBe(true);
+    /* Eight weeks of it, which is a real campaign rather than the two
+       months the monthly turn could offer. */
+    expect(TURNS_PER_TERM - CAMPAIGN_START_TURN + 1).toBe(CAMPAIGN_WEEKS);
   });
 });
 

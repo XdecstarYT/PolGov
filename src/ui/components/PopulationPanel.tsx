@@ -181,7 +181,7 @@ export function PopulationPanel() {
                       }
                     >
                       {entry.netFlow >= 0 ? '+' : '−'}
-                      {Math.abs(entry.netFlow).toFixed(2)}k/mo
+                      {Math.abs(entry.netFlow).toFixed(2)}k/yr
                     </span>
                   </span>
                 </li>

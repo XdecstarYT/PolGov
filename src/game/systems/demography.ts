@@ -55,6 +55,7 @@ import {
   URBANISATION_DRIFT,
   URBANISATION_START,
   VITAL_RATE_ADJUST,
+  TURNS_PER_YEAR,
 } from '../balance.ts';
 import type {
   Demography,
@@ -126,7 +127,7 @@ export function dependencyRatio(demography: Demography): number {
 /** Annual growth in the labour force, %. What the economy's speed limit reads. */
 export function workforceGrowth(previous: Demography, current: Demography): number {
   if (previous.workforce <= 0) return 0;
-  return ((current.workforce - previous.workforce) / previous.workforce) * 100 * 12;
+  return ((current.workforce - previous.workforce) / previous.workforce) * 100 * TURNS_PER_YEAR;
 }
 
 /**
@@ -221,20 +222,21 @@ export function stepDemography(demography: Demography, inputs: DemographyInputs)
    * births and positive net migration. Nothing about it was visible in any
    * single month.
    */
-  const perMonth = (rate: number) => rate / 1000 / 12;
+  /* A rate stated per thousand per year, as a fraction per turn. */
+  const perTurn = (rate: number) => rate / 1000 / TURNS_PER_YEAR;
   const youth = demography.youthShare * demography.population;
   const working = demography.workingShare * demography.population;
   const retired = demography.retiredShare * demography.population;
 
-  const births = demography.population * perMonth(birthRate);
-  const migrants = demography.population * perMonth(netMigration);
+  const births = demography.population * perTurn(birthRate);
+  const migrants = demography.population * perTurn(netMigration);
 
-  const comingOfAge = youth / (YEARS_AS_YOUTH * 12);
-  const retiring = working / (YEARS_AT_WORK * 12);
+  const comingOfAge = youth / (YEARS_AS_YOUTH * TURNS_PER_YEAR);
+  const retiring = working / (YEARS_AT_WORK * TURNS_PER_YEAR);
   const retiredYears = Math.max(4, lifeExpectancy - YEARS_AS_YOUTH - YEARS_AT_WORK);
-  const retiredDeaths = retired / (retiredYears * 12);
-  const workingDeaths = working * perMonth(PREMATURE_DEATH_RATE);
-  const youthDeaths = youth * perMonth(PREMATURE_DEATH_RATE * 0.2);
+  const retiredDeaths = retired / (retiredYears * TURNS_PER_YEAR);
+  const workingDeaths = working * perTurn(PREMATURE_DEATH_RATE);
+  const youthDeaths = youth * perTurn(PREMATURE_DEATH_RATE * 0.2);
 
   const nextYouth = Math.max(
     0.01,
@@ -257,7 +259,8 @@ export function stepDemography(demography: Demography, inputs: DemographyInputs)
   /* The death rate is an OUTPUT of the cohorts rather than a setting of its
      own. Stating it independently is how the earlier version came to have a
      population whose deaths did not match its own age structure. */
-  const deathRate = ((retiredDeaths + workingDeaths + youthDeaths) / population) * 1000 * 12;
+  const deathRate =
+    ((retiredDeaths + workingDeaths + youthDeaths) / population) * 1000 * TURNS_PER_YEAR;
 
   /* 4. Participation. Slow to rise, because people who left the labour force
         are slow to re-enter it even once the work comes back. */
@@ -283,7 +286,8 @@ export function stepDemography(demography: Demography, inputs: DemographyInputs)
   const regional = stepRegionalPopulation(demography.regional, inputs.regionalJobs, migrants);
 
   const urbanisation = clamp(
-    demography.urbanisation + (URBANISATION_DRIFT / 12) * (1 - demography.urbanisation) * 4,
+    demography.urbanisation +
+      (URBANISATION_DRIFT / TURNS_PER_YEAR) * (1 - demography.urbanisation) * 4,
     0,
     0.96,
   );

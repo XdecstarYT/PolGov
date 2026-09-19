@@ -14,7 +14,7 @@ import {
   SECTOR_BASELINE_FUNDING,
   SECTOR_KEYS,
 } from '../balance.ts';
-import { GDP_START } from '../balance.ts';
+import { GDP_START, TURNS_PER_TERM, TURNS_PER_YEAR } from '../balance.ts';
 import type { Sector } from '../types.ts';
 
 /** Debt is judged against output now, so every call needs an economy. */
@@ -120,9 +120,13 @@ describe('political capital', () => {
     expect(computePcRegen(100)).toBeGreaterThan(computePcRegen(0));
   });
 
-  it('regenerates roughly 15/turn at middling approval, per the brief', () => {
-    expect(computePcRegen(50)).toBeGreaterThan(13);
-    expect(computePcRegen(50)).toBeLessThan(19);
+  it('regenerates about a quarter of its old monthly rate, because a turn is a week now', () => {
+    /* The brief asked for about 15 a month at middling approval. A turn is
+       a week now, so the same real-time rate arrives in four-and-a-third
+       smaller pieces. Scaled back up, it is the figure the brief asked for. */
+    const perMonth = computePcRegen(50) * (TURNS_PER_YEAR / 12);
+    expect(perMonth).toBeGreaterThan(13);
+    expect(perMonth).toBeLessThan(19);
   });
 
   it('clamps to the 0..PC_MAX band', () => {
@@ -140,7 +144,7 @@ describe('clamps and tenure', () => {
   it('counts turns served across terms', () => {
     expect(turnsServed(1, 1)).toBe(0);
     expect(turnsServed(1, 12)).toBe(11);
-    expect(turnsServed(2, 1)).toBe(12);
-    expect(turnsServed(3, 5)).toBe(28);
+    expect(turnsServed(2, 1)).toBe(TURNS_PER_TERM);
+    expect(turnsServed(3, 5)).toBe(TURNS_PER_TERM * 2 + 4);
   });
 });

@@ -28,7 +28,7 @@ export function Title() {
         <p className="mt-3 max-w-2xl text-ink-soft">
           You lead a party in the parliamentary democracy of Verdana. Win elections, hold a
           coalition together, pass an agenda, and balance a budget that will not balance. Every
-          month you get a desk, a briefing, and more things worth doing than you have capital for.
+          week you get a desk, a briefing, and more things worth doing than you have capital for.
         </p>
       </header>
 
@@ -36,7 +36,7 @@ export function Title() {
         <div className="space-y-6">
           <Panel title="Begin">
             <p className="text-sm text-ink-soft">
-              A full term runs twelve months and ends at a general election. Expect thirty to
+              A full term runs four years — two hundred and eight weeks — and ends at a general election. Expect thirty to
               forty-five minutes.
             </p>
             <div className="mt-4">
@@ -74,7 +74,7 @@ export function Title() {
                         {save.partyName}
                       </div>
                       <div className="truncate text-xs text-ink-faint tnum">
-                        {save.countryName} · term {save.termNumber}, month {save.turnNumber} ·{' '}
+                        {save.countryName} · term {save.termNumber}, week {save.turnNumber} ·{' '}
                         {pct(save.approval, 1)} approval
                         {save.status !== 'active' && ` · ${save.status}`}
                       </div>

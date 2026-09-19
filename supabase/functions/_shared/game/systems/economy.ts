@@ -89,6 +89,7 @@ import {
   UNEMPLOYMENT_ADJUST_RATE,
   WAGE_ADJUST_RATE,
   WAGE_TIGHTNESS_WEIGHT,
+  TURNS_PER_YEAR,
 } from '../balance.ts';
 import type {
   CyclePhase,
@@ -241,7 +242,8 @@ export function targetGrowth(
   const confidence = (economy.consumerConfidence + economy.businessConfidence) / 2;
   const confidenceTerm = (confidence - 50) * IS_CONFIDENCE_WEIGHT;
   /* Deficit as a share of output, annualised, in percentage points. */
-  const deficitShare = economy.gdp > 0 ? ((fiscalImpulse * 12) / economy.gdp) * 100 : 0;
+  const deficitShare =
+    economy.gdp > 0 ? ((fiscalImpulse * TURNS_PER_YEAR) / economy.gdp) * 100 : 0;
   const fiscalTerm = deficitShare * IS_FISCAL_MULTIPLIER;
   const { growth: shockTerm } = shockTotals(economy.shocks);
 
@@ -410,11 +412,25 @@ export function stepEconomy(economy: Economy, inputs: EconomyInputs): Economy {
   const priceMomentum =
     economy.priceMomentum * CYCLE_PERSISTENCE + (inputs.noise?.supply ?? 0) * CYCLE_SUPPLY_NOISE;
   const wanted = targetGrowth(economy, inputs.fiscalImpulse, workforceGrowth, cycleMomentum);
-  const growth = economy.growth + (wanted - economy.growth) * GROWTH_ADJUST_RATE;
+  /*
+   * Clamped because nothing real goes past here, and because without it an
+   * absurd input runs away: a fiscal impulse of several times national
+   * output drove growth so far negative that output went negative, the
+   * output gap went to infinity and every figure downstream became NaN. A
+   * guard rather than a mechanic — no reachable policy gets near it.
+   */
+  const growth = clamp(
+    economy.growth + (wanted - economy.growth) * GROWTH_ADJUST_RATE,
+    -40,
+    40,
+  );
 
-  const gdp = economy.gdp * (1 + growth / 100 / 12);
-  const potentialGdp = economy.potentialGdp * (1 + trend / 100 / 12);
-  const outputGap = ((gdp - potentialGdp) / potentialGdp) * 100;
+  const gdp = Math.max(1, economy.gdp * (1 + growth / 100 / TURNS_PER_YEAR));
+  const potentialGdp = Math.max(
+    1,
+    economy.potentialGdp * (1 + trend / 100 / TURNS_PER_YEAR),
+  );
+  const outputGap = clamp(((gdp - potentialGdp) / potentialGdp) * 100, -60, 60);
 
   /* 3. Jobs. Okun's law, with stickiness — hiring and firing both lag. */
   const impliedUnemployment =
@@ -596,7 +612,7 @@ export function forecastEconomy(
  * the deficit widens on its own, before the government has decided anything.
  */
 export function computeRevenueFromGdp(gdp: number, revenueModifier: number): number {
-  return (gdp / 12) * REVENUE_GDP_SHARE + revenueModifier;
+  return (gdp / TURNS_PER_YEAR) * REVENUE_GDP_SHARE + revenueModifier;
 }
 
 /**

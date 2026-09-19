@@ -2,7 +2,7 @@
  * Agenda.tsx — phase 3. Where political capital is spent.
  *
  * Everything that costs capital is here: tabling legislation, whipping it,
- * addressing the country, buying off partners, and — in the final two months
+ * addressing the country, buying off partners, and — in the final eight weeks
  * of a term — campaigning.
  *
  * The Policy Desk shows the full pass-chance arithmetic and any red line the
@@ -56,7 +56,7 @@ export function Agenda() {
     <div className="space-y-5">
       <Panel title="The agenda" aside={`${game.politicalCapital.toFixed(0)} PC available`}>
         <p className="text-sm leading-relaxed text-ink-soft">
-          Spend what you have. Capital regenerates each month in proportion to your standing, so a
+          Spend what you have. Capital regenerates each week in proportion to your standing, so a
           popular government can do more — and an unpopular one finds every door heavier.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -139,7 +139,7 @@ function PolicyDesk() {
     >
       {tabled.length > 0 && (
         <div className="mb-4 border border-rule-strong bg-sunk/40 p-3">
-          <Kicker>Tabled for this month&apos;s divisions</Kicker>
+          <Kicker>Tabled for this week&apos;s divisions</Kicker>
           <ul className="space-y-3">
             {tabled.map((bill) => (
               <li key={bill.id}>
@@ -164,7 +164,7 @@ function PolicyDesk() {
 
       {inCommittee.length > 0 && (
         <div className="mb-4 border border-rule p-3">
-          <Kicker>In committee — returns next month</Kicker>
+          <Kicker>In committee — returns next week</Kicker>
           <ul className="space-y-1">
             {inCommittee.map((bill) => (
               <li key={bill.id} className="text-sm text-ink-soft">

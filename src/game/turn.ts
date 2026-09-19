@@ -29,6 +29,7 @@ import {
   PUBLIC_ADDRESS_DIMINISH,
   SECTOR_LABELS,
   TURNS_PER_TERM,
+  TURNS_PER_YEAR,
   WHIP_MAX_STEPS,
   AD_BUY_INVESTMENT,
   CAMPAIGN_STOP_INVESTMENT,
@@ -374,8 +375,8 @@ export function applyEffects(
       growthImpulse: spec.growthImpulse * relief,
       inflationImpulse: spec.inflationImpulse * relief,
       confidenceImpulse: spec.confidenceImpulse * relief,
-      remaining: spec.months,
-      duration: spec.months,
+      remaining: spec.turns,
+      duration: spec.turns,
       startedTurn: state.turnNumber,
     });
     log(entries, {
@@ -387,7 +388,7 @@ export function applyEffects(
         (relief < 1
           ? `Softened to ${(relief * 100).toFixed(0)}% of what it would have been, `
           : '') +
-        `${spec.months} months of it, worst in the first.`,
+        `${spec.turns} weeks of it, worst in the first.`,
       unit: '',
     });
   }
@@ -1196,10 +1197,11 @@ export function resolveTurn(state: GameState): GameState {
     const tick = stepPublicFinance(next.finance, {
       debt: next.debt,
       economy: next.economy,
-      monthlyBalance: fiscal.balance,
+      turnBalance: fiscal.balance,
       spending: fiscal.spending,
       regions: next.regions,
-      nationalRevenue: fiscal.revenue,
+      /* Annual, like every other budget figure the regions read. */
+      nationalRevenue: fiscal.revenue * TURNS_PER_YEAR,
       newBorrowing: Math.max(0, fiscal.debtDelta),
       /* The treasury funds at five years by default: dearer than short
          paper, and it does not hand the next crisis a refinancing cliff. */

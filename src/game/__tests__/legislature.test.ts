@@ -171,14 +171,14 @@ describe('red lines', () => {
       id: 'rl-floor',
       kind: 'sector_floor',
       sector: 'health',
-      threshold: 28,
-      description: 'Health stays at or above ₡28bn.',
+      threshold: 336,
+      description: 'Health stays at or above ₡336bn a year.',
     };
-    // Baseline health funding is 30; a -1 cut stays above the floor.
-    expect(billViolatesRedLine(makeBill({ effects: { fundingDeltas: { health: -1 } } }), floor, sectors)).toBe(false);
-    expect(billViolatesRedLine(makeBill({ effects: { fundingDeltas: { health: -5 } } }), floor, sectors)).toBe(true);
+    // Baseline health funding is ₡360bn a year; a ₡12bn cut stays above it.
+    expect(billViolatesRedLine(makeBill({ effects: { fundingDeltas: { health: -12 } } }), floor, sectors)).toBe(false);
+    expect(billViolatesRedLine(makeBill({ effects: { fundingDeltas: { health: -60 } } }), floor, sectors)).toBe(true);
     // An increase never breaches a floor.
-    expect(billViolatesRedLine(makeBill({ effects: { fundingDeltas: { health: 10 } } }), floor, sectors)).toBe(false);
+    expect(billViolatesRedLine(makeBill({ effects: { fundingDeltas: { health: 120 } } }), floor, sectors)).toBe(false);
   });
 
   it('detects a category breach', () => {

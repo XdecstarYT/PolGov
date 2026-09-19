@@ -98,7 +98,7 @@ describe('the ten crises', () => {
       expect(shocks.length, template.key).toBeGreaterThan(0);
       for (const choice of shocks) {
         const shock = choice.effects.economicShock!;
-        expect(shock.months).toBeGreaterThan(0);
+        expect(shock.turns).toBeGreaterThan(0);
         expect(shock.id.length).toBeGreaterThan(0);
       }
     }

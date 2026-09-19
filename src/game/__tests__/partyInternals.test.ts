@@ -28,6 +28,7 @@ import {
   MEMBERS_FLOOR,
   SECTOR_BASELINE_FUNDING,
   SECTOR_KEYS,
+  CAMPAIGN_START_TURN,
 } from '../balance.ts';
 import { Rng } from '../rng.ts';
 import { makeIdeology, normalisedDistance } from '../ideology.ts';
@@ -336,7 +337,8 @@ describe('the party pays for its own campaigning', () => {
       ...base,
       phase: 'agenda',
       negotiation: null,
-      turnNumber: 11,
+      /* Inside the eight-week campaign, which now starts at week 201. */
+      turnNumber: CAMPAIGN_START_TURN,
       politicalCapital: 100,
       campaign: {
       stopsMade: 0,

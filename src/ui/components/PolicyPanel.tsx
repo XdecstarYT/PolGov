@@ -91,11 +91,11 @@ export function PolicyLifecycle() {
                   <span className="text-sm text-ink">{bill.title}</span>
                   {!bill.inEffect && (
                     <span className="ml-2 text-xs text-ink-faint">
-                      takes effect month {bill.takesEffectOn}
+                      takes effect week {bill.takesEffectOn}
                     </span>
                   )}
                   {bill.lapsesOn && (
-                    <span className="ml-2 text-xs text-warn">lapses month {bill.lapsesOn}</span>
+                    <span className="ml-2 text-xs text-warn">lapses week {bill.lapsesOn}</span>
                   )}
                 </span>
                 <span className="flex gap-1.5">

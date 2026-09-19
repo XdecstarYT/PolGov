@@ -3,7 +3,7 @@
  *
  * The dial at the top of this panel is the most consequential control in the
  * game that nobody will ever thank a government for setting correctly. The
- * panel states that plainly, along with what cutting it saves this month and
+ * panel states that plainly, along with what cutting it saves this week and
  * what the work not done will cost later, because the decision is only
  * interesting if the player can see both halves of it.
  *
@@ -107,13 +107,13 @@ export function InfrastructurePanel() {
         />
         <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
           <span className="tnum text-ink">
-            {(pending * 100).toFixed(0)}% · {money(FULL_MAINTENANCE_COST * pending)} a month
+            {(pending * 100).toFixed(0)}% · {money(FULL_MAINTENANCE_COST * pending)} a year
           </span>
           <span className={`tnum ${saving > 0 ? 'text-warn' : 'text-ink-faint'}`}>
             {saving > 0.05
-              ? `frees ${money(saving)} a month, owes ${money(saving * 1.45)}`
+              ? `frees ${money(saving)} a year, owes ${money(saving * 1.45)}`
               : saving < -0.05
-                ? `costs ${money(-saving)} a month extra, works the backlog off`
+                ? `costs ${money(-saving)} a year extra, works the backlog off`
                 : 'holding everything where it is'}
           </span>
         </div>
@@ -201,7 +201,7 @@ export function InfrastructurePanel() {
           {(() => {
             const template = findInfrastructure(building);
             const units = 5;
-            const opensIn = Math.round(template.buildMonths / 12);
+            const opensIn = Math.round(template.buildTurns / 12);
             return (
               <div>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -215,8 +215,8 @@ export function InfrastructurePanel() {
                 <p className="mt-1 text-xs leading-relaxed text-ink-soft">{template.blurb}</p>
                 <p className="mt-1 text-[0.7rem] text-ink-faint">
                   {units} units of capacity, opening in {opensIn} years — about{' '}
-                  {Math.ceil(template.buildMonths / 48)} election
-                  {Math.ceil(template.buildMonths / 48) === 1 ? '' : 's'} from now. The credit
+                  {Math.ceil(template.buildTurns / 48)} election
+                  {Math.ceil(template.buildTurns / 48) === 1 ? '' : 's'} from now. The credit
                   will go to whoever cuts the ribbon.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -252,7 +252,7 @@ export function InfrastructurePanel() {
                 </span>
                 <span className="flex items-baseline gap-3 text-xs tnum">
                   <span className="text-ink-faint">
-                    {Math.round(project.remainingMonths / 12)}y left ·{' '}
+                    {Math.round(project.remainingTurns / 12)}y left ·{' '}
                     {money(project.remainingCost)} to pay
                   </span>
                   {termsAway(project) > 1 && (

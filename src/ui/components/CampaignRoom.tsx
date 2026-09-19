@@ -138,7 +138,7 @@ export function CampaignRoom() {
               <li key={index} className="border border-rule p-2.5">
                 <div className="flex items-baseline justify-between text-xs text-ink-faint">
                   <span>
-                    Month {poll.turnNumber} · {poll.quality} sample
+                    Week {poll.turnNumber} · {poll.quality} sample
                   </span>
                   <span className="tnum">±{poll.marginOfError.toFixed(1)} pts</span>
                 </div>

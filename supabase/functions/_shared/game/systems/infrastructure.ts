@@ -37,6 +37,8 @@ import {
   MAINTENANCE_LEVEL_MAX,
   MAINTENANCE_LEVEL_START,
   MAX_ACTIVE_PROJECTS,
+  TURNS_PER_TERM,
+  TURNS_PER_YEAR,
 } from '../balance.ts';
 import {
   FULL_MAINTENANCE_COST,
@@ -85,21 +87,24 @@ export function buildInfrastructure(): Infrastructure {
  * Money
  * ------------------------------------------------------------------ */
 
-/** What maintenance costs this month, ₡bn. */
+/** What maintenance costs, ₡bn a year. */
 export function maintenanceSpend(infrastructure: Infrastructure): number {
   return FULL_MAINTENANCE_COST * clamp(infrastructure.maintenanceLevel, 0, MAINTENANCE_LEVEL_MAX);
 }
 
-/** What the projects under construction cost this month, ₡bn. */
+/** What the projects under construction cost, ₡bn a year. */
 export function projectSpend(infrastructure: Infrastructure): number {
   return infrastructure.projects.reduce(
     (sum, project) =>
-      sum + (project.remainingMonths > 0 ? project.remainingCost / project.remainingMonths : 0),
+      sum +
+      (project.remainingTurns > 0
+        ? (project.remainingCost / project.remainingTurns) * TURNS_PER_YEAR
+        : 0),
     0,
   );
 }
 
-/** Everything infrastructure costs this month, ₡bn. */
+/** Everything infrastructure costs, ₡bn a year. */
 export function infrastructureSpend(infrastructure: Infrastructure): number {
   return maintenanceSpend(infrastructure) + projectSpend(infrastructure);
 }
@@ -267,14 +272,17 @@ export function stepInfrastructure(infrastructure: Infrastructure): Infrastructu
      */
     const shortfall = Math.max(0, 1 - level);
     const surplus = Math.max(0, level - 1);
-    const backlogDrag = (asset.backlog / Math.max(1, template.maintenanceCost * 24)) * 0.5;
+    const backlogDrag = (asset.backlog / Math.max(1, template.maintenanceCost * 2)) * 0.5;
     const change =
       -template.decayRate * (shortfall + backlogDrag) + surplus * template.decayRate * 1.4;
     const condition = clamp(asset.condition + change, 0, 100);
 
     /* Backlog. Work not done this month is owed, at more than it was avoided
        for, because catching up is dearer than keeping up. */
-    const deferred = template.maintenanceCost * shortfall * BACKLOG_COMPOUNDING;
+    /* A year's upkeep is owed over a year, so the weekly slice is the
+       annual cost divided by the number of turns in one. */
+    const deferred =
+      (template.maintenanceCost / TURNS_PER_YEAR) * shortfall * BACKLOG_COMPOUNDING;
     /*
      * Nothing is repaid while upkeep is being skipped. An earlier version
      * cleared 3.5% of the backlog every month regardless of what was being
@@ -301,13 +309,14 @@ export function stepInfrastructure(infrastructure: Infrastructure): Infrastructu
   const opened: InfrastructureProject[] = [];
   const projects: InfrastructureProject[] = [];
   for (const project of infrastructure.projects) {
-    const monthly = project.remainingMonths > 0 ? project.remainingCost / project.remainingMonths : 0;
+    const thisTurn =
+      project.remainingTurns > 0 ? project.remainingCost / project.remainingTurns : 0;
     const next = {
       ...project,
-      remainingMonths: project.remainingMonths - 1,
-      remainingCost: Math.max(0, project.remainingCost - monthly),
+      remainingTurns: project.remainingTurns - 1,
+      remainingCost: Math.max(0, project.remainingCost - thisTurn),
     };
-    if (next.remainingMonths <= 0) {
+    if (next.remainingTurns <= 0) {
       opened.push(next);
       const asset = assets.find((a) => a.key === next.key);
       if (asset) asset.capacity += next.units;
@@ -350,7 +359,7 @@ export function commission(
     key: template.key,
     units,
     remainingCost: template.buildCost * units,
-    remainingMonths: template.buildMonths,
+    remainingTurns: template.buildTurns,
     startedTurn: turn,
     startedTerm: term,
   };
@@ -358,7 +367,7 @@ export function commission(
 
 /** How many elections away a project opens. */
 export function termsAway(project: InfrastructureProject): number {
-  return Math.ceil(project.remainingMonths / 12 / 4);
+  return Math.ceil(project.remainingTurns / TURNS_PER_TERM);
 }
 
 export { INFRASTRUCTURE_TEMPLATES, FULL_MAINTENANCE_COST, findInfrastructure };

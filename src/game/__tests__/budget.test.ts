@@ -112,14 +112,14 @@ describe('public finances', () => {
   });
 
   it('finances a deficit entirely with new debt', () => {
-    const tick = resolveFiscalTurn(sectors({ economy: { funding: 200 } }), economy(), 0, 200);
+    const tick = resolveFiscalTurn(sectors({ economy: { funding: 2400 } }), economy(), 0, 200);
     expect(tick.balance).toBeLessThan(0);
     expect(tick.debtDelta).toBeCloseTo(-tick.balance, 6);
     expect(tick.treasuryDelta).toBe(0);
   });
 
   it('applies a surplus to debt first, then banks the remainder', () => {
-    const tick = resolveFiscalTurn(sectors({ health: { funding: 5 } }), economy(), 0, 500);
+    const tick = resolveFiscalTurn(sectors({ health: { funding: 60 } }), economy(), 0, 500);
     expect(tick.balance).toBeGreaterThan(0);
     expect(tick.debtDelta).toBeLessThan(0);
     expect(tick.treasuryDelta).toBeGreaterThan(0);

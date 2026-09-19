@@ -111,7 +111,7 @@ export function CoalitionRoom() {
                     <dt className="text-ink-faint">
                       {SECTOR_LABELS[demand.sectorFloor.sector]} funding floor
                     </dt>
-                    <dd className="tnum text-ink">{money(demand.sectorFloor.amount)}/mo</dd>
+                    <dd className="tnum text-ink">{money(demand.sectorFloor.amount)}/yr</dd>
                   </div>
                 </dl>
 

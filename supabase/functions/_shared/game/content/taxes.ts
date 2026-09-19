@@ -90,7 +90,7 @@ export const TAX_TEMPLATES: TaxTemplate[] = [
     name: 'Income tax',
     blurb: 'The largest single source, paid by everyone who works.',
     base: 0.45,
-    defaultRate: 0.285,
+    defaultRate: 0.34,
     maxRate: 0.75,
     /* Peaks around 67%. People work less and declare less, but they do not
        relocate the way capital does. */
@@ -125,7 +125,7 @@ export const TAX_TEMPLATES: TaxTemplate[] = [
     name: 'Goods and services tax',
     blurb: 'A broad tax on consumption. Cheap to collect and hard to avoid.',
     base: 0.55,
-    defaultRate: 0.1,
+    defaultRate: 0.14,
     maxRate: 0.3,
     /* Peaks around 125% — which is to say, never in practice. Broad
        consumption taxes are the hardest thing in the code to escape. */
@@ -165,7 +165,7 @@ export const TAX_TEMPLATES: TaxTemplate[] = [
      * left the whole tax code raising 27% of GDP against a state that spends
      * 34% — a country permanently and inexplicably in deficit.
      */
-    defaultRate: 0.3,
+    defaultRate: 0.36,
     maxRate: 0.55,
     elasticity: 0.9,
     incidence: {

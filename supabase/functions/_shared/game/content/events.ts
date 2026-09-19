@@ -177,7 +177,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         label: 'Broker a private sale on any terms',
         tradeoff: 'Costs the treasury nothing and hands the buyer every concession they ask for.',
         pcCost: 9,
-        effects: { sectorDeltas: { economy: -s(0.5, v) }, approval: -s(0.6, v), revenueDelta: -1 },
+        effects: { sectorDeltas: { economy: -s(0.5, v) }, approval: -s(0.6, v), revenueDelta: -12 },
       },
     ],
   },
@@ -660,7 +660,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         pcCost: 6,
         effects: {
           treasury: -s(9, v),
-          fundingDeltas: { health: 1, education: 1 },
+          fundingDeltas: { health: 12, education: 12 },
           approval: s(1.2, v),
         },
       },

@@ -150,7 +150,7 @@ export function FinancePanel() {
                 'Due inside a year',
                 `${money(cliff)} — refinanced at whatever the market charges then`,
               ],
-              ['Interest this month', money(fiscal.debtService)],
+              ['Interest this week', money(fiscal.debtService)],
             ].map(([label, value]) => (
               <tr key={label} className="border-b border-rule/60 last:border-0">
                 <th scope="row" className="py-1.5 text-left font-normal text-ink-soft">
@@ -223,7 +223,7 @@ export function FinancePanel() {
           <div className="figure mt-0.5 text-xl text-ink">{money(f.reserveFund)}</div>
           <p className="text-xs leading-relaxed text-ink-faint">
             {f.reserveContribution > 0
-              ? `Paying in ${money(f.reserveContribution)} a month. `
+              ? `Paying in ${money(f.reserveContribution)} a year. `
               : 'Nothing being paid in. '}
             It returns more than the debt costs, which makes funding it correct on a long horizon
             and wrong on a short one.
@@ -275,7 +275,7 @@ export function FinancePanel() {
       {/* Forecast */}
       <div className="mt-5 rule-engraved border-t pt-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <span className="label text-ink-faint">If nothing changes · 12 months</span>
+          <span className="label text-ink-faint">If nothing changes · a year</span>
           <div className="flex flex-wrap gap-1.5">
             {forecast.downgradeInHorizon && <Tag tone="loss">Downgrade in the horizon</Tag>}
             {forecast.breachInHorizon.map((kind) => (

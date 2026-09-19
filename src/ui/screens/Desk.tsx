@@ -73,7 +73,7 @@ export function Desk() {
                 </span>
               </div>
               <div className="text-[0.68rem] uppercase tracking-wide text-ink-faint tnum">
-                {game.countryName} · Term {game.termNumber}, month {game.turnNumber} of{' '}
+                {game.countryName} · Term {game.termNumber}, week {game.turnNumber} of{' '}
                 {TURNS_PER_TERM}
               </div>
             </div>
@@ -226,10 +226,10 @@ function NewsRail() {
   if (!game) return null;
 
   return (
-    <Panel title="The press" aside={items.length > 0 ? `month ${items[0]?.turnNumber}` : undefined}>
+    <Panel title="The press" aside={items.length > 0 ? `week ${items[0]?.turnNumber}` : undefined}>
       {items.length === 0 ? (
         <p className="text-xs text-ink-faint">
-          Coverage of your first month appears once it has been resolved.
+          Coverage of your first week appears once it has been resolved.
         </p>
       ) : (
         <ul className="space-y-3.5">

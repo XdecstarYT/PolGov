@@ -16,11 +16,87 @@ import type { Difficulty, SectorKey } from './types.ts';
  * Time
  * ------------------------------------------------------------------ */
 
-export const TURNS_PER_TERM = 12;
-/** Turns 11–12 are the campaign run-up; the Agenda phase changes shape. */
-export const CAMPAIGN_START_TURN = 11;
-/** The budget is only editable on these turns (every 3rd), unless forced. */
-export const BUDGET_TURN_INTERVAL = 3;
+/**
+ * One turn is one WEEK.
+ *
+ * It used to be a month, and a term was twelve of them — a year in office,
+ * which is not a term anywhere. A week is the unit a government actually
+ * works in: the grid is weekly, the press cycle is weekly, and the gap
+ * between deciding something and its first consequence is measured in weeks
+ * rather than in quarters.
+ *
+ * Everything else in this file follows from that constant. Rates are still
+ * WRITTEN the way a person states them — per month, per year, in months —
+ * and converted here, once, by the helpers below. That keeps the numbers
+ * readable and means the turn length can be changed again by editing one
+ * line rather than by hunting through nine systems for stray divisions by
+ * twelve.
+ */
+export const TURNS_PER_YEAR = 52;
+
+/** A rate stated per month, as a rate per turn. */
+export const perMonth = (rate: number): number => (rate * 12) / TURNS_PER_YEAR;
+
+/** An amount stated per year, as an amount per turn. */
+export const perYear = (amount: number): number => amount / TURNS_PER_YEAR;
+
+/**
+ * A number of months, as a number of turns.
+ *
+ * Rounded, because a month is not a whole number of weeks and the game does
+ * not need it to be. Never rounds below one: a one-month process must still
+ * take at least one turn or it happens instantly and invisibly.
+ */
+export const months = (n: number): number =>
+  Math.max(1, Math.round((n * TURNS_PER_YEAR) / 12));
+
+/**
+ * A persistence coefficient stated per month, as one per turn.
+ *
+ * An AR(1) carried forward more often has to carry less each time to decay
+ * at the same speed. Getting this wrong is the classic weekly-conversion
+ * bug: the same 0.88 applied weekly instead of monthly turns a cycle that
+ * faded over a year and a half into one that never fades at all.
+ */
+export const persistPerMonth = (coefficient: number): number =>
+  coefficient ** (12 / TURNS_PER_YEAR);
+
+/**
+ * The size of a shock stated per month, as one per turn.
+ *
+ * NOT the same conversion as a rate, and this is the subtle one. A rate
+ * applied more often does less each time, so it divides. A random shock
+ * drawn more often accumulates differently: an AR(1) driven by noise has
+ * stationary variance σ²/(1−ρ²), so matching the amount of cycle across two
+ * sampling frequencies means
+ *
+ *     σ_weekly = σ_monthly · √((1 − ρ_weekly²) / (1 − ρ_monthly²))
+ *
+ * which is roughly a half rather than the ~0.23 a rate would take. Dividing
+ * it like a rate flattened the economy exactly the way the first version of
+ * this model did: growth never went negative, half of forty-year careers
+ * contained no recession at all, and unemployment moved by under a point in
+ * four decades.
+ */
+export const noisePerMonth = (sigma: number, persistence: number): number => {
+  const weekly = persistPerMonth(persistence);
+  return sigma * Math.sqrt((1 - weekly ** 2) / (1 - persistence ** 2));
+};
+
+/** Four years, which is what a term is. */
+export const YEARS_PER_TERM = 4;
+export const TURNS_PER_TERM = TURNS_PER_YEAR * YEARS_PER_TERM;
+
+/** The last eight weeks before polling day are the campaign. */
+export const CAMPAIGN_WEEKS = 8;
+export const CAMPAIGN_START_TURN = TURNS_PER_TERM - CAMPAIGN_WEEKS + 1;
+
+/**
+ * The budget is set quarterly — thirteen weeks — unless an emergency budget
+ * forces it open. A government that could rewrite its spending every week
+ * would never have to live with a decision.
+ */
+export const BUDGET_TURN_INTERVAL = 13;
 
 /* ------------------------------------------------------------------ *
  * Political Capital
@@ -29,8 +105,8 @@ export const BUDGET_TURN_INTERVAL = 3;
 export const PC_MAX = 100;
 export const PC_START = 50;
 /** Regen = base + (approval/100 * scale). At 50% approval this is ~16/turn. */
-export const PC_REGEN_BASE = 10;
-export const PC_REGEN_APPROVAL_SCALE = 12;
+export const PC_REGEN_BASE = perMonth(10);
+export const PC_REGEN_APPROVAL_SCALE = perMonth(12);
 
 export const PC_COSTS = {
   proposeMinorBill: 8,
@@ -82,10 +158,10 @@ export const APPROVAL_DEBT_FREE_RATIO = 0.45;
 export const APPROVAL_DEBT_PER_POINT = 0.16;
 export const APPROVAL_DEBT_MAX_PENALTY = 14;
 /** Voters tire of an incumbent. Accrues per turn served, capped. */
-export const APPROVAL_FATIGUE_PER_TURN = 0.16;
+export const APPROVAL_FATIGUE_PER_TURN = perMonth(0.16);
 export const APPROVAL_FATIGUE_CAP = 7;
 /** How fast approval closes the gap to its target each turn. */
-export const APPROVAL_INERTIA = 0.34;
+export const APPROVAL_INERTIA = persistPerMonth(0.34);
 
 export const PUBLIC_ADDRESS_APPROVAL = 3.5;
 /** Addresses lose potency if spammed within a term. */
@@ -96,9 +172,9 @@ export const PUBLIC_ADDRESS_DIMINISH = 0.6;
  * ------------------------------------------------------------------ */
 
 /** Revenue = base * (0.5 + economyHealth/100). At health 60 this is ~104.5. */
-export const REVENUE_BASE = 95;
+export const REVENUE_BASE = perYear(95 * 12);
 /** Per-turn interest charged on outstanding debt (~11%/yr). */
-export const DEBT_INTEREST_RATE = 0.009;
+export const DEBT_INTEREST_RATE = perMonth(0.009);
 /** A surplus pays down debt at this fraction before banking the remainder. */
 export const SURPLUS_TO_DEBT_RATIO = 0.7;
 
@@ -116,12 +192,23 @@ export const SECTOR_KEYS: SectorKey[] = [
  * genuine diminishing returns: doubling health spend from 30 to 60 moves
  * equilibrium from 60 to 75, not to 120.
  */
+/**
+ * What each sector is funded at, ₡bn A YEAR.
+ *
+ * Annual, because that is how a budget is stated everywhere outside this
+ * file — a finance minister does not think in weekly rates, and neither
+ * should the player. The engine divides by `TURNS_PER_YEAR` at the point of
+ * spending and nowhere else.
+ *
+ * These are twelve times what they were when a turn was a month, so the real
+ * fiscal position is unchanged.
+ */
 export const SECTOR_BASELINE_FUNDING: Record<SectorKey, number> = {
-  economy: 20,
-  health: 30,
-  education: 20,
-  infrastructure: 20,
-  environment: 14,
+  economy: 240,
+  health: 360,
+  education: 240,
+  infrastructure: 240,
+  environment: 168,
 };
 
 export const SECTOR_START_HEALTH: Record<SectorKey, number> = {
@@ -133,7 +220,7 @@ export const SECTOR_START_HEALTH: Record<SectorKey, number> = {
 };
 
 /** How fast health closes the gap to its funding-implied equilibrium. */
-export const SECTOR_DRIFT_RATE = 0.18;
+export const SECTOR_DRIFT_RATE = perMonth(0.18);
 /** Sector health below this starts generating related crisis events. */
 export const SECTOR_DISTRESS_THRESHOLD = 40;
 
@@ -203,16 +290,16 @@ export const COHESION_START = 68;
 export const AUTHORITY_START = 70;
 
 /** Subscription income per thousand members per turn, in ₡m. */
-export const FUNDS_PER_MEMBER = 0.055;
+export const FUNDS_PER_MEMBER = perYear(0.055 * 12);
 /** Additional donations scale with standing: this much at 100% approval. */
-export const FUNDS_APPROVAL_BONUS = 6;
+export const FUNDS_APPROVAL_BONUS = perYear(6 * 12);
 /** Running the party costs this much per turn before anything is spent. */
-export const PARTY_OVERHEADS = 3.5;
+export const PARTY_OVERHEADS = perYear(3.5 * 12);
 /** Each level of headquarters investment adds this to fundraising. */
-export const FUNDS_PER_HQ_LEVEL = 2.2;
+export const FUNDS_PER_HQ_LEVEL = perYear(2.2 * 12);
 
 /** Membership drifts toward a level implied by approval, at this rate. */
-export const MEMBERS_DRIFT_RATE = 0.12;
+export const MEMBERS_DRIFT_RATE = perMonth(0.12);
 /** Members at 0% and 100% approval respectively, in thousands. */
 export const MEMBERS_FLOOR = 60;
 export const MEMBERS_CEILING = 340;
@@ -221,7 +308,7 @@ export const MEMBERS_LOST_PER_REBELLION = 6;
 
 /** Cohesion drifts toward this, modified by authority and recent rebellions. */
 export const COHESION_BASE_TARGET = 62;
-export const COHESION_DRIFT_RATE = 0.22;
+export const COHESION_DRIFT_RATE = perMonth(0.22);
 /** Each point of authority above 50 adds this much to the cohesion target. */
 export const COHESION_PER_AUTHORITY = 0.35;
 /** A rebellion costs this much cohesion immediately. */
@@ -238,7 +325,7 @@ export const REBELLION_SENSITIVITY = 1.35;
 export const REBELLION_WHIP_SUPPRESSION = 0.14;
 
 /** Authority drifts toward a level implied by approval and party results. */
-export const AUTHORITY_DRIFT_RATE = 0.2;
+export const AUTHORITY_DRIFT_RATE = perMonth(0.2);
 /** A leadership challenge fires below this authority. */
 export const AUTHORITY_CHALLENGE_THRESHOLD = 25;
 /**
@@ -249,7 +336,7 @@ export const AUTHORITY_CHALLENGE_THRESHOLD = 25;
  * guillotine rather than a risk. Parties do not move against their leader
  * monthly; organising one costs the plotters something too.
  */
-export const CHALLENGE_COOLDOWN_TURNS = 6;
+export const CHALLENGE_COOLDOWN_TURNS = months(6);
 /** Surviving a challenge restores authority to at least this. */
 export const AUTHORITY_AFTER_SURVIVING = 55;
 
@@ -313,7 +400,7 @@ export const CROSSBENCH_SENATE_BONUS = 0.18;
 
 export const MOOD_START = 62;
 export const MOOD_THREATEN_EXIT = 30;
-export const MOOD_DRIFT_RATE = 0.25;
+export const MOOD_DRIFT_RATE = perMonth(0.25);
 export const MOOD_BASE_TARGET = 50;
 /** Weight on ideological affinity between player and partner (−1..1). */
 export const MOOD_W_AFFINITY = 20;
@@ -347,11 +434,11 @@ export const COUNTER_OFFER_RELIEF = 0.35;
  * the quiet tragedy of a twelve-month term: the things worth doing land after
  * the election that decides whether you were right to do them.
  */
-export const IMPLEMENTATION_DELAY_MINOR = 1;
-export const IMPLEMENTATION_DELAY_MAJOR = 2;
+export const IMPLEMENTATION_DELAY_MINOR = months(1);
+export const IMPLEMENTATION_DELAY_MAJOR = months(2);
 
 /** Turns before a bill with a sunset clause lapses unless renewed. */
-export const SUNSET_DEFAULT_TURNS = 8;
+export const SUNSET_DEFAULT_TURNS = months(8);
 
 /** Approval for each manifesto promise kept, and each one broken. */
 export const PROMISE_KEPT_APPROVAL = 2.4;
@@ -382,11 +469,17 @@ export const PC_COSTS_POLICY = {
  * Events
  * ------------------------------------------------------------------ */
 
+/*
+ * Two a turn was two a month. A turn is a week now, so the CHANCE of one
+ * arriving is scaled to keep the same number per year — otherwise a
+ * government faces four times as many crises with a quarter of the capital
+ * to answer them, which is not a harder game, just an impossible one.
+ */
 export const MAX_EVENTS_PER_TURN = 2;
 /** Probability that any event at all fires on a given turn. */
-export const EVENT_BASE_CHANCE = 0.62;
+export const EVENT_BASE_CHANCE = perMonth(0.62);
 /** Probability of a second event, given the first fired. */
-export const EVENT_SECOND_CHANCE = 0.3;
+export const EVENT_SECOND_CHANCE = perMonth(0.3);
 
 /* ------------------------------------------------------------------ *
  * The electorate
@@ -495,7 +588,7 @@ export const REDRAW_APPROVAL_PENALTY = 9;
  * ------------------------------------------------------------------ */
 
 /** Campaigning fades: a push in month nine is worth little by month twelve. */
-export const REACH_DECAY_PER_TURN = 0.22;
+export const REACH_DECAY_PER_TURN = perMonth(0.22);
 /** Scales accumulated reach into a persuasion bonus. */
 export const REACH_PERSUASION_SCALE = 0.11;
 /** Scales accumulated reach into a turnout bonus. */
@@ -640,14 +733,14 @@ export const POTENTIAL_GROWTH_BASE = 2.1;
  * shape real cycles have and the shape the game needs: a recession has to be
  * the thing a government is afraid of.
  */
-export const OUTPUT_GAP_CLOSE_RATE = 0.032;
+export const OUTPUT_GAP_CLOSE_RATE = perMonth(0.032);
 /** How much harder a boom is pulled back than a slump is pulled up. */
 export const OUTPUT_GAP_BOOM_DAMPING = 1.9;
 
 /** Productivity index at the start. 100 is "as productive as last decade". */
 export const PRODUCTIVITY_START = 100;
 /** Drift per month toward the level education and infrastructure imply. */
-export const PRODUCTIVITY_DRIFT_RATE = 0.012;
+export const PRODUCTIVITY_DRIFT_RATE = perMonth(0.012);
 /** A point of productivity above 100 is worth this much trend growth. */
 export const PRODUCTIVITY_TO_GROWTH = 0.055;
 
@@ -692,8 +785,8 @@ export const IS_FISCAL_MULTIPLIER = 0.18;
  * model's true expectation, and reality will differ from it, every time, in
  * the direction nobody could have told you in advance.
  */
-export const CYCLE_DEMAND_NOISE = 1.9;
-export const CYCLE_SUPPLY_NOISE = 0.30;
+export const CYCLE_DEMAND_NOISE = noisePerMonth(1.5, 0.88);
+export const CYCLE_SUPPLY_NOISE = noisePerMonth(0.3, 0.88);
 
 /**
  * How much of last month's cycle carries into this one.
@@ -710,9 +803,9 @@ export const CYCLE_SUPPLY_NOISE = 0.30;
  * government which caused it is often not the one that wears it, which is
  * the most honest thing the economic model does.
  */
-export const CYCLE_PERSISTENCE = 0.88;
+export const CYCLE_PERSISTENCE = persistPerMonth(0.88);
 /** How fast growth eases toward what the IS curve implies. */
-export const GROWTH_ADJUST_RATE = 0.22;
+export const GROWTH_ADJUST_RATE = perMonth(0.22);
 
 /* --- Okun's law: output and jobs --- */
 
@@ -721,7 +814,7 @@ export const NATURAL_UNEMPLOYMENT = 4.8;
 /** Points of unemployment per point of output gap. Okun's coefficient. */
 export const OKUN_COEFFICIENT = 0.42;
 /** Unemployment is sticky: it eases toward its implied level at this rate. */
-export const UNEMPLOYMENT_ADJUST_RATE = 0.17;
+export const UNEMPLOYMENT_ADJUST_RATE = perMonth(0.17);
 
 /* --- the Phillips curve: jobs and prices --- */
 
@@ -744,9 +837,9 @@ export const PHILLIPS_SLOPE = 0.55;
  */
 export const PHILLIPS_SLACK_DAMPING = 0.3;
 /** How much of last month's inflation carries into expectations. */
-export const INFLATION_PERSISTENCE = 0.86;
+export const INFLATION_PERSISTENCE = persistPerMonth(0.86);
 /** Wages chase prices plus productivity, at this speed. */
-export const WAGE_ADJUST_RATE = 0.25;
+export const WAGE_ADJUST_RATE = perMonth(0.25);
 /** Wage growth above prices that tight labour markets buy. */
 export const WAGE_TIGHTNESS_WEIGHT = 0.7;
 
@@ -768,7 +861,7 @@ export const TAYLOR_OUTPUT_WEIGHT = 0.5;
  * month is roughly what a committee meeting monthly actually does, and it is
  * fast enough for the Taylor principle to hold.
  */
-export const POLICY_RATE_MAX_STEP = 0.5;
+export const POLICY_RATE_MAX_STEP = perMonth(0.5);
 export const POLICY_RATE_FLOOR = 0;
 /**
  * The ceiling has to sit above any inflation the model can reach, or the rule
@@ -781,7 +874,7 @@ export const POLICY_RATE_CEILING = 30;
 /* --- confidence --- */
 
 export const CONFIDENCE_START = 55;
-export const CONFIDENCE_ADJUST_RATE = 0.2;
+export const CONFIDENCE_ADJUST_RATE = perMonth(0.2);
 /** A point of unemployment above natural costs consumers this much confidence. */
 export const CONFIDENCE_UNEMPLOYMENT_WEIGHT = 3.4;
 /** A point of inflation above target costs this much. */
@@ -814,7 +907,7 @@ export const INVESTMENT_RATE_WEIGHT = 0.011;
 /** Annualised growth below this counts as a contracting month. */
 export const CONTRACTION_THRESHOLD = 0;
 /** Consecutive contracting months before it is called a recession. */
-export const RECESSION_MONTHS = 3;
+export const RECESSION_MONTHS = months(3);
 /** Output gap above this is a boom. */
 export const BOOM_OUTPUT_GAP = 1.8;
 /** Output gap below this is a slump, whatever growth is doing. */
@@ -823,18 +916,25 @@ export const SLUMP_OUTPUT_GAP = -1.8;
 /** Months of macro history kept for charts and forecasts. */
 export const ECONOMY_HISTORY_LIMIT = 120;
 /** How far ahead the Treasury forecast runs, in months. */
-export const FORECAST_HORIZON = 12;
+export const FORECAST_HORIZON = months(12);
 
 /**
  * Revenue is a share of output now, not a flat base scaled by a health dial.
  *
- * 34% of GDP is where a mixed economy with this much public provision
- * actually sits. At GDP_START that is ₡104bn a month, which is what
- * `computeRevenue` returned at the old economy health of 60 — so every
- * fiscal number the rest of the game was tuned against holds, and the
- * tax system in Engine 2C moves this share rather than replacing it.
+ * Just under 39% of GDP, which is where a state with this much public
+ * provision actually sits — twenty services, twenty infrastructure assets,
+ * a pension system and a health service do not come out of a third of
+ * national output, and pretending they did left the country running a
+ * deficit of 7% of GDP in week one through nobody's decision.
+ *
+ * It still does not balance. Spending is about 42% of output, so a new
+ * government inherits a structural deficit of roughly three points — real,
+ * survivable, and the first thing a serious finance minister would want to
+ * do something about. That is a better starting position than a balanced
+ * one: it gives the player a problem on day one that they did not cause and
+ * cannot ignore.
  */
-export const REVENUE_GDP_SHARE = 0.34;
+export const REVENUE_GDP_SHARE = 0.386;
 
 /* ------------------------------------------------------------------ *
  * Engine 2B — government finance
@@ -894,7 +994,7 @@ export const RATING_DEFICIT_NOTCH_AT = 0.06;
 /** A recession costs a notch too — lenders price the revenue, not the promise. */
 export const RATING_RECESSION_NOTCH = true;
 /** Months a downgrade takes to arrive. Agencies are slow, and then sudden. */
-export const RATING_REVIEW_MONTHS = 3;
+export const RATING_REVIEW_MONTHS = months(3);
 
 /* --- fiscal rules, which a government imposes on itself --- */
 
@@ -903,13 +1003,13 @@ export const FISCAL_RULE_PC_COST = 18;
 /** PC to repeal one. Cheaper than adopting it, which is the trap. */
 export const FISCAL_RULE_REPEAL_PC_COST = 10;
 /** Approval cost per month a rule is in breach. Compounds while it lasts. */
-export const FISCAL_RULE_BREACH_APPROVAL = 0.9;
+export const FISCAL_RULE_BREACH_APPROVAL = perMonth(0.9);
 /** Coalition mood cost per month in breach, for partners who demanded it. */
-export const FISCAL_RULE_BREACH_MOOD = 1.6;
+export const FISCAL_RULE_BREACH_MOOD = perMonth(1.6);
 /** Yield relief for a government holding to its own rules, in points. */
 export const FISCAL_RULE_CREDIBILITY_RELIEF = 0.35;
 /** Months of compliance before the market believes you. */
-export const FISCAL_RULE_CREDIBILITY_MONTHS = 12;
+export const FISCAL_RULE_CREDIBILITY_MONTHS = months(12);
 
 /* --- the funds --- */
 
@@ -930,11 +1030,11 @@ export const EMERGENCY_FUND_REFILL_SHARE = 0.15;
  * this game is about. A government that funds it is handing a stronger
  * position to whoever wins the election it just lost.
  */
-export const RESERVE_FUND_RETURN = 0.0055;
+export const RESERVE_FUND_RETURN = perMonth(0.0055);
 /** Political capital to change the standing contribution. */
 export const RESERVE_CONTRIBUTION_PC_COST = 6;
 /** The most that can be paid in per month, ₡bn. */
-export const RESERVE_CONTRIBUTION_MAX = 40;
+export const RESERVE_CONTRIBUTION_MAX = perYear(40 * 12);
 
 /* --- the tiers --- */
 
@@ -951,24 +1051,25 @@ export const REGIONAL_GRANT_SHARE = 0.22;
 /** Share of the grant a region raises locally, from its own base. */
 export const LOCAL_OWN_REVENUE_SHARE = 0.18;
 /**
- * The funding per seat, per month, that sustains a regional service quality
+ * The funding per seat, per YEAR, that sustains a regional service quality
  * of 60 — the same "adequate" the national sectors are calibrated to.
  *
  * Derived rather than picked: at the starting economy the centre raises
- * ₡104bn a month, sends 22% of it to the regions, and the regions add 18% of
- * that from their own base, which is ₡27bn across 180 seats — ₡0.15bn each.
- * Setting the constant to anything else means the regions start failing on
- * turn one through nobody's decision, which is what happened when this was
- * an unexamined 1.15 and every region decayed to a quality of 17.
+ * ₡1,420bn a year, sends 22% of it to the regions, and the regions add 18%
+ * of that from their own base, which is ₡369bn across 180 seats — ₡2.05bn
+ * each. Setting the constant to anything else means the regions start
+ * failing in week one through nobody's decision, which is what happened
+ * when this was an unexamined 1.15 and every region decayed to a quality
+ * of 17.
  */
-export const REGIONAL_FUNDING_PER_SEAT = 0.15;
+export const REGIONAL_FUNDING_PER_SEAT = 2.05;
 /** How fast regional service quality drifts toward what funding sustains. */
-export const REGIONAL_SERVICE_DRIFT = 0.16;
+export const REGIONAL_SERVICE_DRIFT = perMonth(0.16);
 /** Points of regional satisfaction per point of regional service quality. */
 export const REGIONAL_SERVICE_WEIGHT = 0.0022;
 
 /** Months between statements of the public accounts. */
-export const BUDGET_UPDATE_INTERVAL = 6;
+export const BUDGET_UPDATE_INTERVAL = months(6);
 
 /* ------------------------------------------------------------------ *
  * Engine 2C — taxation
@@ -994,7 +1095,7 @@ export const TAX_PROGRESSIVITY_SHIFT = 7;
  * and have it stop costing votes before the election — a cynical strategy,
  * and one the game should permit rather than pretend does not work.
  */
-export const TAX_CHANGE_MEMORY_MONTHS = 18;
+export const TAX_CHANGE_MEMORY_MONTHS = months(18);
 /** Political capital to legislate a rate change. */
 export const TAX_CHANGE_PC_COST = 12;
 
@@ -1011,7 +1112,7 @@ export const TAX_CHANGE_PC_COST = 12;
  * consequences of the previous one's decisions and hands its own to the
  * next, which is both true and the most interesting thing about the lag.
  */
-export const INDUSTRY_ADJUST_RATE = 0.055;
+export const INDUSTRY_ADJUST_RATE = perMonth(0.055);
 
 /**
  * The share of employment that is not in any of the twenty industries.
@@ -1022,8 +1123,15 @@ export const INDUSTRY_ADJUST_RATE = 0.055;
  */
 export const INDUSTRY_UNCOUNTED_EMPLOYMENT = 0.065;
 
-/** Points of industry health per ₡bn of funding for the sector it lives on. */
-export const INDUSTRY_PUBLIC_FUNDING_WEIGHT = 0.45;
+/**
+ * Points of industry health per ₡bn A YEAR of funding above or below what
+ * the sector it lives on is normally funded at.
+ *
+ * At 0.08, doubling a sector's budget is worth about thirty points to the
+ * industry that lives on it — a lot, and it should be: the state is that
+ * industry's only customer.
+ */
+export const INDUSTRY_PUBLIC_FUNDING_WEIGHT = 0.08;
 
 /** Points of regional support per point of regional employment gap. */
 export const REGIONAL_JOBS_WEIGHT = 0.0035;
@@ -1091,14 +1199,14 @@ export const MIGRATION_JOBS_WEIGHT = 0.55;
 /** Extra net migration per point of average service quality above 60. */
 export const MIGRATION_SERVICES_WEIGHT = 0.06;
 /** How fast the actual flow eases toward what conditions imply. */
-export const MIGRATION_ADJUST_RATE = 0.12;
+export const MIGRATION_ADJUST_RATE = perMonth(0.12);
 
 /** Share of the working-age population in or seeking work. */
 export const PARTICIPATION_START = 0.647;
 /** Participation rises this much per point of unemployment below natural. */
 export const PARTICIPATION_JOBS_WEIGHT = 0.004;
 /** How fast participation follows conditions. People are slow to re-enter. */
-export const PARTICIPATION_ADJUST_RATE = 0.05;
+export const PARTICIPATION_ADJUST_RATE = perMonth(0.05);
 
 /** Share of the population in cities at the start. */
 export const URBANISATION_START = 0.71;
@@ -1123,7 +1231,7 @@ export const SKILLS_START = 0.62;
  * schools budget a government cuts is a technology policy its successor's
  * successor discovers.
  */
-export const SKILLS_ADJUST_RATE = 0.004;
+export const SKILLS_ADJUST_RATE = perMonth(0.004);
 /** Points of industry health lost per point of skills shortage. */
 export const SKILLS_SHORTAGE_WEIGHT = 0.4;
 
@@ -1132,7 +1240,7 @@ export const LIFE_EXPECTANCY_PER_HEALTH = 0.016;
 /** Births per thousand gained per point of average service quality above 60. */
 export const BIRTH_RATE_PER_SERVICE = 0.012;
 /** How fast the vital rates follow conditions. Generational, not annual. */
-export const VITAL_RATE_ADJUST = 0.006;
+export const VITAL_RATE_ADJUST = perMonth(0.006);
 
 /**
  * How often the seats are redistributed between regions, in turns.
@@ -1142,7 +1250,7 @@ export const VITAL_RATE_ADJUST = 0.006;
  * one it will defend. A player who lets a region empty out is handing seats
  * to wherever those people went.
  */
-export const APPORTIONMENT_INTERVAL = 48;
+export const APPORTIONMENT_INTERVAL = months(48);
 /** The fewest seats any region can be reduced to. */
 export const MIN_REGION_SEATS = 4;
 
@@ -1181,7 +1289,7 @@ export const MAINTENANCE_LEVEL_MAX = 1.8;
  */
 export const BACKLOG_COMPOUNDING = 1.45;
 /** Share of the backlog that above-full maintenance works off each month. */
-export const BACKLOG_REPAYMENT_RATE = 0.035;
+export const BACKLOG_REPAYMENT_RATE = perMonth(0.035);
 
 /** Condition below which an asset starts failing visibly. */
 export const CONDITION_FAILING = 45;
@@ -1214,9 +1322,9 @@ export const PROJECT_MONTHLY_SHARE = 1;
 /** Quality every service starts at, matching the sector health it reports to. */
 export const SERVICE_QUALITY_START = 60;
 /** How fast a service's quality follows the funding it is getting. */
-export const SERVICE_QUALITY_DRIFT = 0.12;
+export const SERVICE_QUALITY_DRIFT = perMonth(0.12);
 /** How fast staffing follows funding. Hiring and firing both take time. */
-export const SERVICE_STAFFING_DRIFT = 0.08;
+export const SERVICE_STAFFING_DRIFT = perMonth(0.08);
 
 /**
  * Months of waiting at a service funded exactly to its demand.
@@ -1253,7 +1361,7 @@ export const RELATIONS_FRIENDLY = 40;
 export const RELATIONS_HOSTILE = -40;
 
 /** Relations drift toward this each month, from ideology and trade alone. */
-export const RELATIONS_DRIFT_RATE = 0.04;
+export const RELATIONS_DRIFT_RATE = perMonth(0.04);
 /** Points of natural relations per point of ideological affinity. */
 export const RELATIONS_IDEOLOGY_WEIGHT = 55;
 /** Points of natural relations from sharing a border. Neighbours argue. */
@@ -1305,10 +1413,10 @@ export const DIPLOMACY_EFFECTS = {
 export const EMBASSY_STABILISER = 0.55;
 
 /** Months an ambassador takes to have any effect at all. */
-export const AMBASSADOR_SETTLING_MONTHS = 4;
+export const AMBASSADOR_SETTLING_MONTHS = months(4);
 
 /** Months between summits a country will attend. */
-export const SUMMIT_COOLDOWN = 12;
+export const SUMMIT_COOLDOWN = months(12);
 /** Approval a successful summit is worth at home. */
 export const SUMMIT_APPROVAL = 1.8;
 /** Approval a state visit is worth, and the cost if relations are hostile. */

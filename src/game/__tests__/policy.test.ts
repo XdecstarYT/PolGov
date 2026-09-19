@@ -306,7 +306,12 @@ describe('the lifecycle, end to end', () => {
     let resolved = resolveTurn({ ...state, phase: 'budget' });
     if (resolved.bills.find((b) => b.id === bill.id)!.status !== 'passed') return;
 
-    resolved = resolveTurn({ ...resolved, phase: 'budget', turnNumber: resolved.turnNumber + 2 });
+    /* A minor bill takes a month to bite, which is four turns now. */
+    resolved = resolveTurn({
+      ...resolved,
+      phase: 'budget',
+      turnNumber: resolved.turnNumber + IMPLEMENTATION_DELAY_MINOR + 1,
+    });
     expect(resolved.bills.find((b) => b.id === bill.id)!.inEffect).toBe(true);
   });
 

@@ -28,7 +28,7 @@ export interface PartyTemplate {
   leaderTitle: string;
   /** Sector this party fights for at the budget table. */
   prioritySector: SectorKey;
-  /** Per-turn funding this party demands for its priority sector. */
+  /** Annual funding this party demands for its priority sector, ₡bn. */
   sectorFloor: number;
   cabinetDemand: number;
   redLinePool: RedLine[];
@@ -47,7 +47,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     baseStrength: 1.0,
     leaderTitle: 'Convenor',
     prioritySector: 'economy',
-    sectorFloor: 19,
+    sectorFloor: 228,
     cabinetDemand: 3,
     blurb:
       'Splits differences by instinct. Reliable in a coalition, hard to excite, and quick to leave a government that looks unserious.',
@@ -64,7 +64,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
         id: 'meridian-econ-floor',
         kind: 'sector_floor',
         sector: 'economy',
-        threshold: 17,
+        threshold: 204,
         description: 'Economic programme funding stays at or above ₡17bn per turn.',
       },
     ],
@@ -79,7 +79,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     baseStrength: 1.05,
     leaderTitle: 'General Secretary',
     prioritySector: 'health',
-    sectorFloor: 31,
+    sectorFloor: 372,
     cabinetDemand: 4,
     blurb:
       'Built on workplace federations. Will trade almost anything for service funding, and almost nothing for cuts to it.',
@@ -88,7 +88,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
         id: 'concord-health-floor',
         kind: 'sector_floor',
         sector: 'health',
-        threshold: 28,
+        threshold: 336,
         description: 'Health funding stays at or above ₡28bn per turn.',
       },
       {
@@ -111,7 +111,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     baseStrength: 0.95,
     leaderTitle: 'Chair',
     prioritySector: 'economy',
-    sectorFloor: 22,
+    sectorFloor: 264,
     cabinetDemand: 3,
     blurb:
       'Treats the budget line as the only honest sentence in a manifesto. Tolerant on most things, immovable on the deficit.',
@@ -128,7 +128,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
         id: 'enterprise-econ-floor',
         kind: 'sector_floor',
         sector: 'economy',
-        threshold: 20,
+        threshold: 240,
         description: 'Economic programme funding stays at or above ₡20bn per turn.',
       },
     ],
@@ -143,7 +143,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     baseStrength: 0.9,
     leaderTitle: 'Speaker',
     prioritySector: 'infrastructure',
-    sectorFloor: 21,
+    sectorFloor: 252,
     cabinetDemand: 3,
     blurb:
       'Organised around continuity and locality. Suspicious of rapid change in either direction, and unusually loyal once committed.',
@@ -160,7 +160,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
         id: 'heritage-infra-floor',
         kind: 'sector_floor',
         sector: 'infrastructure',
-        threshold: 18,
+        threshold: 216,
         description: 'Infrastructure funding stays at or above ₡18bn per turn.',
       },
     ],
@@ -175,7 +175,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     baseStrength: 0.72,
     leaderTitle: 'Convenor',
     prioritySector: 'environment',
-    sectorFloor: 18,
+    sectorFloor: 216,
     cabinetDemand: 2,
     blurb:
       'Single-minded about the long horizon, and candid that the bill falls due now. Small, disciplined, and willing to collapse a government.',
@@ -184,7 +184,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
         id: 'verdant-env-floor',
         kind: 'sector_floor',
         sector: 'environment',
-        threshold: 16,
+        threshold: 192,
         description: 'Environment funding stays at or above ₡16bn per turn.',
       },
       {
@@ -207,7 +207,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     baseStrength: 0.8,
     leaderTitle: 'Spokesperson',
     prioritySector: 'education',
-    sectorFloor: 22,
+    sectorFloor: 264,
     cabinetDemand: 2,
     blurb:
       'Process-minded and reform-minded in equal measure. Cheap to keep happy on money, expensive to keep happy on procedure.',
@@ -216,7 +216,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
         id: 'civic-education-floor',
         kind: 'sector_floor',
         sector: 'education',
-        threshold: 19,
+        threshold: 228,
         description: 'Education funding stays at or above ₡19bn per turn.',
       },
       {
@@ -237,7 +237,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
     baseStrength: 0.68,
     leaderTitle: 'Warden',
     prioritySector: 'infrastructure',
-    sectorFloor: 20,
+    sectorFloor: 240,
     cabinetDemand: 2,
     blurb:
       'Speaks for the districts that feel governed rather than represented. Transactional, and open about it.',
@@ -246,7 +246,7 @@ export const PARTY_TEMPLATES: PartyTemplate[] = [
         id: 'landward-infra-floor',
         kind: 'sector_floor',
         sector: 'infrastructure',
-        threshold: 19,
+        threshold: 228,
         description: 'Infrastructure funding stays at or above ₡19bn per turn.',
       },
       {

@@ -8,6 +8,7 @@
 
 import { useGame } from '../../state/store.ts';
 import {
+  TURNS_PER_TERM,
   SECTOR_LABELS,
   computeApprovalTarget,
   coalitionPartners,
@@ -56,7 +57,7 @@ export function Briefing() {
     <div className="space-y-5">
       <Panel
         title="The morning brief"
-        aside={`Term ${game.termNumber}, month ${game.turnNumber}`}
+        aside={`Term ${game.termNumber}, week ${game.turnNumber} of ${TURNS_PER_TERM}`}
       >
         <Kicker>Where you stand</Kicker>
         <p className="text-sm leading-relaxed text-ink-soft">
@@ -70,9 +71,9 @@ export function Briefing() {
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {budgetOpen ? (
-            <Tag tone="accent">Budget open this month</Tag>
+            <Tag tone="accent">Budget open this week</Tag>
           ) : (
-            <Tag>Budget fixed this month</Tag>
+            <Tag>Budget fixed this week</Tag>
           )}
           {campaign && <Tag tone="warn">Campaign period</Tag>}
           {unhappy.length > 0 && (
@@ -103,7 +104,7 @@ export function Briefing() {
                     band={bandFor(sector.health)}
                     hint={
                       <>
-                        {money(sector.funding)} per month sustains{' '}
+                        {money(sector.funding)} a year sustains{' '}
                         <span className="tnum">{equilibrium.toFixed(0)}</span> —{' '}
                         {Math.abs(drifting) < 0.5 ? (
                           'holding steady'

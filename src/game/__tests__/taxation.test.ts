@@ -21,21 +21,26 @@ import {
   instrumentYield,
   isPastPeak,
   marginalYield,
-  monthlyReceipts,
+  turnReceipts,
   receiptsBreakdown,
   recordChange,
   revenuePeak,
   taxBurdenScore,
   taxEffects,
 } from '../systems/taxation.ts';
-import { GDP_START, REVENUE_GDP_SHARE, TAX_CHANGE_MEMORY_MONTHS } from '../balance.ts';
+import {
+  GDP_START,
+  REVENUE_GDP_SHARE,
+  TAX_CHANGE_MEMORY_MONTHS,
+  TURNS_PER_YEAR,
+} from '../balance.ts';
 
 const GDP = GDP_START;
 const code = () => buildTaxCode();
 
 describe('the inherited code', () => {
   it('raises what the rest of the game is balanced against', () => {
-    const share = (monthlyReceipts(code(), GDP) * 12) / GDP;
+    const share = (turnReceipts(code(), GDP) * TURNS_PER_YEAR) / GDP;
     /* Within a point of the flat share every spending figure was tuned to.
        If this drifts, the country runs a structural deficit nobody chose. */
     expect(share).toBeGreaterThan(REVENUE_GDP_SHARE - 0.01);
@@ -55,7 +60,7 @@ describe('the inherited code', () => {
     /* Income tax and social contributions first, as in any real budget —
        not the loud narrow ones. */
     expect(['income', 'payroll']).toContain(rows[0]!.template.key);
-    expect(rows[0]!.monthly).toBeGreaterThan(rows[rows.length - 1]!.monthly * 20);
+    expect(rows[0]!.perTurn).toBeGreaterThan(rows[rows.length - 1]!.perTurn * 20);
   });
 });
 
@@ -110,7 +115,7 @@ describe('the income tax dials', () => {
   it('costs money to give deductions and credits', () => {
     const generous = { ...code(), deductions: 1, credits: 1 };
     expect(incomeReliefFactor(generous)).toBeLessThan(incomeReliefFactor(code()));
-    expect(monthlyReceipts(generous, GDP)).toBeLessThan(monthlyReceipts(code(), GDP));
+    expect(turnReceipts(generous, GDP)).toBeLessThan(turnReceipts(code(), GDP));
   });
 
   it('never gives so much relief that the tax raises nothing', () => {
@@ -120,7 +125,7 @@ describe('the income tax dials', () => {
   it('collects the same money at any progressivity — it only moves who pays', () => {
     const flat = { ...code(), progressivity: 0 };
     const steep = { ...code(), progressivity: 1 };
-    expect(monthlyReceipts(flat, GDP)).toBeCloseTo(monthlyReceipts(steep, GDP), 6);
+    expect(turnReceipts(flat, GDP)).toBeCloseTo(turnReceipts(steep, GDP), 6);
 
     const flatIncidence = incidenceBySegment(flat, GDP);
     const steepIncidence = incidenceBySegment(steep, GDP);

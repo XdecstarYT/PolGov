@@ -56,14 +56,14 @@ const OFFERS: {
   },
   {
     kind: 'spending_cap',
-    threshold: 110,
-    pitch: 'Programme spending stays under ₡110bn a month.',
+    threshold: 1320,
+    pitch: 'Programme spending stays under ₡1,320bn a year.',
     cost: 'Caps the total, so every new programme has to come out of an old one.',
   },
   {
     kind: 'balanced_budget',
     threshold: 0,
-    pitch: 'The budget balances, every month.',
+    pitch: 'The budget balances, every week.',
     cost: 'The strictest thing you can promise. Almost nobody keeps it.',
   },
 ];
@@ -129,7 +129,7 @@ export function FiscalRulesRoom() {
                     Repeal · {FISCAL_RULE_REPEAL_PC_COST} PC
                   </Button>
                   <span className="ml-2 text-[0.7rem] text-ink-faint">
-                    Cheaper than adopting it was. The market has been watching, and every month of
+                    Cheaper than adopting it was. The market has been watching, and every week of
                     credibility it earned goes with it.
                   </span>
                 </div>
@@ -176,7 +176,7 @@ export function FiscalRulesRoom() {
           </span>
         </div>
         <label className="mt-2 block text-sm text-ink-soft" htmlFor="reserve-contribution">
-          Pay in <span className="tnum text-ink">{money(pending)}</span> a month
+          Pay in <span className="tnum text-ink">{money(pending)}</span> a year
         </label>
         <input
           id="reserve-contribution"

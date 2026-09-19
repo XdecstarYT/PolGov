@@ -8,6 +8,7 @@
 
 import {
   DEBT_INTEREST_RATE,
+  perYear,
   DIFFICULTY,
   POLICY_RATE_NEUTRAL,
   SECTOR_BASELINE_FUNDING,
@@ -18,7 +19,7 @@ import {
 import type { Bond, Difficulty, Economy, Sector, SectorKey, TaxCode } from '../types.ts';
 import { computeRevenueFromGdp } from './economy.ts';
 import { couponsDue } from './publicFinance.ts';
-import { monthlyReceipts } from './taxation.ts';
+import { turnReceipts } from './taxation.ts';
 
 /**
  * The health a sector settles at for a given funding level.
@@ -72,9 +73,11 @@ export function computeRevenue(gdp: number, revenueModifier: number, taxes?: Tax
   /* With a tax code, receipts are the sum of what each instrument actually
      raises at its rate. Without one — a handful of tests care only about
      seat arithmetic — fall back to the flat share it is calibrated to. */
+  /* `revenueModifier` is an ANNUAL figure carried by legislation, so it is
+     divided here like every other annual amount. */
   return taxes
-    ? monthlyReceipts(taxes, gdp) + revenueModifier
-    : computeRevenueFromGdp(gdp, revenueModifier);
+    ? turnReceipts(taxes, gdp) + perYear(revenueModifier)
+    : computeRevenueFromGdp(gdp, perYear(revenueModifier));
 }
 
 /**
@@ -92,6 +95,13 @@ export function computeDebtService(debt: number, policyRate = POLICY_RATE_NEUTRA
   return Math.max(0, debt) * DEBT_INTEREST_RATE * relative;
 }
 
+/**
+ * Everything the five sectors are funded at, ₡bn A YEAR.
+ *
+ * Annual, like the figures it sums. `resolveFiscalTurn` divides it down to
+ * what is actually spent this week — in one place, so the unit can never
+ * drift between the budget screen and the treasury.
+ */
 export function totalFunding(sectors: readonly Sector[]): number {
   return sectors.reduce((sum, sector) => sum + sector.funding, 0);
 }
@@ -145,11 +155,16 @@ export function resolveFiscalTurn(
   bonds?: readonly Bond[],
   /** The rates the government is charging. */
   taxes?: TaxCode,
-  /** Spending outside the five programme sectors — maintenance and building. */
+  /**
+   * Spending outside the five programme sectors — maintenance and building.
+   * Stated annually, like everything else on a budget.
+   */
   otherSpending = 0,
 ): FiscalTick {
   const revenue = computeRevenue(economy.gdp, revenueModifier, taxes);
-  const spending = totalFunding(sectors) + otherSpending;
+  /* Programme budgets are annual figures. This is the one place they are
+     divided into what is actually spent this week. */
+  const spending = perYear(totalFunding(sectors) + otherSpending);
   const debtService = bonds ? couponsDue(bonds) : computeDebtService(debt, economy.policyRate);
   const balance = revenue - spending - debtService;
 

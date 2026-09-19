@@ -35,6 +35,7 @@ import {
 import {
   INDUSTRY_ADJUST_RATE,
   INDUSTRY_PUBLIC_FUNDING_WEIGHT,
+  SECTOR_BASELINE_FUNDING,
   INDUSTRY_UNCOUNTED_EMPLOYMENT,
   NEUTRAL_REAL_RATE,
 } from '../balance.ts';
@@ -136,10 +137,18 @@ export function industryPressure(
     }
   }
 
-  /* Publicly funded industries move with the budget, not the market. */
+  /*
+   * Publicly funded industries move with the budget, not the market —
+   * measured against what that sector is NORMALLY funded at, not against a
+   * flat figure. An unexamined constant of 24 here was a monthly baseline
+   * compared against an annual budget once turns became weeks, and it put
+   * healthcare, education and research at 178 out of 100 in a country that
+   * had changed nothing.
+   */
   if (template.publiclyFunded && template.supports) {
     const funding = findSector(sectors, template.supports).funding;
-    const fundingTerm = (funding - 24) * INDUSTRY_PUBLIC_FUNDING_WEIGHT;
+    const normal = SECTOR_BASELINE_FUNDING[template.supports];
+    const fundingTerm = (funding - normal) * INDUSTRY_PUBLIC_FUNDING_WEIGHT;
     if (Math.abs(fundingTerm) > 0.05) {
       reasons.push({ label: 'Government orders', value: fundingTerm });
     }

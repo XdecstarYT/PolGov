@@ -45,6 +45,7 @@ import {
   SPREAD_PER_DEBT_POINT,
   SPREAD_PER_DEFICIT_POINT,
 } from '../balance.ts';
+import { TURNS_PER_YEAR } from '../balance.ts';
 import type {
   Bond,
   CreditGrade,
@@ -73,11 +74,11 @@ export function debtRatio(debt: number, gdp: number): number {
 /**
  * The deficit as a share of a year's output.
  *
- * Annualised from the monthly balance, so it reads the way a finance
+ * Annualised from this turn's balance, so it reads the way a finance
  * ministry states it rather than the way the turn loop computes it.
  */
-export function deficitRatio(monthlyBalance: number, gdp: number): number {
-  return gdp > 0 ? (-monthlyBalance * 12) / gdp : 0;
+export function deficitRatio(turnBalance: number, gdp: number): number {
+  return gdp > 0 ? (-turnBalance * TURNS_PER_YEAR) / gdp : 0;
 }
 
 /* ------------------------------------------------------------------ *
@@ -95,11 +96,11 @@ export function deficitRatio(monthlyBalance: number, gdp: number): number {
 export function marketSpread(
   debt: number,
   gdp: number,
-  monthlyBalance: number,
+  turnBalance: number,
   credibility: number,
 ): number {
   const level = Math.max(0, debtRatio(debt, gdp) - SPREAD_FREE_DEBT_RATIO) * 100;
-  const direction = Math.max(0, deficitRatio(monthlyBalance, gdp) * 100);
+  const direction = Math.max(0, deficitRatio(turnBalance, gdp) * 100);
 
   const raw =
     level * SPREAD_PER_DEBT_POINT +
@@ -153,7 +154,7 @@ function gradeIndex(grade: CreditGrade): number {
 export function justifiedRating(
   debt: number,
   gdp: number,
-  monthlyBalance: number,
+  turnBalance: number,
   economy: Economy,
 ): { grade: CreditGrade; spread: number; reasons: string[] } {
   const ratio = debtRatio(debt, gdp);
@@ -163,7 +164,7 @@ export function justifiedRating(
   if (index < 0) index = CREDIT_RATINGS.length - 1;
   reasons.push(`Debt at ${(ratio * 100).toFixed(0)}% of output`);
 
-  const deficit = deficitRatio(monthlyBalance, gdp);
+  const deficit = deficitRatio(turnBalance, gdp);
   if (deficit > RATING_DEFICIT_NOTCH_AT) {
     index += 1;
     reasons.push(
@@ -196,10 +197,10 @@ export function stepRating(
   rating: CreditRating,
   debt: number,
   gdp: number,
-  monthlyBalance: number,
+  turnBalance: number,
   economy: Economy,
 ): CreditRating {
-  const justified = justifiedRating(debt, gdp, monthlyBalance, economy);
+  const justified = justifiedRating(debt, gdp, turnBalance, economy);
   const held = gradeIndex(rating.grade);
   const due = gradeIndex(justified.grade);
 
@@ -269,7 +270,7 @@ export function issueBond(
 
 /** Interest due this month across the whole book, ₡bn. */
 export function couponsDue(bonds: readonly Bond[]): number {
-  return bonds.reduce((sum, b) => sum + (b.principal * b.coupon) / 100 / 12, 0);
+  return bonds.reduce((sum, b) => sum + (b.principal * b.coupon) / 100 / TURNS_PER_YEAR, 0);
 }
 
 /** Principal falling due within the next `months`, ₡bn. */
@@ -325,18 +326,18 @@ export function ruleHolds(
   rule: FiscalRule,
   debt: number,
   gdp: number,
-  monthlyBalance: number,
+  turnBalance: number,
   spending: number,
 ): boolean {
   switch (rule.kind) {
     case 'deficit_cap':
-      return deficitRatio(monthlyBalance, gdp) <= rule.threshold;
+      return deficitRatio(turnBalance, gdp) <= rule.threshold;
     case 'debt_ceiling':
       return debtRatio(debt, gdp) <= rule.threshold;
     case 'spending_cap':
       return spending <= rule.threshold;
     case 'balanced_budget':
-      return monthlyBalance >= 0;
+      return turnBalance >= 0;
   }
 }
 
@@ -345,11 +346,11 @@ export function stepRules(
   rules: readonly FiscalRule[],
   debt: number,
   gdp: number,
-  monthlyBalance: number,
+  turnBalance: number,
   spending: number,
 ): FiscalRule[] {
   return rules.map((rule) => {
-    const holds = ruleHolds(rule, debt, gdp, monthlyBalance, spending);
+    const holds = ruleHolds(rule, debt, gdp, turnBalance, spending);
     return {
       ...rule,
       breachMonths: holds ? 0 : rule.breachMonths + 1,
@@ -397,6 +398,7 @@ export function breachMoodCost(rules: readonly FiscalRule[]): number {
  */
 export function buildRegionalBudgets(
   regions: readonly Region[],
+  /** National receipts, ₡bn A YEAR. The grant is a share of them. */
   nationalRevenue: number,
 ): RegionalBudget[] {
   const totalSeats = regions.reduce((sum, r) => sum + r.seats, 0) || 1;
@@ -429,6 +431,7 @@ export function regionalEquilibrium(funding: number, seats: number): number {
 export function stepRegionalBudgets(
   budgets: readonly RegionalBudget[],
   regions: readonly Region[],
+  /** National receipts, ₡bn A YEAR, like every other budget figure. */
   nationalRevenue: number,
 ): RegionalBudget[] {
   const totalSeats = regions.reduce((sum, r) => sum + r.seats, 0) || 1;
@@ -447,7 +450,10 @@ export function stepRegionalBudgets(
      * as their own debt for a while, which is why a grant cut shows up as a
      * regional deficit first and as a service failure afterwards.
      */
-    const spending = Math.max(income, budget.spending * 0.94);
+    /* Regions cannot cut as fast as the centre can, so they hold spending
+       up for a while and carry the gap. Per turn, not per year: this is the
+       speed of the adjustment, not its size. */
+    const spending = Math.max(income, budget.spending * (1 - 0.06 / (TURNS_PER_YEAR / 12)));
     const shortfall = Math.max(0, spending - income);
 
     const target = regionalEquilibrium(spending, region.seats);
@@ -463,7 +469,8 @@ export function stepRegionalBudgets(
       ownRevenue,
       spending,
       serviceQuality,
-      debt: budget.debt + shortfall,
+      /* The shortfall is an annual rate; what accrues this turn is a slice. */
+      debt: budget.debt + shortfall / TURNS_PER_YEAR,
     };
   });
 }
@@ -563,7 +570,7 @@ export function stepPublicFinance(
   options: {
     debt: number;
     economy: Economy;
-    monthlyBalance: number;
+    turnBalance: number;
     spending: number;
     regions: readonly Region[];
     nationalRevenue: number;
@@ -574,7 +581,7 @@ export function stepPublicFinance(
     turn: number;
   },
 ): FinanceTick {
-  const { debt, economy, monthlyBalance, spending, regions, nationalRevenue, turn } = options;
+  const { debt, economy, turnBalance, spending, regions, nationalRevenue, turn } = options;
 
   /* 1. Age the book. Matured paper is refinanced at today's price, which is
         the whole point of tracking maturities at all. */
@@ -586,7 +593,7 @@ export function stepPublicFinance(
 
   /* 2. The market prices this government's paper. */
   const credibility = ruleCredibility(finance.rules);
-  const spread = marketSpread(debt, economy.gdp, monthlyBalance, credibility);
+  const spread = marketSpread(debt, economy.gdp, turnBalance, credibility);
 
   /* 3. Refinance the cliff and fund the month's shortfall, at today's rate. */
   const toIssue = maturedPrincipal + Math.max(0, options.newBorrowing);
@@ -595,12 +602,12 @@ export function stepPublicFinance(
   }
 
   /* 4. The agencies. Slow to downgrade, immediate to upgrade. */
-  const rating = stepRating(finance.rating, debt, economy.gdp, monthlyBalance, economy);
+  const rating = stepRating(finance.rating, debt, economy.gdp, turnBalance, economy);
   const ratingMoved = rating.grade !== finance.rating.grade;
 
   /* 5. The government's promises about all of the above. */
   const before = new Set(rulesInBreach(finance.rules).map((r) => r.kind));
-  const rules = stepRules(finance.rules, debt, economy.gdp, monthlyBalance, spending);
+  const rules = stepRules(finance.rules, debt, economy.gdp, turnBalance, spending);
   const newBreaches = rulesInBreach(rules)
     .map((r) => r.kind)
     .filter((kind) => !before.has(kind));
@@ -609,7 +616,7 @@ export function stepPublicFinance(
         of surplus, which is why it is usually empty when it is needed. */
   const reserveReturn = finance.reserveFund * RESERVE_FUND_RETURN;
   const reserveContributed = Math.max(0, finance.reserveContribution);
-  const surplus = Math.max(0, monthlyBalance);
+  const surplus = Math.max(0, turnBalance);
   const emergencyRefilled = Math.min(
     Math.max(0, EMERGENCY_FUND_TARGET - finance.emergencyFund),
     surplus * EMERGENCY_FUND_REFILL_SHARE,
@@ -621,7 +628,7 @@ export function stepPublicFinance(
   const point: FiscalPoint = {
     turn,
     debtRatio: debtRatio(debt, economy.gdp),
-    deficitRatio: deficitRatio(monthlyBalance, economy.gdp),
+    deficitRatio: deficitRatio(turnBalance, economy.gdp),
     borrowingCost: borrowingCost(economy.policyRate, spread, options.tenor),
     grade: rating.grade,
   };
@@ -664,7 +671,7 @@ export function forecastFinance(
   finance: PublicFinance,
   debt: number,
   economy: Economy,
-  monthlyBalance: number,
+  turnBalance: number,
   spending: number,
   horizon = 12,
 ): FiscalForecast {
@@ -675,14 +682,14 @@ export function forecastFinance(
   let downgrade = false;
 
   for (let i = 1; i <= horizon; i += 1) {
-    runningDebt = Math.max(0, runningDebt - monthlyBalance);
+    runningDebt = Math.max(0, runningDebt - turnBalance);
     const credibility = ruleCredibility(finance.rules);
-    const spread = marketSpread(runningDebt, economy.gdp, monthlyBalance, credibility);
-    rating = stepRating(rating, runningDebt, economy.gdp, monthlyBalance, economy);
+    const spread = marketSpread(runningDebt, economy.gdp, turnBalance, credibility);
+    rating = stepRating(rating, runningDebt, economy.gdp, turnBalance, economy);
     if (rating.grade !== finance.rating.grade) downgrade = true;
 
     for (const rule of finance.rules) {
-      if (!ruleHolds(rule, runningDebt, economy.gdp, monthlyBalance, spending)) {
+      if (!ruleHolds(rule, runningDebt, economy.gdp, turnBalance, spending)) {
         breached.add(rule.kind);
       }
     }
@@ -690,7 +697,7 @@ export function forecastFinance(
     months.push({
       turn: i,
       debtRatio: debtRatio(runningDebt, economy.gdp),
-      deficitRatio: deficitRatio(monthlyBalance, economy.gdp),
+      deficitRatio: deficitRatio(turnBalance, economy.gdp),
       borrowingCost: borrowingCost(economy.policyRate, spread),
       grade: rating.grade,
     });

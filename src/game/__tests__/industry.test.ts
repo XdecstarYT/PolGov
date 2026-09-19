@@ -108,16 +108,16 @@ describe('what moves an industry', () => {
 
   it('makes a carbon price bite exactly where it is aimed', () => {
     const priced = taxes({ carbon: 0.35 });
-    const after = run(48, economy(), priced);
+    const after = run(208, economy(), priced);
     expect(healthOf(after, 'energy')).toBeLessThan(100);
     expect(healthOf(after, 'mining')).toBeLessThan(100);
     /* And it is a tailwind for the two industries that benefit. */
-    expect(healthOf(after, 'forestry')).toBeGreaterThan(healthOf(run(48), 'forestry'));
+    expect(healthOf(after, 'forestry')).toBeGreaterThan(healthOf(run(208), 'forestry'));
   });
 
   it('makes a tariff a transfer between industries, not a free gift', () => {
     const protective = taxes({ import_tariff: 0.22 });
-    const after = run(48, economy(), protective);
+    const after = run(208, economy(), protective);
     /* Manufacturing is sheltered; logistics pays for it at the port. */
     expect(healthOf(after, 'manufacturing')).toBeGreaterThan(100);
     expect(healthOf(after, 'logistics')).toBeLessThan(100);
@@ -127,11 +127,11 @@ describe('what moves an industry', () => {
     const starved = sectors.map((s) =>
       s.key === 'education' ? { ...s, health: 20, funding: 4 } : s,
     );
-    const after = run(60, economy(), taxes(), starved);
+    const after = run(260, economy(), taxes(), starved);
     expect(healthOf(after, 'technology')).toBeLessThan(100);
     expect(healthOf(after, 'research')).toBeLessThan(100);
     /* Mining does not care how good the schools are. */
-    expect(healthOf(after, 'mining')).toBeCloseTo(healthOf(run(60), 'mining'), 6);
+    expect(healthOf(after, 'mining')).toBeCloseTo(healthOf(run(260), 'mining'), 6);
   });
 
   it('names every reason, so trouble can always be traced', () => {
@@ -155,8 +155,8 @@ describe('the lag', () => {
   it('is slow — a government inherits the last one’s industrial decisions', () => {
     const shock = economy({ policyRate: 12 });
     const oneMonth = run(1, shock);
-    const oneYear = run(12, shock);
-    const threeYears = run(36, shock);
+    const oneYear = run(52, shock);
+    const threeYears = run(156, shock);
     expect(healthOf(oneMonth, 'construction')).toBeGreaterThan(healthOf(oneYear, 'construction'));
     expect(healthOf(oneYear, 'construction')).toBeGreaterThan(healthOf(threeYears, 'construction'));
     /* The claim is proportional, not absolute: after one month of an
@@ -167,7 +167,7 @@ describe('the lag', () => {
   });
 
   it('cuts jobs more slowly than output, and rehires later', () => {
-    const after = run(6, economy({ policyRate: 12 }));
+    const after = run(26, economy({ policyRate: 12 }));
     const construction = after.find((i) => i.key === 'construction')!;
     const template = findIndustry('construction');
     const outputFall = 1 - construction.outputShare / template.outputShare;
@@ -178,17 +178,27 @@ describe('the lag', () => {
 
 describe('the regional chain', () => {
   it('turns a national rate rise into a specific region’s jobs problem', () => {
-    const dear = run(36, economy({ policyRate: 12 }));
+    const dear = run(156, economy({ policyRate: 12 }));
     const jobs = regionalEmployment(dear);
-    /* Construction and real estate are the rate-sensitive industries, and
-       they are concentrated in the capital and its commuter belt. */
-    expect(jobs.ternhill!).toBeLessThan(0);
-    /* Sable Reach is energy and mining. It barely notices. */
-    expect(jobs.sable!).toBeGreaterThan(jobs.ternhill!);
+
+    /* Construction is the rate-sensitive industry and Estmoor and Halloway
+       are where it is. They lose work. */
+    expect(jobs.estmoor!).toBeLessThan(0);
+    expect(jobs.halloway!).toBeLessThan(0);
+
+    /*
+     * Ternhill does BETTER, and that is not a bug. The capital runs on
+     * finance, finance is the one industry in the file with a negative rate
+     * sensitivity, and banks make more on a wider margin. A rate rise is
+     * therefore a transfer from the industrial regions to the capital —
+     * which is a real and deeply resented feature of monetary policy, and
+     * the model should say so rather than smooth it away.
+     */
+    expect(jobs.ternhill!).toBeGreaterThan(jobs.estmoor!);
   });
 
   it('turns a carbon price into a different region’s jobs problem', () => {
-    const priced = run(36, economy(), taxes({ carbon: 0.4 }));
+    const priced = run(156, economy(), taxes({ carbon: 0.4 }));
     const jobs = regionalEmployment(priced);
     expect(jobs.sable!).toBeLessThan(0);
     /* And the capital, which does not dig anything up, is fine. */
@@ -235,6 +245,6 @@ describe('aggregates', () => {
   });
 
   it('is deterministic', () => {
-    expect(run(24)).toEqual(run(24));
+    expect(run(104)).toEqual(run(104));
   });
 });

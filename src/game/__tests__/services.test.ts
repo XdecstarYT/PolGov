@@ -120,7 +120,7 @@ describe('demand nobody sets', () => {
      * no minister did it.
      */
     const ageing = demography({ retiredShare: 0.26, workingShare: 0.57, youthShare: 0.17 });
-    const after = run(60, sectors(), ageing);
+    const after = run(260, sectors(), ageing);
     const pensions = find(after, 'pensions');
     expect(coverage(pensions)).toBeLessThan(0.75);
     expect(pensions.quality).toBeLessThan(SERVICE_QUALITY_START);
@@ -178,7 +178,7 @@ describe('what underfunding produces', () => {
   });
 
   it('degrades quality more than proportionally', () => {
-    const halved = run(72, sectors(0.5));
+    const halved = run(312, sectors(0.5));
     for (const service of halved) {
       expect(service.quality).toBeLessThan(SERVICE_QUALITY_START);
     }
@@ -187,7 +187,7 @@ describe('what underfunding produces', () => {
   });
 
   it('improves things when a budget outruns demand, but with limits', () => {
-    const generous = run(72, sectors(1.6));
+    const generous = run(312, sectors(1.6));
     for (const service of generous) {
       expect(service.quality).toBeGreaterThan(SERVICE_QUALITY_START);
       expect(service.quality).toBeLessThanOrEqual(100);
@@ -195,10 +195,10 @@ describe('what underfunding produces', () => {
   });
 
   it('follows staffing more slowly than money', () => {
-    const cut = run(3, sectors(0.5));
+    const cut = run(13, sectors(0.5));
     /* Three months after a halving, the staff are still mostly there. */
     expect(find(cut, 'healthcare').staffing).toBeGreaterThan(0.7);
-    const later = run(60, sectors(0.5));
+    const later = run(260, sectors(0.5));
     expect(find(later, 'healthcare').staffing).toBeLessThan(0.65);
   });
 });
@@ -233,7 +233,7 @@ describe('what it does to the sectors', () => {
 
 describe('reporting', () => {
   it('names the services under strain, worst first', () => {
-    const squeezed = run(60, sectors(0.6));
+    const squeezed = run(260, sectors(0.6));
     const list = strained(squeezed);
     expect(list.length).toBeGreaterThan(10);
     for (let i = 1; i < list.length; i += 1) {
@@ -242,8 +242,8 @@ describe('reporting', () => {
   });
 
   it('names nothing when nothing is strained', () => {
-    expect(strained(run(24, sectors(1.3)))).toHaveLength(0);
-    expect(longestWaits(run(24, sectors(1.3)))).toHaveLength(0);
+    expect(strained(run(104, sectors(1.3)))).toHaveLength(0);
+    expect(longestWaits(run(104, sectors(1.3)))).toHaveLength(0);
   });
 
   it('reports a new strain once, when it happens', () => {
@@ -255,7 +255,7 @@ describe('reporting', () => {
   });
 
   it('ranks the longest queues', () => {
-    const waits = longestWaits(run(48, sectors(0.5)));
+    const waits = longestWaits(run(208, sectors(0.5)));
     expect(waits.length).toBeGreaterThan(0);
     for (let i = 1; i < waits.length; i += 1) {
       expect(waits[i - 1]!.waitMonths).toBeGreaterThanOrEqual(waits[i]!.waitMonths);
@@ -263,6 +263,6 @@ describe('reporting', () => {
   });
 
   it('is deterministic', () => {
-    expect(run(24)).toEqual(run(24));
+    expect(run(104)).toEqual(run(104));
   });
 });

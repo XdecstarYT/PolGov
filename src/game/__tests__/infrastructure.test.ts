@@ -33,6 +33,7 @@ import {
   CONDITION_START,
   MAX_ACTIVE_PROJECTS,
   POPULATION_START,
+  TURNS_PER_YEAR,
 } from '../balance.ts';
 import type { Infrastructure } from '../types.ts';
 
@@ -45,7 +46,7 @@ function run(months: number, level = 1, from = buildInfrastructure()): Infrastru
   return infra;
 }
 
-const YEARS = (n: number) => n * 12;
+const YEARS = (n: number) => n * TURNS_PER_YEAR;
 const conditionOf = (infra: Infrastructure, key: string) =>
   infra.assets.find((a) => a.key === key)!.condition;
 
@@ -76,8 +77,9 @@ describe('the country as inherited', () => {
   });
 
   it('costs about a sixth of programme spending to keep up', () => {
-    expect(FULL_MAINTENANCE_COST).toBeGreaterThan(10);
-    expect(FULL_MAINTENANCE_COST).toBeLessThan(25);
+    /* ₡bn a year, against programme spending of about ₡1,250bn a year. */
+    expect(FULL_MAINTENANCE_COST).toBeGreaterThan(120);
+    expect(FULL_MAINTENANCE_COST).toBeLessThan(300);
     expect(maintenanceSpend(buildInfrastructure())).toBeCloseTo(FULL_MAINTENANCE_COST, 6);
   });
 });
@@ -100,7 +102,8 @@ describe('the trap', () => {
   });
 
   it('compounds — the work owed grows faster than the money saved', () => {
-    const saved = FULL_MAINTENANCE_COST * YEARS(4);
+    /* Four years of not paying an ANNUAL bill. */
+    const saved = FULL_MAINTENANCE_COST * 4;
     const owed = totalBacklog(run(YEARS(4), 0));
     /* A resurfacing deferred becomes a reconstruction. If this ever comes
        out below one, deferring maintenance is a free loan and the decision
@@ -218,7 +221,7 @@ describe('building things', () => {
   it('takes years, and most of them open under somebody else', () => {
     for (const template of INFRASTRUCTURE_TEMPLATES) {
       const project = commission(template, 1, 1, 1);
-      expect(project.remainingMonths).toBeGreaterThan(12);
+      expect(project.remainingTurns).toBeGreaterThan(TURNS_PER_YEAR);
     }
     const nuclear = commission(findInfrastructure('nuclear'), 1, 1, 1);
     /* Nine years. Two elections away, minimum. */
@@ -233,7 +236,7 @@ describe('building things', () => {
     };
     const before = infra.assets.find((a) => a.key === 'internet')!.capacity;
 
-    for (let i = 0; i < template.buildMonths - 1; i += 1) {
+    for (let i = 0; i < template.buildTurns - 1; i += 1) {
       infra = stepInfrastructure(infra).infrastructure;
       expect(infra.assets.find((a) => a.key === 'internet')!.capacity).toBe(before);
     }
@@ -250,9 +253,12 @@ describe('building things', () => {
       ...buildInfrastructure(),
       projects: [commission(template, 4, 1, 1)],
     };
-    const monthly = projectSpend(infra);
-    expect(monthly).toBeCloseTo((template.buildCost * 4) / template.buildMonths, 4);
-    expect(infrastructureSpend(infra)).toBeCloseTo(FULL_MAINTENANCE_COST + monthly, 4);
+    const annual = projectSpend(infra);
+    expect(annual).toBeCloseTo(
+      ((template.buildCost * 4) / template.buildTurns) * TURNS_PER_YEAR,
+      4,
+    );
+    expect(infrastructureSpend(infra)).toBeCloseTo(FULL_MAINTENANCE_COST + annual, 4);
   });
 
   it('limits how much can be under way at once', () => {

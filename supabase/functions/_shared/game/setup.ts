@@ -18,6 +18,7 @@ import {
   SECTOR_BASELINE_FUNDING,
   SECTOR_KEYS,
   SECTOR_START_HEALTH,
+  TURNS_PER_YEAR,
 } from './balance.ts';
 import { BILL_TEMPLATES } from './content/bills.ts';
 import { PARTY_TEMPLATES } from './content/parties.ts';
@@ -26,7 +27,7 @@ import { Rng, seedFromString } from './rng.ts';
 import { buildDistricts } from './systems/districts.ts';
 import { buildEconomy } from './systems/economy.ts';
 import { buildPublicFinance } from './systems/publicFinance.ts';
-import { buildTaxCode, monthlyReceipts } from './systems/taxation.ts';
+import { buildTaxCode, turnReceipts } from './systems/taxation.ts';
 import { buildIndustries } from './systems/industry.ts';
 import { buildDemography } from './systems/demography.ts';
 import { buildInfrastructure } from './systems/infrastructure.ts';
@@ -257,7 +258,7 @@ export function createGame(options: NewGameOptions): GameState {
       buildEconomy().gdp,
       buildEconomy().policyRate,
       regions,
-      monthlyReceipts(buildTaxCode(), buildEconomy().gdp),
+      turnReceipts(buildTaxCode(), buildEconomy().gdp) * TURNS_PER_YEAR,
     ),
 
     partyInternals: {

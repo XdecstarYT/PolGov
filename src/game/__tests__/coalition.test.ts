@@ -145,7 +145,10 @@ describe('mood target', () => {
 describe('mood drift and exit', () => {
   it('converges on the target', () => {
     let mood = 60;
-    for (let i = 0; i < 100; i += 1) mood = driftMood(mood, 20);
+    /* Four hundred weeks — nearly eight years of the same treatment. Mood
+       eases at the same real-time speed it always did, which now takes more
+       turns to get there. */
+    for (let i = 0; i < 400; i += 1) mood = driftMood(mood, 20);
     expect(mood).toBeCloseTo(20, 4);
   });
 

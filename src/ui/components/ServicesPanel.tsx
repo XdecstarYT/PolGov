@@ -45,7 +45,7 @@ export function ServicesPanel() {
       <p className="text-sm leading-relaxed text-ink-soft">
         Every service here is driven by a number of people — the retired, the young, the
         unemployed — and those numbers move on their own. As the country ages, the demand on
-        healthcare and pensions rises every month whether or not anybody decides anything.
+        healthcare and pensions rises every week whether or not anybody decides anything.
         Holding a budget flat is a cut, and nobody has to take it.
       </p>
 
@@ -53,7 +53,7 @@ export function ServicesPanel() {
         <Stat
           label="Being asked for"
           value={money(demand)}
-          detail="a month, to meet demand in full"
+          detail="a year, to meet demand in full"
           size="large"
         />
         <Stat
@@ -136,7 +136,7 @@ export function ServicesPanel() {
       {short.length > 0 && (
         <p className="mt-4 text-xs leading-relaxed text-ink-faint">
           Nobody cut {findService(short[0]!.key).name.toLowerCase()}. It is being asked for{' '}
-          <span className="tnum">{money(short[0]!.demand)}</span> a month and receiving{' '}
+          <span className="tnum">{money(short[0]!.demand)}</span> a year and receiving{' '}
           <span className="tnum">{money(short[0]!.funding)}</span>, because the country changed
           and the budget did not.
         </p>

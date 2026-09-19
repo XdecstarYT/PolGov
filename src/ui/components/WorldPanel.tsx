@@ -8,7 +8,7 @@
  * equally worth attending to is not a foreign policy.
  *
  * Exposure gets its own callout because it is the list a foreign minister
- * actually needs and the one most likely to be ignored until the month it
+ * actually needs and the one most likely to be ignored until the week it
  * matters. Leverage and exposure look identical on a relations number and
  * are opposite things.
  */

@@ -38,6 +38,7 @@ import { buildEconomy } from '../systems/economy.ts';
 import { buildRegions } from '../setup.ts';
 import {
   FISCAL_RULE_CREDIBILITY_MONTHS,
+  TURNS_PER_YEAR,
   RATING_REVIEW_MONTHS,
   SPREAD_CEILING,
 } from '../balance.ts';
@@ -49,7 +50,7 @@ const economy = (overrides: Partial<Economy> = {}): Economy => ({
 });
 
 const regions = buildRegions();
-const finance = () => buildPublicFinance(300, buildEconomy().gdp, 4.1, regions, 104);
+const finance = () => buildPublicFinance(300, buildEconomy().gdp, 4.1, regions, 1248);
 
 const rule = (overrides: Partial<FiscalRule> = {}): FiscalRule => ({
   kind: 'deficit_cap',
@@ -66,10 +67,12 @@ describe('the ratios everything else is a function of', () => {
     expect(debtRatio(0, 1000)).toBe(0);
   });
 
-  it('annualises the monthly balance, the way a finance ministry states it', () => {
-    /* ₡10bn a month of deficit against ₡1,200bn of output is 10% a year. */
-    expect(deficitRatio(-10, 1200)).toBeCloseTo(0.1, 10);
-    expect(deficitRatio(10, 1200)).toBeCloseTo(-0.1, 10);
+  it('annualises this turn\u2019s balance, the way a finance ministry states it', () => {
+    /* A turn is a week. ₡10bn a week of deficit against ₡1,200bn of output
+       is 43% a year, which is what annualising a weekly figure means. */
+    const weekly = 1200 * 0.1 / TURNS_PER_YEAR;
+    expect(deficitRatio(-weekly, 1200)).toBeCloseTo(0.1, 10);
+    expect(deficitRatio(weekly, 1200)).toBeCloseTo(-0.1, 10);
   });
 
   it('does not divide by an economy of nothing', () => {
@@ -236,12 +239,12 @@ describe('fiscal rules', () => {
   });
 
   it('knows whether it is being kept', () => {
-    expect(ruleHolds(rule({ threshold: 0.03 }), 0, gdp, -5, 100)).toBe(true);
-    expect(ruleHolds(rule({ threshold: 0.03 }), 0, gdp, -60, 100)).toBe(false);
+    expect(ruleHolds(rule({ threshold: 0.03 }), 0, gdp, -1, 100)).toBe(true);
+    expect(ruleHolds(rule({ threshold: 0.03 }), 0, gdp, -20, 100)).toBe(false);
     expect(ruleHolds(rule({ kind: 'debt_ceiling', threshold: 0.6 }), gdp * 0.5, gdp, 0, 100)).toBe(true);
     expect(ruleHolds(rule({ kind: 'debt_ceiling', threshold: 0.6 }), gdp * 0.9, gdp, 0, 100)).toBe(false);
-    expect(ruleHolds(rule({ kind: 'spending_cap', threshold: 120 }), 0, gdp, 0, 100)).toBe(true);
-    expect(ruleHolds(rule({ kind: 'spending_cap', threshold: 80 }), 0, gdp, 0, 100)).toBe(false);
+    expect(ruleHolds(rule({ kind: 'spending_cap', threshold: 1440 }), 0, gdp, 0, 1200)).toBe(true);
+    expect(ruleHolds(rule({ kind: 'spending_cap', threshold: 960 }), 0, gdp, 0, 1200)).toBe(false);
     expect(ruleHolds(rule({ kind: 'balanced_budget', threshold: 0 }), 0, gdp, 1, 100)).toBe(true);
     expect(ruleHolds(rule({ kind: 'balanced_budget', threshold: 0 }), 0, gdp, -1, 100)).toBe(false);
   });
@@ -286,8 +289,9 @@ describe('the tiers', () => {
     const before = budgets[0]!.serviceQuality;
     /* The centre halves what it sends. Nothing in the national accounts
        records this as a cut to any service. */
-    for (let i = 0; i < 24; i += 1) {
-      budgets = stepRegionalBudgets(budgets, regions, 52);
+    /* Two years of weeks at half the grant. */
+    for (let i = 0; i < 260; i += 1) {
+      budgets = stepRegionalBudgets(budgets, regions, 624);
     }
     expect(budgets[0]!.debt).toBeGreaterThan(0);
     expect(budgets[0]!.serviceQuality).toBeLessThan(before);
@@ -295,8 +299,8 @@ describe('the tiers', () => {
 
   it('holds services steady when the grant holds steady', () => {
     let budgets = finance().regional;
-    for (let i = 0; i < 24; i += 1) {
-      budgets = stepRegionalBudgets(budgets, regions, 104);
+    for (let i = 0; i < 104; i += 1) {
+      budgets = stepRegionalBudgets(budgets, regions, 1248);
     }
     for (const b of budgets) {
       expect(b.serviceQuality).toBeGreaterThan(30);
@@ -325,10 +329,10 @@ describe('a month of public finance', () => {
   const base = {
     debt: 300,
     economy: economy(),
-    monthlyBalance: -10,
+    turnBalance: -10,
     spending: 100,
     regions,
-    nationalRevenue: 104,
+    nationalRevenue: 1248,
     newBorrowing: 10,
     tenor: 60,
     turn: 1,
@@ -367,7 +371,7 @@ describe('a month of public finance', () => {
     /* Running a deficit, so there is nothing to refill the emergency fund with. */
     expect(deficit.emergencyRefilled).toBe(0);
 
-    const surplus = stepPublicFinance(withFund, { ...base, monthlyBalance: 40 });
+    const surplus = stepPublicFinance(withFund, { ...base, turnBalance: 40 });
     expect(surplus.emergencyRefilled).toBeGreaterThan(0);
   });
 

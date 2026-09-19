@@ -18,6 +18,7 @@ import { EVENT_TEMPLATES, type EventTemplate, type EventWeightContext } from '..
 import { ECONOMIC_EVENT_TEMPLATES } from '../content/economicEvents.ts';
 import type {
   Demography,
+  EventChoice,
   Difficulty,
   Economy,
   GameEvent,
@@ -112,6 +113,39 @@ function weightFor(
  * Draw this turn's events. Returns 0–2 fully-formed events with their choices
  * and mechanical consequences already fixed.
  */
+/**
+ * Every event ends with the option of doing nothing.
+ *
+ * Appended here rather than written into each template, so it is a guarantee
+ * rather than a convention that a future event can forget. Two reasons it has
+ * to be a guarantee:
+ *
+ * The mechanical one: every other course costs political capital, so a
+ * government that has run out of it could not resolve the event, could not
+ * leave the phase, and could not take a turn. That deadlock sat latent for
+ * the whole of development — a monthly turn regenerated enough capital that
+ * a player never quite hit it, and making a turn a week walked straight into
+ * it on the eighth turn of the first game.
+ *
+ * The honest one: inaction IS a political choice, it is the one governments
+ * make most often, and it is never free. It costs nothing at the desk and
+ * something in the country, which is exactly why it is so attractive.
+ */
+export function withInaction(choices: EventChoice[], severity: number): EventChoice[] {
+  if (choices.some((c) => c.pcCost === 0)) return choices;
+  return [
+    ...choices,
+    {
+      label: 'Take no action',
+      tradeoff:
+        'Nothing is decided and the situation runs its course. It costs no capital at the ' +
+        'desk and something in the country, which is why it is the course most often taken.',
+      pcCost: 0,
+      effects: { approval: -Math.round(severity * 12) / 10 },
+    },
+  ];
+}
+
 export function drawEvents(
   rng: Rng,
   ctx: EventWeightContext,
@@ -147,7 +181,7 @@ export function drawEvents(
       narrative: template.narrative,
       severity,
       turnNumber,
-      choices: template.choices(severity),
+      choices: withInaction(template.choices(severity), severity),
       chosenIndex: null,
       resolved: false,
     });

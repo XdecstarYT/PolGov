@@ -31,7 +31,7 @@ import {
 import { benchInk } from '../bench.ts';
 
 const GROUPS: { kind: LogKind; title: string; blurb: string }[] = [
-  { kind: 'legislature', title: 'The chamber', blurb: 'Divisions held this month.' },
+  { kind: 'legislature', title: 'The chamber', blurb: 'Divisions held this week.' },
   { kind: 'event', title: 'Events', blurb: 'What reached the desk, and what you did about it.' },
   { kind: 'approval', title: 'Approval', blurb: 'Every movement in your public standing.' },
   { kind: 'political_capital', title: 'Political capital', blurb: 'Earned and spent.' },
@@ -43,7 +43,7 @@ const GROUPS: { kind: LogKind; title: string; blurb: string }[] = [
     blurb: 'What the country did, rather than what you decided.',
   },
   { kind: 'sector', title: 'Public services', blurb: 'Health of each sector and its funding.' },
-  { kind: 'coalition', title: 'Coalition', blurb: 'How your partners took the month.' },
+  { kind: 'coalition', title: 'Coalition', blurb: 'How your partners took the week.' },
   { kind: 'note', title: 'Notes', blurb: '' },
   { kind: 'election', title: 'Election', blurb: '' },
 ];
@@ -70,10 +70,10 @@ export function Report() {
   return (
     <div className="space-y-5">
       <Panel
-        title={`End of month ${game.turnNumber}`}
+        title={`End of week ${game.turnNumber}`}
         aside={`Term ${game.termNumber}`}
       >
-        <Kicker>The month in one line</Kicker>
+        <Kicker>The week in one line</Kicker>
         <p className="font-serif text-lg leading-snug text-ink">
           {passed.length > 0
             ? `${passed.length} bill${passed.length === 1 ? '' : 's'} carried`
@@ -119,14 +119,14 @@ export function Report() {
 
         <div className="mt-4">
           <Button variant="primary" onClick={() => void dispatch({ type: 'advance_phase' })}>
-            {lastTurnOfTerm ? 'To the election →' : 'Begin the next month →'}
+            {lastTurnOfTerm ? 'To the election →' : 'Begin the next week →'}
           </Button>
         </div>
       </Panel>
 
       <Panel title="What changed, and why" aside={`${log.length} entries`}>
         {log.length === 0 ? (
-          <EmptyNote>Nothing moved this month.</EmptyNote>
+          <EmptyNote>Nothing moved this week.</EmptyNote>
         ) : (
           <div className="space-y-6">
             {GROUPS.map((group) => {
@@ -184,14 +184,14 @@ function SummaryFigure({
       </div>
       <div className="font-serif text-lg tnum text-ink">{now}</div>
       <div className="text-xs">
-        <Delta value={delta} unit={unit} /> <span className="text-ink-faint">this month</span>
+        <Delta value={delta} unit={unit} /> <span className="text-ink-faint">this week</span>
       </div>
     </div>
   );
 }
 
 /**
- * Net change for a resource this month. Informational lines — gross revenue,
+ * Net change for a resource this week. Informational lines — gross revenue,
  * gross spending, interest charged, rate changes — are deliberately excluded:
  * they explain the movement but are not themselves the movement, and summing
  * them would make this figure disagree with the top bar.

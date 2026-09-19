@@ -167,8 +167,8 @@ export function ApprovalTrend({ history }: { history: ApprovalPoint[] }) {
         role="img"
         aria-label={
           `Approval from ${first.toFixed(0)}% at the start of the career to ${latest.toFixed(0)}% now, ` +
-          `across ${history.length - 1} resolved months. Highest ${peak.approval.toFixed(0)}% in month ${peak.turn}, ` +
-          `lowest ${trough.approval.toFixed(0)}% in month ${trough.turn}.`
+          `across ${history.length - 1} resolved weeks. Highest ${peak.approval.toFixed(0)}% in week ${peak.turn}, ` +
+          `lowest ${trough.approval.toFixed(0)}% in week ${trough.turn}.`
         }
         onPointerMove={onMove}
         onPointerLeave={() => setCursor(null)}
@@ -199,7 +199,7 @@ export function ApprovalTrend({ history }: { history: ApprovalPoint[] }) {
           50
         </text>
 
-        {/* Axis ends only — a value every month would be noise. */}
+        {/* Axis ends only — a value every week would be noise. */}
         {[0, 100].map((value) => (
           <text
             key={value}
@@ -260,7 +260,7 @@ export function ApprovalTrend({ history }: { history: ApprovalPoint[] }) {
           style={{ fontSize: '9px', fill: 'var(--color-ink-faint)' }}
           className="tnum"
         >
-          month {geometry.minTurn}
+          week {geometry.minTurn}
         </text>
         <text
           x={W - PAD.right}
@@ -269,7 +269,7 @@ export function ApprovalTrend({ history }: { history: ApprovalPoint[] }) {
           style={{ fontSize: '9px', fill: 'var(--color-ink-faint)' }}
           className="tnum"
         >
-          month {geometry.maxTurn}
+          week {geometry.maxTurn}
         </text>
       </svg>
 
@@ -280,7 +280,7 @@ export function ApprovalTrend({ history }: { history: ApprovalPoint[] }) {
           role="status"
         >
           <span className="tnum font-semibold text-ink">{active.approval.toFixed(1)}%</span>{' '}
-          <span className="text-ink-faint">month {active.turn}</span>
+          <span className="text-ink-faint">week {active.turn}</span>
         </div>
       )}
 
@@ -288,7 +288,7 @@ export function ApprovalTrend({ history }: { history: ApprovalPoint[] }) {
         Now <span className="tnum text-ink">{latest.toFixed(1)}%</span> ·{' '}
         {change >= 0 ? 'up' : 'down'}{' '}
         <span className="tnum">{Math.abs(change).toFixed(1)}</span> points across{' '}
-        <span className="tnum">{history.length - 1}</span> resolved months · high{' '}
+        <span className="tnum">{history.length - 1}</span> resolved weeks · high{' '}
         <span className="tnum">{peak.approval.toFixed(0)}%</span>, low{' '}
         <span className="tnum">{trough.approval.toFixed(0)}%</span>.
       </p>

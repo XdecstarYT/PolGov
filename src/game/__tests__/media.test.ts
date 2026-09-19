@@ -64,7 +64,9 @@ describe('channels reach different people', () => {
 
   it('drops to nothing eventually rather than lingering forever', () => {
     let reach = applyChannelPush({}, 'radio');
-    for (let i = 0; i < 40; i += 1) reach = decayReach(reach);
+    /* Three years of weeks. Attention fades at the same real-time speed it
+       always did; there are simply more turns for it to fade across. */
+    for (let i = 0; i < 160; i += 1) reach = decayReach(reach);
     expect(Object.keys(reach)).toHaveLength(0);
   });
 

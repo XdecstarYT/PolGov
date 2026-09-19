@@ -51,7 +51,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(-0.6, 0.1, 0),
     'Restructures income tax into steeper bands, raising sustained revenue from higher earners.',
     'Durable revenue, but it lands as a visible tax rise and measurably slows private activity.',
-    { revenueDelta: 9, approval: -3.5, sectorDeltas: { economy: -3 } },
+    { revenueDelta: 108, approval: -3.5, sectorDeltas: { economy: -3 } },
   ),
   bill(
     'fiscal-consumption-cut',
@@ -61,7 +61,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(0.65, 0, -0.1),
     'Cuts the general consumption rate, leaving more money in household hands immediately.',
     'Popular and genuinely stimulative — and it tears a permanent hole in the revenue base.',
-    { revenueDelta: -8, approval: 4, sectorDeltas: { economy: 3 } },
+    { revenueDelta: -96, approval: 4, sectorDeltas: { economy: 3 } },
   ),
   bill(
     'fiscal-corporate-realignment',
@@ -71,7 +71,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(0.55, -0.05, -0.15),
     'Lowers the headline company rate while closing several deductions.',
     'Investment responds well; the net revenue loss is real and the optics are poor.',
-    { revenueDelta: -6, sectorDeltas: { economy: 5 }, approval: -1.5 },
+    { revenueDelta: -72, sectorDeltas: { economy: 5 }, approval: -1.5 },
   ),
   bill(
     'fiscal-dormant-assets',
@@ -103,11 +103,11 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     'The fastest route to a balanced budget, paid for in every service at once.',
     {
       fundingDeltas: {
-        economy: -3,
-        health: -3,
-        education: -3,
-        infrastructure: -3,
-        environment: -3,
+        economy: -36,
+        health: -36,
+        education: -36,
+        infrastructure: -36,
+        environment: -36,
       },
       approval: -6,
     },
@@ -122,7 +122,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(-0.5, 0.2, 0),
     'Funds a large increase in front-line general practice capacity.',
     'Visibly shortens waits and is widely welcomed; the higher funding line is permanent.',
-    { fundingDeltas: { health: 6 }, sectorDeltas: { health: 6 }, approval: 4 },
+    { fundingDeltas: { health: 72 }, sectorDeltas: { health: 6 }, approval: 4 },
   ),
   bill(
     'health-throughput',
@@ -142,7 +142,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(-0.4, 0, 0),
     'Centralises medicine procurement into a single national buyer.',
     'Cheaper supply and better stock control; suppliers retaliate by narrowing what they list.',
-    { sectorDeltas: { health: 3 }, revenueDelta: 2, approval: 1.5 },
+    { sectorDeltas: { health: 3 }, revenueDelta: 24, approval: 1.5 },
   ),
   bill(
     'health-private-capacity',
@@ -152,7 +152,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(0.65, -0.1, 0),
     'Buys surge capacity from independent providers to clear the backlog.',
     'Clears waiting lists quickly, and hands a permanent claim on the health budget to contractors.',
-    { sectorDeltas: { health: 7 }, revenueDelta: -4, approval: -1 },
+    { sectorDeltas: { health: 7 }, revenueDelta: -48, approval: -1 },
   ),
   bill(
     'health-preventive-levy',
@@ -162,7 +162,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(-0.2, 0.3, 0.1),
     'Taxes a narrow category of goods and earmarks the proceeds for prevention.',
     'Raises money and improves long-run outcomes; voters experience it as a tax on daily life.',
-    { revenueDelta: 3, sectorDeltas: { health: 2 }, approval: -3.5 },
+    { revenueDelta: 36, sectorDeltas: { health: 2 }, approval: -3.5 },
   ),
   bill(
     'health-rural-clinics',
@@ -172,7 +172,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(-0.25, -0.2, 0.05),
     'Guarantees a staffed clinic within a fixed travel time of every settlement.',
     'Deeply popular in thin constituencies; the per-patient cost is indefensible on a spreadsheet.',
-    { sectorDeltas: { health: 3 }, fundingDeltas: { health: 2 }, approval: 2.5 },
+    { sectorDeltas: { health: 3 }, fundingDeltas: { health: 24 }, approval: 2.5 },
   ),
 
   /* --------------------------- education -------------------------- */
@@ -184,7 +184,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(-0.55, 0.4, 0),
     'Entitles every child to a funded place from an early age.',
     'Strong long-run returns and immediate relief for parents, on a permanently higher budget line.',
-    { sectorDeltas: { education: 7 }, fundingDeltas: { education: 5 }, approval: 3.5 },
+    { sectorDeltas: { education: 7 }, fundingDeltas: { education: 60 }, approval: 3.5 },
   ),
   bill(
     'education-vocational',
@@ -204,7 +204,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(-0.4, 0.15, 0),
     'Caps class sizes in the early years of schooling.',
     'Parents notice it immediately; it requires more rooms and more staff, forever.',
-    { sectorDeltas: { education: 4 }, fundingDeltas: { education: 3 }, approval: 2 },
+    { sectorDeltas: { education: 4 }, fundingDeltas: { education: 36 }, approval: 2 },
   ),
   bill(
     'education-curriculum',
@@ -224,7 +224,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(0.6, -0.1, 0),
     'Shifts a larger share of tertiary cost onto graduates through income-linked repayment.',
     'Materially improves the fiscal position and materially narrows who applies.',
-    { revenueDelta: 5, sectorDeltas: { education: -3 }, approval: -5 },
+    { revenueDelta: 60, sectorDeltas: { education: -3 }, approval: -5 },
   ),
   bill(
     'education-retention',
@@ -234,7 +234,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(-0.45, 0.1, 0),
     'Settles the pay dispute and funds retention premiums in shortage subjects.',
     'Ends the disruption and stops the exodus; every other public workforce now has a benchmark.',
-    { sectorDeltas: { education: 4 }, fundingDeltas: { education: 2 }, approval: 1.5, treasury: -8 },
+    { sectorDeltas: { education: 4 }, fundingDeltas: { education: 24 }, approval: 1.5, treasury: -8 },
   ),
 
   /* ------------------------- infrastructure ----------------------- */
@@ -308,7 +308,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(-0.2, 0.05, 0.8),
     'Prices emissions across industry with a scheduled annual tightening.',
     'Raises real revenue and cuts emissions; energy-intensive regions carry the cost first.',
-    { revenueDelta: 7, sectorDeltas: { environment: 7, economy: -4 }, approval: -4 },
+    { revenueDelta: 84, sectorDeltas: { environment: 7, economy: -4 }, approval: -4 },
   ),
   bill(
     'env-grid',
@@ -328,7 +328,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(0.5, -0.15, -0.75),
     'Opens new licensing rounds for domestic resource extraction.',
     'Strong revenue and regional employment, against lasting environmental damage.',
-    { revenueDelta: 8, sectorDeltas: { economy: 5, environment: -9 }, approval: -2 },
+    { revenueDelta: 96, sectorDeltas: { economy: 5, environment: -9 }, approval: -2 },
   ),
   bill(
     'env-watershed',
@@ -370,7 +370,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(-0.7, 0.15, 0),
     'Raises the statutory minimum substantially above the current floor.',
     'Lifts low pay immediately; smaller employers absorb it through hours and headcount.',
-    { approval: 5, sectorDeltas: { economy: -3 }, revenueDelta: 1 },
+    { approval: 5, sectorDeltas: { economy: -3 }, revenueDelta: 12 },
   ),
   bill(
     'labour-bargaining',
@@ -420,7 +420,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(0.55, -0.1, 0),
     'Raises the state pension age on a published timetable.',
     'Closes a structural hole in the public finances, at the single highest political price available.',
-    { revenueDelta: 6, approval: -7 },
+    { revenueDelta: 72, approval: -7 },
   ),
 
   /* ----------------------------- civic ---------------------------- */
@@ -452,7 +452,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(0.2, 0.3, 0.05),
     'Transfers substantial spending authority to regional administrations.',
     'Decisions land closer to the people affected; the centre loses both leverage and revenue.',
-    { approval: 3, sectorDeltas: { infrastructure: 3 }, revenueDelta: -3 },
+    { approval: 3, sectorDeltas: { infrastructure: 3 }, revenueDelta: -36 },
   ),
   bill(
     'civic-lobbying',
@@ -472,7 +472,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(0.35, -0.1, 0),
     'Merges overlapping agencies and reduces administrative headcount.',
     'A permanent saving, bought with a year of disruption and a visible round of redundancies.',
-    { revenueDelta: 3, approval: -2, politicalCapital: 4 },
+    { revenueDelta: 36, approval: -2, politicalCapital: 4 },
   ),
   bill(
     'civic-assembly',
@@ -514,7 +514,7 @@ export const BILL_TEMPLATES: BillTemplate[] = [
     makeIdeology(0.05, -0.4, 0),
     'Funds a multi-year increase in officer numbers.',
     'Reliably popular, and locks in a recurring cost that outlives the reason for it.',
-    { approval: 3, revenueDelta: -3 },
+    { approval: 3, revenueDelta: -36 },
   ),
   bill(
     'security-surveillance',

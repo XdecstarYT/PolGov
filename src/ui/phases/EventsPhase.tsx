@@ -27,7 +27,7 @@ export function EffectSummary({ effects }: { effects: Effects }) {
   if (effects.politicalCapital)
     parts.push({ label: 'Capital', value: effects.politicalCapital, unit: 'PC' });
   if (effects.revenueDelta)
-    parts.push({ label: 'Revenue', value: effects.revenueDelta, unit: '₡bn/mo' });
+    parts.push({ label: 'Revenue', value: effects.revenueDelta, unit: '₡bn/yr' });
   if (effects.coalitionMood)
     parts.push({ label: 'All partners', value: effects.coalitionMood, unit: 'mood' });
 
@@ -39,7 +39,7 @@ export function EffectSummary({ effects }: { effects: Effects }) {
       parts.push({
         label: `${SECTOR_LABELS[key as keyof typeof SECTOR_LABELS]} funding`,
         value,
-        unit: '₡bn/mo',
+        unit: '₡bn/yr',
       });
   }
 
@@ -70,7 +70,7 @@ export function EventsPhase() {
     return (
       <Panel title="Events" aside="nothing to resolve">
         <p className="text-sm text-ink-soft">
-          A quiet month. Nothing has reached the desk that requires a decision.
+          A quiet week. Nothing has reached the desk that requires a decision.
         </p>
         <div className="mt-4">
           <Button variant="primary" onClick={() => void dispatch({ type: 'advance_phase' })}>

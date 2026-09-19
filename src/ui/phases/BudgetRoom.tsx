@@ -5,7 +5,7 @@
  * honest deficit readout. The projection runs the same drift function the
  * resolution phase will run, so the preview cannot disagree with the outcome.
  *
- * Editable only on budget months unless an emergency budget is bought.
+ * Editable only on budget weeks unless an emergency budget is bought.
  */
 
 import { useGame } from '../../state/store.ts';
@@ -59,7 +59,7 @@ export function BudgetRoom() {
         {!editable && (
           <div className="mb-4 border border-rule-strong bg-sunk/40 p-3">
             <p className="text-sm text-ink-soft">
-              The estimates are settled for this month. You can force them open, but it costs
+              The estimates are settled for this week. You can force them open, but it costs
               capital and the chamber will notice.
             </p>
             <div className="mt-2">
@@ -76,7 +76,7 @@ export function BudgetRoom() {
         <div className="mb-4 flex flex-wrap gap-x-6 gap-y-3 border-b border-rule pb-4">
           <Stat label="Revenue" value={money(revenue)} detail="per month" />
           <Stat label="Spending" value={money(spending)} detail="across five sectors" />
-          <Stat label="Debt service" value={money(debtService)} detail="interest this month" />
+          <Stat label="Debt service" value={money(debtService)} detail="interest this week" />
           <Stat
             label="Balance"
             value={money(balance)}
@@ -122,13 +122,13 @@ export function BudgetRoom() {
                     className="w-56 max-w-full accent-[var(--color-civic)] disabled:opacity-50"
                     aria-describedby={`projection-${projection.key}`}
                   />
-                  <span className="text-sm tnum text-ink">{money(projection.funding)}/mo</span>
+                  <span className="text-sm tnum text-ink">{money(projection.funding)}/yr</span>
                 </div>
 
                 <p id={`projection-${projection.key}`} className="mt-1 text-xs text-ink-faint">
                   This level sustains a health of{' '}
                   <span className="tnum text-ink-soft">{projection.equilibrium.toFixed(0)}</span>.
-                  Next month it moves <Delta value={drift} unit="pts" /> to{' '}
+                  Next week it moves <Delta value={drift} unit="pts" /> to{' '}
                   <span className="tnum text-ink-soft">
                     {projection.projectedHealth.toFixed(0)}
                   </span>
@@ -175,9 +175,9 @@ export function BudgetRoom() {
 
       <FiscalRulesRoom />
 
-      <Panel title="End the month">
+      <Panel title="End the week">
         <p className="text-sm leading-relaxed text-ink-soft">
-          The chamber divides on everything you have tabled, the month is applied, and the report
+          The chamber divides on everything you have tabled, the week is applied, and the report
           tells you exactly what moved and why.
         </p>
         <div className="mt-4">

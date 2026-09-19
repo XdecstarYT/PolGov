@@ -109,8 +109,8 @@ await step('dark mode', async () => {
 });
 await page.screenshot({ path: `${OUT}/09-report-dark.png`, fullPage: true });
 
-await step('advance into the next month', async () => {
-  await page.getByRole('button', { name: /Begin the next month/ }).click();
+await step('advance into the next week', async () => {
+  await page.getByRole('button', { name: /Begin the next week/ }).click();
   await page.getByRole('heading', { name: 'The morning brief' }).waitFor({ timeout: 8000 });
 });
 

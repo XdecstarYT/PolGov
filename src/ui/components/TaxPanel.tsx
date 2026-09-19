@@ -24,7 +24,7 @@ import {
   changeRawness,
   incidenceBySegment,
   marginalYield,
-  monthlyReceipts,
+  turnReceipts,
   receiptsBreakdown,
   revenuePeak,
   taxEffects,
@@ -46,7 +46,7 @@ export function TaxPanel() {
 
   const gdp = game.economy.gdp;
   const rows = receiptsBreakdown(game.taxes, gdp);
-  const total = monthlyReceipts(game.taxes, gdp);
+  const total = turnReceipts(game.taxes, gdp);
   const burden = incidenceBySegment(game.taxes, gdp);
   const effects = taxEffects(game.taxes);
 
@@ -60,7 +60,7 @@ export function TaxPanel() {
     .slice(0, 4);
 
   return (
-    <Panel title="The rates" aside={`${money(total)} a month`}>
+    <Panel title="The rates" aside={`${money(total)} a year`}>
       <p className="text-sm leading-relaxed text-ink-soft">
         Seventeen instruments, each with its own base, its own revenue peak, and its own set of
         people who pay it. The decision is almost never how much to raise — it is who to raise it
@@ -83,7 +83,7 @@ export function TaxPanel() {
       )}
 
       <ul className="mt-4 divide-y divide-rule">
-        {rows.map(({ template, rate, monthly, pastPeak }) => {
+        {rows.map(({ template, rate, perTurn, pastPeak }) => {
           const pending = draft[template.key] ?? rate;
           const dirty = Math.abs(pending - rate) > 1e-9;
           const peak = revenuePeak(template);
@@ -102,7 +102,7 @@ export function TaxPanel() {
                 <span className="font-serif text-sm font-semibold text-ink">{template.name}</span>
                 <span className="flex items-baseline gap-3 text-xs">
                   <span className="tnum text-ink">{pct(rate, 1)}</span>
-                  <span className="tnum text-ink-faint">{money(monthly)}/mo</span>
+                  <span className="tnum text-ink-faint">{money(perTurn)}/yr</span>
                   {pastPeak && <Tag tone="warn">past its peak</Tag>}
                   {raw > 0 && <Tag tone="brass">recently changed</Tag>}
                 </span>
@@ -132,7 +132,7 @@ export function TaxPanel() {
                     </span>
                     <span className="tnum text-ink-faint">
                       next point: {next >= 0 ? '+' : '−'}
-                      {money(Math.abs(next))}/mo · peak at {pct(peak, 0)}
+                      {money(Math.abs(next))}/yr · peak at {pct(peak, 0)}
                     </span>
                   </div>
 
