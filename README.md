@@ -4,10 +4,14 @@ A turn-based political simulation set in the fictional parliamentary democracy
 of **Verdana**. You lead a party: win elections, form a government, hold a
 coalition together, pass an agenda, and manage a budget that will not balance.
 
-The fantasy is the desk, not the battlefield. Each month you read a briefing,
+The fantasy is the desk, not the battlefield. Each week you read a briefing,
 make three to six consequential decisions, and press **END TURN** to watch the
-machine of state grind forward. A full term is twelve months and ends at a
-general election — about thirty to forty-five minutes.
+machine of state grind forward. A turn is a week, a full term is two hundred
+and eight of them, and it ends at a general election.
+
+Three engines run underneath it and none of them is a backdrop for the others:
+the politics of holding a government together, the economy and public finances
+it is trying to run, and a world outside the borders that is not about you.
 
 ---
 
@@ -92,11 +96,17 @@ non-zero on any match; `npm run verify` runs it as a gate.
 src/game/          The engine. Pure TypeScript — no DOM, no fetch, no Supabase.
   balance.ts         Every tunable number in the game, in one file.
   turn.ts            The 8-phase state machine and every player Intent.
-  systems/           approval, budget, legislature, coalition, elections,
-                     electorate, electoralSystems, districts, partyInternals,
-                     parliament, policy, media, events, legacy
+  systems/           approval, budget, budgetProcess, legislature, coalition,
+                     elections, electorate, electoralSystems, districts,
+                     partyInternals, parliament, policy, media, events, legacy,
+                     economy, publicFinance, taxation, industry, demography,
+                     infrastructure, services, diplomacy, organisations, trade,
+                     military, conflict, intelligence, worldSim
   content/           48 bills, 30 events, 8 parties, 8 regions, 20 voter
-                     segments, 4 factions, 6 referendums, 6 media channels
+                     segments, 4 factions, 6 referendums, 6 media channels,
+                     20 services, 8 ministries, 12 nations, 7 organisations,
+                     4 arms, 4 doctrines, 6 procurement programmes,
+                     6 covert operations, 12 global events
   serverGuards.ts    Snapshot invariants and the intent allowlist. Unit-tested.
 src/services/      Supabase client, storage adapters, AI narrator client.
 src/state/         Zustand store.
@@ -106,7 +116,9 @@ scripts/           Engine sync, secret audit, headless playtest, browser smoke t
 docs/ENGINE-1.md   Feature-by-feature coverage, including what is NOT built.
 ```
 
-### The five systems worth knowing about
+### The systems worth knowing about
+
+**Politics**
 
 - **The electorate.** Twenty overlapping voter segments, each with its own
   position, turnout habit and issue priorities. A region's politics are
@@ -125,20 +137,65 @@ docs/ENGINE-1.md   Feature-by-feature coverage, including what is NOT built.
 - **Campaigns and polling.** Six channels that reach different segments, and
   polls that are *samples* — the player never sees the true figure.
 
+**Money**
+
+- **A three-equation macroeconomy.** An IS curve with an open-economy net
+  exports term, a Phillips curve with downward nominal rigidity, and a Taylor
+  rule the government does not control. Debt is a real book of bonds with
+  staggered maturities, so refinancing is a problem from week one.
+- **A budget that has to pass.** Twenty service lines grouped under eight
+  ministries, each held by a coalition party. Cutting health is telling a
+  partner's Health Secretary their department is being reduced. Backbenchers
+  vote, not parties. Pensions, welfare and disability are statutory — re-priced
+  off the population every year, without anybody voting — so most of the total
+  is not a decision at all. Losing the division twice is a confidence crisis,
+  and a minority government gets through it by buying an abstention.
+- **Demand nobody sets.** Every service is driven by a headcount that moves on
+  its own. Holding a budget flat is a cut, and the country ages whether or not
+  anybody is looking.
+
+**The world**
+
+- **Rooms where nobody is in charge.** You may put a resolution; you may not
+  pass one. Twelve governments vote their own interests and each vote comes
+  back with its reason, so a loss tells you which relationships you did not
+  build. Three permanent members hold a veto and Verdana is not one of them.
+- **Trade.** Gravity rather than goodwill: size and distance decide most of it
+  and policy moves the margin. A tariff shelters one region and is paid at
+  every till, and the partner answers six weeks later — long after the
+  announcement and the applause.
+- **Forces, years early.** Strength is what gets announced; readiness is what
+  decides anything and is the first thing cut; equipment falls every week
+  whatever anybody does. Procurement runs on a clock that does not reset at an
+  election, so a successor collects what you ordered, late and over budget.
+- **An escalation ladder.** Crises arrive rather than being started. Climbing
+  is cheap and popular; coming down costs approval immediately and in public.
+  Approval rises when a crisis begins and falls further than it rose if it does
+  not end.
+- **An intelligence service you cannot trust.** Assessments are the truth plus
+  noise, labelled with a confidence that is itself an estimate. Capability can
+  be counted and is usually right; intentions cannot be collected against at
+  all, and a high-confidence intentions assessment is wrong about a quarter of
+  the time.
+- **A world that changes shape.** Other countries have relationships with each
+  other, go to war without consulting anybody here, rise and decline, and are
+  occasionally a different country by the following week. Over sixteen years
+  the map is not the one the government took office with.
+
 ### The turn
 
 An explicit state machine. The player may act only in phases 2–4.
 
 | # | Phase | |
 |---|---|---|
-| 1 | Briefing | Standing, money, the chamber, services, coverage. Read-only. |
-| 2 | Events | 0–2 crises fire. All must be resolved. |
+| 1 | Briefing | Standing, money, the chamber, and three sections of supporting papers. Read-only. |
+| 2 | Events | 0–2 crises fire. All must be resolved; every one has a free option. |
 | 3 | Agenda | Spend political capital: legislation, addresses, partners, campaigning. |
-| 4 | Budget | Five sliders. Editable every third month unless forced open. |
+| 4 | Budget | The estimates, line by line. Open for the first quarter of each year. |
 | 5 | Legislature | The chamber divides on everything tabled. |
-| 6 | Resolution | Effects, economy, treasury, approval, coalition drift. |
+| 6 | Resolution | The world first, then effects, economy, treasury, approval, coalition drift. |
 | 7 | Report | Itemised "what changed and why". |
-| 8 | Advance | Next month, or the election. |
+| 8 | Advance | Next week, or the election. |
 
 ### Server authority
 
@@ -184,15 +241,21 @@ The numbers currently in `balance.ts` are a considered starting point, not a
 finished balance pass. The ones most worth revisiting first:
 
 - `PC_REGEN_BASE` / `PC_REGEN_APPROVAL_SCALE` — how much a government can do
-  per month. A major bill costs more than a month's income on purpose.
+  per week. A major bill costs more than a quarter of a year of it on purpose.
 - `SEAT_SHARE_WEIGHT` — above 1.0 so a disciplined majority passes most of what
   it tables rather than barely half.
 - `APPROVAL_BASE` and `APPROVAL_INERTIA` — where a competently-run country sits,
   and how fast standing responds.
 - `ELECTION_APPROVAL_FLOOR` / `ELECTION_APPROVAL_RANGE` — how much a term of
   governing well changes the result on the night.
-- `DEBT_INTEREST_RATE` — the rate at which debt service crowds out everything
-  else. This is the game's central long-term tension.
+- `READINESS_FUNDING_PIVOT` / `READINESS_FUNDING_SPAN` — how much more than
+  upkeep a ready force costs. Level funding buys one about half ready.
+- `CRISIS_RALLY` / `CRISIS_RALLY_HALFLIFE` / `PATIENCE_FLOOR` — the rally and
+  how fast it curdles. The whole conflict system turns on these three.
+- `OVERCONFIDENCE_BASE` — how often an assessment is more certain of itself
+  than it should be. Raising it makes intelligence more dangerous to trust.
+- `GLOBAL_EVENT_BASE_RISK` — how often something happens that was not aimed
+  here. About one a year, capped at three running at once.
 
 ---
 

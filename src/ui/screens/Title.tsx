@@ -27,8 +27,16 @@ export function Title() {
         </h1>
         <p className="mt-3 max-w-2xl text-ink-soft">
           You lead a party in the parliamentary democracy of Verdana. Win elections, hold a
-          coalition together, pass an agenda, and balance a budget that will not balance. Every
-          week you get a desk, a briefing, and more things worth doing than you have capital for.
+          coalition together, pass an agenda, and get a budget through a chamber that can refuse
+          it. Every week you get a desk, a briefing, and more things worth doing than you have
+          capital for.
+        </p>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-faint">
+          Outside the borders there is a world that is not about you: twelve countries with
+          their own quarrels, rooms where nobody is in charge and a vote you cannot whip, trade
+          that answers back six weeks after you touch it, forces whose readiness was decided
+          four budgets ago, and an intelligence service that will hand you a confident number
+          and occasionally be wrong about it.
         </p>
       </header>
 
@@ -36,8 +44,10 @@ export function Title() {
         <div className="space-y-6">
           <Panel title="Begin">
             <p className="text-sm text-ink-soft">
-              A full term runs four years — two hundred and eight weeks — and ends at a general election. Expect thirty to
-              forty-five minutes.
+              A turn is a week. A full term runs four years — two hundred and eight of them — and
+              ends at a general election. Nothing here resolves inside a term except the
+              politics; the budget takes a year, a procurement programme takes a decade, and the
+              population takes longer than anybody is in office.
             </p>
             <div className="mt-4">
               <Button variant="primary" onClick={() => setScreen('setup')}>

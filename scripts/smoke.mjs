@@ -62,7 +62,9 @@ await step('reach the briefing', async () => {
 });
 await page.screenshot({ path: `${OUT}/04-briefing.png`, fullPage: true });
 
-await step('look at the institutions', async () => {
+await step('open the world papers', async () => {
+  await page.getByRole('tab', { name: /The world/ }).click();
+  await page.waitForTimeout(250);
   await page.getByRole('heading', { name: 'The institutions' }).waitFor();
   await page.getByRole('button', { name: /Standing Council/ }).click();
   await page.waitForTimeout(200);
@@ -81,16 +83,21 @@ await step('look at the trade schedule', async () => {
   await page.screenshot({ path: `${OUT}/04c-trade.png`, fullPage: true });
 });
 
-await step('look at the forces', async () => {
+await step('open the security papers', async () => {
+  await page.getByRole('tab', { name: /Security/ }).click();
+  await page.waitForTimeout(250);
   await page.getByRole('heading', { name: 'The forces' }).waitFor();
   await page.getByRole('heading', { name: 'Procurement' }).waitFor();
-  await page.screenshot({ path: `${OUT}/04d-defence.png`, fullPage: true });
-});
-
-await step('look at the agencies', async () => {
   await page.getByRole('heading', { name: 'The agencies' }).waitFor();
   await page.getByRole('heading', { name: 'Assessments' }).waitFor();
-  await page.screenshot({ path: `${OUT}/04e-intelligence.png`, fullPage: true });
+  await page.screenshot({ path: `${OUT}/04d-security.png`, fullPage: true });
+});
+
+await step('back to the country', async () => {
+  await page.getByRole('tab', { name: /The country/ }).click();
+  await page.waitForTimeout(250);
+  await page.getByRole('heading', { name: 'What the state does' }).waitFor();
+  await page.screenshot({ path: `${OUT}/04f-country.png`, fullPage: true });
 });
 
 await step('open the red box', async () => {

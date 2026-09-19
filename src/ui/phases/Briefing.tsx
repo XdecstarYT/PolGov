@@ -32,6 +32,7 @@ import {
   pct,
 } from '../components/Primitives.tsx';
 import { ApprovalTrend, SeatChart } from '../components/ChartsLazy.tsx';
+import { Dossier } from '../components/Dossier.tsx';
 import { EconomyPanel } from '../components/EconomyPanel.tsx';
 import { FinancePanel } from '../components/FinancePanel.tsx';
 import { OrganisationsPanel } from '../components/OrganisationsPanel.tsx';
@@ -148,31 +149,55 @@ export function Briefing() {
         </div>
       </div>
 
-      <GlobalPanel />
-
-      <WorldPanel />
-
-      <OrganisationsPanel />
-
-      <TradePanel />
-
-      <CrisisPanel />
-
-      <DefencePanel />
-
-      <IntelligencePanel />
-
-      <ServicesPanel />
-
-      <EconomyPanel />
-
-      <IndustryPanel />
-
-      <PopulationPanel />
-
-      <FinancePanel />
-
-      <ElectoratePanel />
+      <Dossier
+        sections={[
+          {
+            key: 'country',
+            label: 'The country',
+            blurb:
+              'What the state actually does, what the economy is doing underneath it, and who is in it. None of these figures are yours to set directly; all of them are downstream of decisions you take in the next three phases.',
+            content: (
+              <>
+                <ServicesPanel />
+                <EconomyPanel />
+                <IndustryPanel />
+                <PopulationPanel />
+                <FinancePanel />
+                <ElectoratePanel />
+              </>
+            ),
+          },
+          {
+            key: 'world',
+            label: 'The world',
+            blurb:
+              'Most of what happens out here has nothing to do with this country. The job is not to prevent any of it — it is to notice which parts reach you, and how.',
+            flag: game.world.globalEvents.filter((e) => !e.ended).length,
+            content: (
+              <>
+                <GlobalPanel />
+                <WorldPanel />
+                <OrganisationsPanel />
+                <TradePanel />
+              </>
+            ),
+          },
+          {
+            key: 'security',
+            label: 'Security',
+            blurb:
+              'Every decision on these pages is slow and every consequence is late. A government that cuts readiness changes nothing anybody can see, and changes what is possible under a government that will not be this one.',
+            flag: game.crises.filter((c) => c.stage !== 'settled').length,
+            content: (
+              <>
+                <CrisisPanel />
+                <DefencePanel />
+                <IntelligencePanel />
+              </>
+            ),
+          },
+        ]}
+      />
 
       <Panel title="How your standing is derived" aside="no black boxes">
         <p className="mb-3 text-sm text-ink-soft">
