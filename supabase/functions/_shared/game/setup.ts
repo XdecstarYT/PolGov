@@ -16,13 +16,13 @@ import {
   PARTY_FUNDS_START,
   PC_START,
   SECTOR_BASELINE_FUNDING,
+  GDP_START,
+  POPULATION_START,
   SECTOR_KEYS,
   SECTOR_START_HEALTH,
   TURNS_PER_YEAR,
 } from './balance.ts';
 import { BILL_TEMPLATES } from './content/bills.ts';
-import { PARTY_TEMPLATES } from './content/parties.ts';
-import { REGION_TEMPLATES } from './content/regions.ts';
 import { Rng, seedFromString } from './rng.ts';
 import { buildDistricts } from './systems/districts.ts';
 import { buildEconomy } from './systems/economy.ts';
@@ -51,13 +51,27 @@ import type {
   Party,
   Region,
   Sector,
+  SectorKey,
 } from './types.ts';
 import type { District } from './systems/districts.ts';
 import type { NationKey } from './content/nations.ts';
+import { findCountry, type CountryKey } from './content/world/countries.ts';
+import { findPolitics, hasPolitics } from './content/world/politics.ts';
+import { financesFor, partiesFor, regionsFor } from './content/world/generate.ts';
 
 export interface NewGameOptions {
   gameId: string;
   ownerId?: string | null;
+  /**
+   * Which country to govern.
+   *
+   * Every parliamentary democracy in the world table, plus the invented
+   * one. It decides the chamber, the electoral system, the regions, the
+   * parties, the public finances and the view of the rest of the world —
+   * which is nearly everything except the party the player leads.
+   */
+  country?: CountryKey;
+  /** Overrides the country's own name. Mostly for the invented one. */
   countryName?: string;
   difficulty: Difficulty;
   playerPartyName: string;
@@ -93,8 +107,46 @@ export function buildDistrictsFor(
   });
 }
 
-/** Electoral mass for the player's party — enough to usually lead, never to coast. */
+/**
+ * Electoral mass for the player's party — enough to usually lead, never to
+ * coast.
+ *
+ * Relative to the field rather than absolute, because the field is not the
+ * same everywhere. A party with this mass leads comfortably in a chamber of
+ * seven and finishes third in a chamber of two, and under first past the
+ * post third means a tenth of the seats and no government to form. The
+ * player's party is always a little ahead of the largest party it faces;
+ * the game is about what happens next, not about whether it starts.
+ */
 const PLAYER_BASE_STRENGTH = 1.15;
+/* Chosen so the invented country's player party lands on exactly
+   PLAYER_BASE_STRENGTH, which is where every measurement of the balance
+   was taken. An absolute floor instead of a ratio used to hand the player
+   a sweeping majority in any fragmented field under a majoritarian system,
+   because there a tenth of a point of vote share is most of the chamber. */
+const PLAYER_LEAD_OVER_FIELD = 1.095;
+
+/**
+ * And less than that where the system amplifies.
+ *
+ * Under first past the post, preferential or two-round counting, a tenth of
+ * a point of national vote share is most of the chamber: a party that leads
+ * everywhere wins everywhere. Starting the player a nose AHEAD there
+ * produced coronations of a hundred and fifty seats out of a hundred and
+ * eighty. Starting them a nose behind produces a contest, which is what
+ * those systems are actually like for the party that is not incumbent.
+ */
+const PLAYER_LEAD_MAJORITARIAN = 0.98;
+
+function playerStrength(
+  others: readonly { baseStrength: number }[],
+  system: ElectoralSystem,
+): number {
+  const largest = others.reduce((max, p) => Math.max(max, p.baseStrength), 0);
+  if (largest <= 0) return PLAYER_BASE_STRENGTH;
+  const amplifying = system === 'fptp' || system === 'preferential' || system === 'two_round';
+  return largest * (amplifying ? PLAYER_LEAD_MAJORITARIAN : PLAYER_LEAD_OVER_FIELD);
+}
 
 export function buildBills(): Bill[] {
   return BILL_TEMPLATES.map((template) => ({
@@ -120,16 +172,23 @@ export function buildBills(): Bill[] {
   }));
 }
 
-export function buildSectors(): Sector[] {
+export function buildSectors(moneyScale = 1): Sector[] {
   return SECTOR_KEYS.map((key) => ({
     key,
     health: SECTOR_START_HEALTH[key],
-    funding: SECTOR_BASELINE_FUNDING[key],
+    funding: Math.round(SECTOR_BASELINE_FUNDING[key] * moneyScale),
   }));
 }
 
-export function buildRegions(): Region[] {
-  return REGION_TEMPLATES.map((template) => ({
+/** The sector baselines at this country's size, which is what floors mean. */
+export function baselineFundingFor(moneyScale: number): Record<SectorKey, number> {
+  return Object.fromEntries(
+    SECTOR_KEYS.map((key) => [key, Math.round(SECTOR_BASELINE_FUNDING[key] * moneyScale)]),
+  ) as Record<SectorKey, number>;
+}
+
+export function buildRegions(country: CountryKey = 'verdana'): Region[] {
+  return regionsFor(country).map((template) => ({
     id: template.id,
     name: template.name,
     character: template.character,
@@ -140,26 +199,15 @@ export function buildRegions(): Region[] {
   }));
 }
 
-function buildParties(options: NewGameOptions): Party[] {
-  const player: Party = {
-    id: 'player',
-    name: options.playerPartyName,
-    shortName: options.playerPartyName.split(' ')[0] ?? options.playerPartyName,
-    color: options.playerColor,
-    glyph: options.playerGlyph,
-    isPlayer: true,
-    inCoalition: true,
-    ideology: options.playerIdeology,
-    seats: 0,
-    coalitionMood: null,
-    redLines: [],
-    baseStrength: PLAYER_BASE_STRENGTH,
-    cabinetPosts: 0,
-    cabinetDemand: 0,
-    leaderTitle: 'Leader',
-  };
-
-  const others: Party[] = PARTY_TEMPLATES.map((template) => ({
+function buildParties(
+  options: NewGameOptions,
+  moneyScale: number,
+  system: ElectoralSystem,
+): Party[] {
+  const others: Party[] = partiesFor(
+    options.country ?? 'verdana',
+    baselineFundingFor(moneyScale),
+  ).map((template) => ({
     id: template.id,
     name: template.name,
     shortName: template.shortName,
@@ -176,7 +224,32 @@ function buildParties(options: NewGameOptions): Party[] {
     cabinetPosts: 0,
     cabinetDemand: template.cabinetDemand,
     leaderTitle: template.leaderTitle,
+    prioritySector: template.prioritySector,
+    sectorFloor: template.sectorFloor,
+    redLinePool: template.redLinePool,
   }));
+
+  const player: Party = {
+    id: 'player',
+    name: options.playerPartyName,
+    shortName: options.playerPartyName.split(' ')[0] ?? options.playerPartyName,
+    color: options.playerColor,
+    glyph: options.playerGlyph,
+    isPlayer: true,
+    inCoalition: true,
+    ideology: options.playerIdeology,
+    seats: 0,
+    coalitionMood: null,
+    redLines: [],
+    baseStrength: playerStrength(others, system),
+    cabinetPosts: 0,
+    cabinetDemand: 0,
+    leaderTitle: 'Leader',
+    /* The party in office asks nothing of itself. */
+    prioritySector: 'economy',
+    sectorFloor: 0,
+    redLinePool: [],
+  };
 
   return [player, ...others];
 }
@@ -187,10 +260,27 @@ export function createGame(options: NewGameOptions): GameState {
   const difficulty = options.difficulty;
   const profile = DIFFICULTY[difficulty];
 
-  const parties = buildParties(options);
-  const regions = buildRegions();
-  const sectors = buildSectors();
-  const electoralSystem = options.electoralSystem ?? 'proportional';
+  /*
+   * Which country, and therefore how large. Both scales are exactly 1 for
+   * the invented country, so nothing about that run changes.
+   */
+  const country = options.country ?? 'verdana';
+  if (!hasPolitics(country)) {
+    throw new Error(
+      `setup: ${country} has no political profile. The playable list is the ` +
+        'parliamentary democracies; a presidential republic is in the world ' +
+        'without being in the chair.',
+    );
+  }
+  const politics = findPolitics(country);
+  const finances = financesFor(country);
+  const moneyScale = finances.gdp / GDP_START;
+  const peopleScale = finances.population / POPULATION_START;
+
+  const electoralSystem = options.electoralSystem ?? politics.electoralSystem;
+  const parties = buildParties(options, moneyScale, electoralSystem);
+  const regions = buildRegions(country);
+  const sectors = buildSectors(moneyScale);
   const districts = buildDistrictsFor(regions, electoralSystem, rng);
 
   /* Seat the opening parliament with the real election model. */
@@ -213,8 +303,13 @@ export function createGame(options: NewGameOptions): GameState {
   const state: GameState = {
     id: options.gameId,
     ownerId: options.ownerId ?? null,
-    countryName: options.countryName?.trim() || 'Verdana',
+    countryName: options.countryName?.trim() || findCountry(country).name,
+    country,
     difficulty,
+
+    moneyScale,
+    peopleScale,
+    debtTolerance: findCountry(country).debtTolerance ?? 1,
 
     turnNumber: 1,
     termNumber: 1,
@@ -223,13 +318,16 @@ export function createGame(options: NewGameOptions): GameState {
     politicalCapital: PC_START,
     approval: APPROVAL_START,
     treasury: 0,
-    debt: profile.startingDebt,
+    /* What the last government left. A real debt ratio against a real
+       output, scaled by how hard this run is meant to be — so governing a
+       heavily indebted country is hard for the reason it is actually hard. */
+    debt: Math.round(finances.debt * (profile.startingDebt / (GDP_START * 0.55))),
     revenueModifier: 0,
 
     /* On trend, on target, at the natural rate. Whatever goes wrong first
        should be legible as something that happened, not as the starting
        conditions catching up with the player. */
-    economy: buildEconomy(),
+    economy: buildEconomy(finances.gdp),
 
     /* The rates the previous government left behind. */
     taxes: buildTaxCode(),
@@ -240,30 +338,35 @@ export function createGame(options: NewGameOptions): GameState {
 
     /* People are distributed as the seats are, because the seats were drawn
        to match them. Apportionment is what keeps that true. */
-    demography: buildDemography(regions),
+    demography: buildDemography(regions, finances.population),
 
     /* Everything at capacity, nothing quite new, and no backlog yet. The
        trap only reads as one if the player is the one who walks into it. */
-    infrastructure: buildInfrastructure(),
+    infrastructure: buildInfrastructure(peopleScale),
 
     /* Every service funded to exactly the demand the country is making of
        it today. None of them will be, a decade from now, unless somebody
        decides otherwise — which is the entire mechanic. */
-    services: buildServices(sectors, buildDemography(regions), buildEconomy()),
+    services: buildServices(
+      sectors,
+      buildDemography(regions, finances.population),
+      buildEconomy(finances.gdp),
+      moneyScale / Math.max(0.0001, peopleScale),
+    ),
 
     /* Alliances this government did not make and quarrels it did not start,
        because every government inherits both. */
-    world: buildWorld(),
+    world: buildWorld(country),
 
     /* And a trade book built by decades of geography and somebody else's
        agreements. The first thing worth noticing about it is how little of
        it is the new government's to decide. */
-    trade: buildTrade(buildEconomy().gdp, buildWorld(), inheritedTradeAgreements()),
+    trade: buildTrade(finances.gdp, buildWorld(country), inheritedTradeAgreements(country)),
 
     /* Adequate, ageing, and nobody's achievement. The gap between what the
        forces are said to be and what they could do tomorrow was left by
        somebody else, and it is the player's to find. */
-    military: buildMilitary(),
+    military: buildMilitary(moneyScale),
 
     /* No quarrels yet. They arrive, which is the correct shape: the
        decision a government faces is never whether to have a crisis. */
@@ -282,11 +385,11 @@ export function createGame(options: NewGameOptions): GameState {
        refinancing problem exists from turn one and was left by somebody
        else — which is the position a new government is actually in. */
     finance: buildPublicFinance(
-      profile.startingDebt,
-      buildEconomy().gdp,
-      buildEconomy().policyRate,
+      Math.round(finances.debt * (profile.startingDebt / (GDP_START * 0.55))),
+      finances.gdp,
+      buildEconomy(finances.gdp).policyRate,
       regions,
-      turnReceipts(buildTaxCode(), buildEconomy().gdp) * TURNS_PER_YEAR,
+      turnReceipts(buildTaxCode(), finances.gdp) * TURNS_PER_YEAR,
     ),
 
     partyInternals: {
@@ -368,9 +471,9 @@ export function createStandardGame(gameId = 'test-game'): GameState {
  * Built from the inherited treaties, because a new government's trade
  * schedule was written by somebody else and it matters from week one.
  */
-function inheritedTradeAgreements(): Set<NationKey> {
+function inheritedTradeAgreements(country: CountryKey): Set<NationKey> {
   const keys = new Set<NationKey>();
-  for (const treaty of buildWorld().treaties) {
+  for (const treaty of buildWorld(country).treaties) {
     if (treaty.kind !== 'trade' && treaty.kind !== 'partnership') continue;
     for (const party of treaty.parties) keys.add(party);
   }

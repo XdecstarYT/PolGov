@@ -42,6 +42,8 @@ export function computeApprovalTarget(
   difficulty: Difficulty,
   /** The economy the debt is carried by. Debt is judged against output. */
   gdp: number,
+  /** How much this country's creditors will carry. See `debtTolerance`. */
+  debtTolerance = 1,
 ): ApprovalTarget {
   const profile = DIFFICULTY[difficulty];
   const avgHealth = averageSectorHealth(sectors);
@@ -52,7 +54,7 @@ export function computeApprovalTarget(
   const ratio = gdp > 0 ? Math.max(0, debt) / gdp : 0;
   const debtPenalty = -Math.min(
     APPROVAL_DEBT_MAX_PENALTY,
-    Math.max(0, (ratio - APPROVAL_DEBT_FREE_RATIO) * 100 * APPROVAL_DEBT_PER_POINT),
+    Math.max(0, (ratio - APPROVAL_DEBT_FREE_RATIO * debtTolerance) * 100 * APPROVAL_DEBT_PER_POINT),
   );
   const fatigue = -Math.min(APPROVAL_FATIGUE_CAP, turnsServed * APPROVAL_FATIGUE_PER_TURN);
 

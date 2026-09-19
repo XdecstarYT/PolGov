@@ -51,7 +51,7 @@ import {
   findIndustry,
   type IndustryKey,
 } from '../content/industries.ts';
-import { NATION_TEMPLATES, findNation, type NationKey } from '../content/nations.ts';
+import { findNation, type NationKey } from '../content/nations.ts';
 import type { Economy, Trade, TradeFlow, World } from '../types.ts';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -72,8 +72,11 @@ export function buildTrade(
   world: World,
   agreements: ReadonlySet<NationKey> = new Set(),
 ): Trade {
-  const blank: TradeFlow[] = NATION_TEMPLATES.map((template) => ({
-    nation: template.key,
+  /* One flow per country in the world as this capital sees it — not one
+     per row of the table, which would open a trade account with the
+     country being governed and with a country that is not in its world. */
+  const blank: TradeFlow[] = world.nations.map((nation) => ({
+    nation: nation.key,
     exports: 0,
     imports: 0,
     /* Surcharges are a government's doing. There are none on day one:

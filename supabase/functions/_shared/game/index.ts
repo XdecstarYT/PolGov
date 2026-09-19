@@ -29,6 +29,8 @@ export * from './systems/services.ts';
 export * from './content/services.ts';
 export * from './systems/diplomacy.ts';
 export * from './content/nations.ts';
+export * from './content/world/politics.ts';
+export * from './content/world/generate.ts';
 export * from './systems/election.ts';
 export * from './systems/electorate.ts';
 export * from './systems/electoralSystems.ts';

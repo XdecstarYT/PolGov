@@ -99,8 +99,11 @@ export function marketSpread(
   gdp: number,
   turnBalance: number,
   credibility: number,
+  /** How much this country's creditors will carry. See `debtTolerance`. */
+  debtTolerance = 1,
 ): number {
-  const level = Math.max(0, debtRatio(debt, gdp) - SPREAD_FREE_DEBT_RATIO) * 100;
+  const level =
+    Math.max(0, debtRatio(debt, gdp) - SPREAD_FREE_DEBT_RATIO * debtTolerance) * 100;
   const direction = Math.max(0, deficitRatio(turnBalance, gdp) * 100);
 
   const raw =
@@ -559,10 +562,11 @@ export function marketAccessHolds(
   gdp: number,
   turnBalance: number,
   grade: CreditGrade,
+  debtTolerance = 1,
 ): boolean {
   if (grade !== 'CCC' && grade !== 'B') return true;
   const ratio = debtRatio(debt, gdp);
-  if (ratio < MARKET_ACCESS_DEBT_RATIO) return true;
+  if (ratio < MARKET_ACCESS_DEBT_RATIO * debtTolerance) return true;
   /* A surplus buys the benefit of the doubt at any level of debt, because
      the question the market is asking is about direction. */
   return turnBalance >= 0;
@@ -615,9 +619,12 @@ export function stepPublicFinance(
     /** Tenor the treasury is issuing at. */
     tenor: number;
     turn: number;
+    /** How much this country's creditors will carry. See `debtTolerance`. */
+    debtTolerance?: number;
   },
 ): FinanceTick {
   const { debt, economy, turnBalance, spending, regions, nationalRevenue, turn } = options;
+  const debtTolerance = options.debtTolerance ?? 1;
 
   /* 1. Age the book. Matured paper is refinanced at today's price, which is
         the whole point of tracking maturities at all. */
@@ -662,7 +669,13 @@ export function stepPublicFinance(
   const regional = stepRegionalBudgets(finance.regional, regions, nationalRevenue);
 
   /* 8. And the question underneath all of it. */
-  const marketAccess = marketAccessHolds(debt, economy.gdp, turnBalance, rating.grade);
+  const marketAccess = marketAccessHolds(
+    debt,
+    economy.gdp,
+    turnBalance,
+    rating.grade,
+    debtTolerance,
+  );
   const weeksShutOut = marketAccess ? 0 : finance.weeksShutOut + 1;
 
   const point: FiscalPoint = {

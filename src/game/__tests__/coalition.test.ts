@@ -39,6 +39,9 @@ const makeParty = (overrides: Partial<Party> = {}): Party => ({
   cabinetPosts: 0,
   cabinetDemand: 0,
   leaderTitle: 'Leader',
+  prioritySector: 'economy' as const,
+  sectorFloor: 240,
+  redLinePool: [],
   ...overrides,
 });
 
@@ -240,8 +243,9 @@ describe('negotiation', () => {
   it('softens demands on a counter-offer, with diminishing relief', () => {
     const state = createStandardGame('counter-offer');
     const original = buildNegotiation(state.parties, 1).candidates[0]!;
-    const once = applyCounterOffer(original);
-    const twice = applyCounterOffer(once);
+    const party = state.parties.find((p) => p.id === original.partyId)!;
+    const once = applyCounterOffer(original, party);
+    const twice = applyCounterOffer(once, party);
 
     expect(once.concessionsWon).toBeGreaterThan(0);
     expect(twice.concessionsWon).toBeGreaterThan(once.concessionsWon);
@@ -252,8 +256,9 @@ describe('negotiation', () => {
   it('never negotiates away a red line', () => {
     const state = createStandardGame('red-lines-fixed');
     const original = buildNegotiation(state.parties, 1).candidates[0]!;
+    const party = state.parties.find((p) => p.id === original.partyId)!;
     let demand = original;
-    for (let i = 0; i < 6; i += 1) demand = applyCounterOffer(demand);
+    for (let i = 0; i < 6; i += 1) demand = applyCounterOffer(demand, party);
     expect(demand.redLines).toEqual(original.redLines);
   });
 });

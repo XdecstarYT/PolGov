@@ -23,7 +23,6 @@ import {
   MOOD_W_APPROVAL,
 } from '../balance.ts';
 import { affinity, normalisedDistance } from '../ideology.ts';
-import { PARTY_TEMPLATES } from '../content/parties.ts';
 import { fallbackCoalitionLine } from '../content/news.ts';
 import { SECTOR_LABELS } from '../balance.ts';
 import type {
@@ -82,10 +81,9 @@ export function buildNegotiation(
 }
 
 function buildDemand(party: Party, player: Party): CoalitionDemand {
-  const template = PARTY_TEMPLATES.find((t) => t.id === party.id);
-  const prioritySector = template?.prioritySector ?? 'economy';
-  const floor = template?.sectorFloor ?? 18;
-  const cabinetDemand = template?.cabinetDemand ?? 2;
+  const prioritySector = party.prioritySector;
+  const floor = party.sectorFloor;
+  const cabinetDemand = party.cabinetDemand;
 
   /* Parties further from the player extract more for the same seats. */
   const distance = normalisedDistance(player.ideology, party.ideology);
@@ -96,7 +94,7 @@ function buildDemand(party: Party, player: Party): CoalitionDemand {
     partyId: party.id,
     cabinetPosts: posts,
     /* Partners table one or two commitments, drawn from what they campaign on. */
-    redLines: (template?.redLinePool ?? []).slice(0, 2),
+    redLines: party.redLinePool.slice(0, 2),
     sectorFloor: { sector: prioritySector, amount },
     dialogue: fallbackCoalitionLine(
       party.name,
@@ -114,12 +112,11 @@ function buildDemand(party: Party, player: Party): CoalitionDemand {
  * outstanding. It can be repeated, with diminishing effect, but it never
  * removes a red line — those are not negotiable, only avoidable.
  */
-export function applyCounterOffer(demand: CoalitionDemand): CoalitionDemand {
+export function applyCounterOffer(demand: CoalitionDemand, party: Party): CoalitionDemand {
   const won = Math.min(0.85, demand.concessionsWon + COUNTER_OFFER_RELIEF);
   const scale = 1 - won;
-  const template = PARTY_TEMPLATES.find((t) => t.id === demand.partyId);
-  const baseCabinet = template?.cabinetDemand ?? 2;
-  const baseFloor = template?.sectorFloor ?? 18;
+  const baseCabinet = party.cabinetDemand;
+  const baseFloor = party.sectorFloor;
 
   return {
     ...demand,

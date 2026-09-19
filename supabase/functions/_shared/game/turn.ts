@@ -715,28 +715,42 @@ export function applyEffects(
     });
   }
 
+  /*
+   * Every figure below is written in the currency of a country the size of
+   * the one the engine is calibrated at. A bill that costs ₡18bn is
+   * costing half a per cent of output there, and it has to cost half a per
+   * cent of output everywhere — otherwise the same school-building
+   * programme is a rounding error in one country and a sixth of national
+   * income in another, which is how a run of a small country used to end
+   * in a boom nobody legislated for.
+   */
+  const money = state.moneyScale;
+
   if (effects.treasury) {
-    state.treasury += effects.treasury;
+    const delta = effects.treasury * money;
+    state.treasury += delta;
     log(entries, {
       kind: 'treasury',
       label: 'Treasury',
-      delta: effects.treasury,
+      delta,
       cause,
       unit: '₡bn',
     });
   }
 
   if (effects.debt) {
-    state.debt = Math.max(0, state.debt + effects.debt);
-    log(entries, { kind: 'debt', label: 'Debt', delta: effects.debt, cause, unit: '₡bn' });
+    const delta = effects.debt * money;
+    state.debt = Math.max(0, state.debt + delta);
+    log(entries, { kind: 'debt', label: 'Debt', delta, cause, unit: '₡bn' });
   }
 
   if (effects.revenueDelta) {
-    state.revenueModifier += effects.revenueDelta;
+    const delta = effects.revenueDelta * money;
+    state.revenueModifier += delta;
     log(entries, {
       kind: 'treasury',
       label: 'Recurring revenue',
-      delta: effects.revenueDelta,
+      delta,
       cause,
       unit: '₡bn/turn',
       /* A change to a per-turn rate, not cash moving this month. */
@@ -757,8 +771,9 @@ export function applyEffects(
     });
   }
 
-  for (const [key, delta] of Object.entries(effects.fundingDeltas ?? {})) {
-    if (!delta) continue;
+  for (const [key, raw] of Object.entries(effects.fundingDeltas ?? {})) {
+    if (!raw) continue;
+    const delta = raw * money;
     const sector = findSector(state.sectors, key as SectorKey);
     sector.funding = Math.max(0, sector.funding + delta);
     log(entries, {
@@ -818,7 +833,7 @@ export function beginTurn(state: GameState): GameState {
    * than a decision. Whatever they have taken is no longer available.
    */
   if ((next.turnNumber - 1) % TURNS_PER_YEAR === 0) {
-    const indexed = indexEntitlements(next.budget, next.demography, next.economy);
+    const indexed = indexEntitlements(next.budget, next.demography, next.economy, costScaleOf(state));
     next.budget = indexed.budget;
     syncSectorsToBudget(next);
     const moved = indexed.changes.reduce((sum, c) => sum + (c.to - c.from), 0);
@@ -954,6 +969,18 @@ function buildDebate(state: GameState, rng: Rng): DebateExchange {
  * This is the authoritative step. It never reads a number the client supplied;
  * it recomputes pass chances from state at the moment of the division.
  */
+/**
+ * What a cost per head is worth here.
+ *
+ * Money over people. A country with a third of the income per head has
+ * public services that cost a third as much per head, because that is what
+ * a doctor, a school place and a kilometre of track cost in a country with
+ * that income — not because anything has been discounted.
+ */
+function costScaleOf(state: GameState): number {
+  return state.moneyScale / Math.max(0.0001, state.peopleScale);
+}
+
 export function resolveTurn(state: GameState): GameState {
   const next = clone(state);
   const rng = new Rng(next.rngState);
@@ -1195,6 +1222,7 @@ export function resolveTurn(state: GameState): GameState {
       sector.funding,
       next.difficulty,
       nudge,
+      next.moneyScale,
     );
     const delta = sector.health - before;
     if (Math.abs(delta) >= 0.05) {
@@ -1219,7 +1247,7 @@ export function resolveTurn(state: GameState): GameState {
     /* Keeping what exists, building what does not, and the subscriptions
        to every room the country has a seat in. All three are spending, and
        all three are the kind nobody notices until they stop. */
-    infrastructureSpend(next.infrastructure) +
+    infrastructureSpend(next.infrastructure, next.moneyScale) +
       duesTotal(next.world.organisations, next.economy.gdp) +
       deploymentCost(next.military) +
       doctrineCost(next.military) +
@@ -1594,6 +1622,7 @@ export function resolveTurn(state: GameState): GameState {
     next.economy,
     /* Straight off the budget's line items. The player set these one by one. */
     serviceFunding(next.budget),
+    costScaleOf(next),
   );
   next.services = servicesTick.services;
   for (const key of servicesTick.newlyStrained) {
@@ -1633,6 +1662,7 @@ export function resolveTurn(state: GameState): GameState {
       next.sectors,
       drag,
       assets,
+      next.moneyScale,
     );
 
     for (const industry of next.industries) {
@@ -1649,6 +1679,7 @@ export function resolveTurn(state: GameState): GameState {
         next.sectors,
         drag,
         assets[industry.key],
+        next.moneyScale,
       );
       const leading = pressure.reasons[0];
       log(entries, {
@@ -1675,6 +1706,7 @@ export function resolveTurn(state: GameState): GameState {
    */
   {
     const tick = stepPublicFinance(next.finance, {
+      debtTolerance: next.debtTolerance,
       debt: next.debt,
       economy: next.economy,
       turnBalance: fiscal.balance,
@@ -2275,6 +2307,7 @@ export function resolveTurn(state: GameState): GameState {
     served,
     next.difficulty,
     next.economy.gdp,
+    next.debtTolerance,
   );
   const beforeApproval = next.approval;
   next.approval = driftApproval(next.approval, target.target);
@@ -5646,7 +5679,14 @@ function handleReferendum(state: GameState, questionId: string): IntentResult {
   const entries = currentLog(next);
   spendPc(next, PC_COSTS_POLICY.callReferendum);
 
-  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier, next.economy, next.taxes);
+  const scores = computeIssueScores(
+    next.sectors,
+    next.debt,
+    next.revenueModifier,
+    next.economy,
+    next.taxes,
+    next.debtTolerance,
+  );
   const result = runReferendum(question, next.regions, scores);
 
   next.referendums.push({
@@ -5812,7 +5852,14 @@ function handlePoll(state: GameState, quality: PollQuality): IntentResult {
   spendPc(next, cost);
 
   const rng = new Rng(next.rngState);
-  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier, next.economy, next.taxes);
+  const scores = computeIssueScores(
+    next.sectors,
+    next.debt,
+    next.revenueModifier,
+    next.economy,
+    next.taxes,
+    next.debtTolerance,
+  );
   const player = playerParty(next.parties);
   const truth = trueNationalShares(next.regions, next.parties, {
     scores,
@@ -5925,7 +5972,14 @@ function handlePressConference(state: GameState): IntentResult {
   spendPc(next, PC_COSTS_MEDIA.pressConference);
 
   /* What the room asks about is whatever is going worst. */
-  const scores = computeIssueScores(next.sectors, next.debt, next.revenueModifier, next.economy, next.taxes);
+  const scores = computeIssueScores(
+    next.sectors,
+    next.debt,
+    next.revenueModifier,
+    next.economy,
+    next.taxes,
+    next.debtTolerance,
+  );
   const worst = Object.entries(scores).sort((a, b) => a[1] - b[1])[0];
   const defensible = (worst?.[1] ?? 50) > 42;
 
@@ -5981,9 +6035,10 @@ function handleNegotiationCounter(state: GameState, partyId: string): IntentResu
 
   const next = clone(state);
   spendPc(next, COUNTER_OFFER_PC_COST);
-  next.negotiation!.candidates[index] = applyCounterOffer(
-    next.negotiation!.candidates[index]!,
-  );
+  const candidate = next.negotiation!.candidates[index]!;
+  const party = next.parties.find((p) => p.id === candidate.partyId);
+  if (!party) return reject(state, 'No such party.');
+  next.negotiation!.candidates[index] = applyCounterOffer(candidate, party);
   return ok(next);
 }
 

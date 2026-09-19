@@ -89,6 +89,8 @@ export function industryPressure(
   skills?: number,
   /** Points of drag from the infrastructure this industry runs on. */
   assets?: number,
+  /** How large this country is, so a baseline means the same thing here. */
+  moneyScale = 1,
 ): IndustryPressure {
   const template = findIndustry(industry.key);
   const reasons: { label: string; value: number }[] = [];
@@ -147,7 +149,7 @@ export function industryPressure(
    */
   if (template.publiclyFunded && template.supports) {
     const funding = findSector(sectors, template.supports).funding;
-    const normal = SECTOR_BASELINE_FUNDING[template.supports];
+    const normal = SECTOR_BASELINE_FUNDING[template.supports] * moneyScale;
     const fundingTerm = (funding - normal) * INDUSTRY_PUBLIC_FUNDING_WEIGHT;
     if (Math.abs(fundingTerm) > 0.05) {
       reasons.push({ label: 'Government orders', value: fundingTerm });
@@ -188,6 +190,7 @@ export function stepIndustries(
   sectors: readonly Sector[],
   skills?: number,
   assets?: Partial<Record<IndustryKey, number>>,
+  moneyScale = 1,
 ): IndustryState[] {
   return industries.map((industry) => {
     const template = findIndustry(industry.key);
@@ -198,6 +201,7 @@ export function stepIndustries(
       sectors,
       skills,
       assets?.[industry.key],
+      moneyScale,
     );
     const health = industry.health + (target - industry.health) * INDUSTRY_ADJUST_RATE;
 

@@ -553,12 +553,13 @@ export function indexEntitlements(
   budget: Budget,
   demography: Demography,
   economy: Economy,
+  costScale = 1,
 ): { budget: Budget; changes: { service: ServiceKey; from: number; to: number }[] } {
   const changes: { service: ServiceKey; from: number; to: number }[] = [];
 
   const lines = budget.lines.map((line) => {
     if (!isStatutory(line.service)) return line;
-    const owed = serviceDemand(findService(line.service), demography, economy);
+    const owed = serviceDemand(findService(line.service), demography, economy, costScale);
     if (Math.abs(owed - line.enacted) < 0.05) return line;
     changes.push({ service: line.service, from: line.enacted, to: owed });
     return { ...line, enacted: owed, proposed: owed };

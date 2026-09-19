@@ -71,21 +71,24 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
  * Starting state
  * ------------------------------------------------------------------ */
 
-export function buildDemography(regions: readonly Region[]): Demography {
+export function buildDemography(
+  regions: readonly Region[],
+  population: number = POPULATION_START,
+): Demography {
   const totalSeats = regions.reduce((sum, r) => sum + r.seats, 0) || 1;
   const regional: RegionalPopulation[] = regions.map((region) => ({
     regionId: region.id,
     /* People are distributed as the seats are, because the seats were drawn
        to match them. Apportionment is what keeps that true. */
-    population: POPULATION_START * (region.seats / totalSeats),
+    population: population * (region.seats / totalSeats),
     netFlow: 0,
     urban: URBANISATION_START,
   }));
 
-  const workforce = POPULATION_START * AGE_WORKING_START * PARTICIPATION_START;
+  const workforce = population * AGE_WORKING_START * PARTICIPATION_START;
 
   return {
-    population: POPULATION_START,
+    population,
     birthRate: BIRTH_RATE_START,
     deathRate: IMPLIED_DEATH_RATE_START,
     lifeExpectancy: LIFE_EXPECTANCY_START,
@@ -96,7 +99,7 @@ export function buildDemography(regions: readonly Region[]): Demography {
     immigration: MIGRATION_BASE + 2.4,
     emigration: 2.4,
     urbanisation: URBANISATION_START,
-    density: POPULATION_START / 0.42,
+    density: population / 0.42,
     householdSize: HOUSEHOLD_SIZE_START,
     participation: PARTICIPATION_START,
     workforce,

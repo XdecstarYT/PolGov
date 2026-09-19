@@ -55,6 +55,9 @@ const makeParty = (id: string, seats: number, isPlayer = false, inCoalition = fa
   cabinetPosts: 0,
   cabinetDemand: 0,
   leaderTitle: 'Leader',
+  prioritySector: 'economy' as const,
+  sectorFloor: 240,
+  redLinePool: [],
 });
 
 const sum = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0);

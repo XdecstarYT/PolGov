@@ -49,6 +49,36 @@ export function migrateState(raw: unknown): GameState | null {
 
   const next = { ...state } as GameState;
 
+  /*
+   * A save written before the world became real has no country and no
+   * scales. It was the invented one, at the scale the engine is calibrated
+   * at, which is exactly what these defaults say.
+   */
+  if (!next.country) next.country = 'verdana';
+  if (typeof next.moneyScale !== 'number' || !(next.moneyScale > 0)) next.moneyScale = 1;
+  if (typeof next.peopleScale !== 'number' || !(next.peopleScale > 0)) next.peopleScale = 1;
+  if (typeof next.debtTolerance !== 'number' || !(next.debtTolerance > 0)) {
+    next.debtTolerance = 1;
+  }
+
+  /* Parties written before they carried their own demands were looked up
+     in the invented country's table, which is where those demands came
+     from. Same values, now on the party. */
+  next.parties = next.parties.map((party) => {
+    const reference = fresh.parties.find((p) => p.id === party.id);
+    return {
+      ...party,
+      prioritySector: party.prioritySector ?? reference?.prioritySector ?? 'economy',
+      sectorFloor:
+        typeof party.sectorFloor === 'number'
+          ? party.sectorFloor
+          : (reference?.sectorFloor ?? 0),
+      redLinePool: Array.isArray(party.redLinePool)
+        ? party.redLinePool
+        : (reference?.redLinePool ?? []),
+    };
+  });
+
   /* Subsystems that may not have existed when the save was written. */
   if (!next.world) next.world = fresh.world;
   if (!Array.isArray(next.world.organisations)) {

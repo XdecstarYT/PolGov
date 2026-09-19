@@ -114,10 +114,10 @@ const clamp = (value: number, lo: number, hi: number) => Math.max(lo, Math.min(h
  * goes wrong is legible as a consequence rather than as the initial
  * conditions catching up.
  */
-export function buildEconomy(): Economy {
+export function buildEconomy(gdp: number = GDP_START): Economy {
   return {
-    gdp: GDP_START,
-    potentialGdp: GDP_START,
+    gdp,
+    potentialGdp: gdp,
     growth: POTENTIAL_GROWTH_BASE,
     potentialGrowth: POTENTIAL_GROWTH_BASE,
     outputGap: 0,
@@ -133,9 +133,9 @@ export function buildEconomy(): Economy {
     consumerConfidence: CONFIDENCE_START,
     businessConfidence: CONFIDENCE_START,
 
-    householdSpending: GDP_START * HOUSEHOLD_INCOME_SHARE * (1 - SAVINGS_RATE_BASE / 100),
+    householdSpending: gdp * HOUSEHOLD_INCOME_SHARE * (1 - SAVINGS_RATE_BASE / 100),
     householdSavingsRate: SAVINGS_RATE_BASE,
-    investment: GDP_START * INVESTMENT_SHARE_BASE,
+    investment: gdp * INVESTMENT_SHARE_BASE,
 
     phase: 'expansion',
     cycleMomentum: 0,

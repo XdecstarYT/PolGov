@@ -179,6 +179,9 @@ describe('your own benches can beat you', () => {
       cabinetPosts: 0,
       cabinetDemand: 0,
       leaderTitle: 'Leader',
+      prioritySector: 'economy' as const,
+      sectorFloor: 240,
+      redLinePool: [],
     },
     {
       id: 'opp',
@@ -196,6 +199,9 @@ describe('your own benches can beat you', () => {
       cabinetPosts: 0,
       cabinetDemand: 0,
       leaderTitle: 'Leader',
+      prioritySector: 'economy' as const,
+      sectorFloor: 240,
+      redLinePool: [],
     },
   ];
 

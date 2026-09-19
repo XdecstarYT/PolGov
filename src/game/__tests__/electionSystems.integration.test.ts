@@ -178,7 +178,7 @@ describe('redrawing boundaries', () => {
   it('actually improves the player’s seat count, or it would not be worth the cost', () => {
     const base = atAgenda('fptp');
     let bent = base;
-    for (let pass = 0; pass < 2; pass += 1) {
+    for (let pass = 0; pass < 4; pass += 1) {
       for (const region of bent.regions) {
         /* Top up before each review: this test is about the map, not the budget. */
         bent = { ...bent, politicalCapital: 100 };

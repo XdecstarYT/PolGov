@@ -159,8 +159,31 @@ export interface CountryTemplate {
   gdp: number;
   /** Population, millions. Same caveat. */
   population: number;
-  /** General government gross debt as a share of output. */
+  /**
+   * General government NET debt as a share of output.
+   *
+   * Net rather than gross, because gross overstates the burden wherever the
+   * state holds large financial assets against its own paper — Japan's
+   * gross figure is close to two and a half times output and its net figure
+   * is nearer one and a half, and the second is the one that decides what
+   * governing there is like.
+   */
   debtRatio: number;
+  /**
+   * How much debt this country's creditors will carry before the price
+   * changes, as a multiple of the baseline.
+   *
+   * Not a difficulty knob — a fact about who holds the paper. A country
+   * whose debt is held at home, in its own currency, by institutions that
+   * are not going anywhere can run a ratio that would shut another country
+   * out of the market within a month. Japan is the standing example and
+   * the reason this field exists: without it, the most indebted rich
+   * democracy in the world is unplayable past its first term, which is not
+   * what governing Japan is actually like.
+   *
+   * 1 is the baseline, and the invented country is exactly 1.
+   */
+  debtTolerance?: number;
   /** Defence spending as a share of output. */
   defenceShare: number;
 
@@ -179,7 +202,18 @@ export interface CountryTemplate {
   veto?: boolean;
   /** Holds nuclear weapons. */
   deterrent?: boolean;
-  /** Can the player govern here? */
+  /**
+   * Can the player govern here?
+   *
+   * True exactly where `world/politics.ts` has a profile, which is the
+   * parliamentary democracies. The engine models a chamber, a government
+   * drawn from it, and a head of government who falls when the chamber
+   * withdraws confidence; a presidential republic does not work that way,
+   * and a United States whose President could be brought down by a bad week
+   * in Congress would be teaching something false. Those countries are in
+   * the world without being in the chair. A test asserts the two lists
+   * agree.
+   */
   playable?: boolean;
 }
 
@@ -204,16 +238,16 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     posture: 'assertive',
     gdp: 27700,
     population: 335,
-    debtRatio: 1.23,
+    debtRatio: 0.97,
     defenceShare: 0.034,
     ideology: makeIdeology(0.45, 0.1, -0.15),
     borders: ['canada', 'mexico'],
     exports: ['technology', 'finance', 'defence', 'energy', 'entertainment'],
     imports: ['manufacturing', 'agriculture', 'retail'],
+    debtTolerance: 1.8,
     institutions: [...UN_BASE, 'security_council', 'nato', 'g7', 'g20'],
     veto: true,
     deterrent: true,
-    playable: true,
   },
   {
     key: 'canada',
@@ -232,6 +266,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: ['united_states'],
     exports: ['energy', 'mining', 'agriculture', 'forestry'],
     imports: ['manufacturing', 'technology', 'retail'],
+    debtTolerance: 1.25,
     institutions: [...UN_BASE, 'icc', 'nato', 'g7', 'g20'],
     playable: true,
   },
@@ -253,7 +288,6 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     exports: ['manufacturing', 'agriculture', 'energy'],
     imports: ['technology', 'finance', 'retail'],
     institutions: [...UN_BASE, 'icc', 'g20'],
-    playable: true,
   },
 
   /* ---------------------------------------------------------------- *
@@ -276,8 +310,8 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: ['argentina', 'colombia'],
     exports: ['agriculture', 'mining', 'energy'],
     imports: ['manufacturing', 'technology', 'defence'],
+    debtTolerance: 1.2,
     institutions: [...UN_BASE, 'icc', 'g20', 'brics'],
-    playable: true,
   },
   {
     key: 'argentina',
@@ -297,7 +331,6 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     exports: ['agriculture', 'energy', 'mining'],
     imports: ['manufacturing', 'technology', 'energy'],
     institutions: [...UN_BASE, 'icc', 'g20'],
-    playable: true,
   },
   {
     key: 'colombia',
@@ -358,6 +391,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: ['ireland'],
     exports: ['finance', 'technology', 'defence', 'entertainment', 'research'],
     imports: ['manufacturing', 'energy', 'agriculture'],
+    debtTolerance: 1.3,
     institutions: [...UN_BASE, 'icc', 'security_council', 'nato', 'g7', 'g20'],
     veto: true,
     deterrent: true,
@@ -374,12 +408,13 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     posture: 'assertive',
     gdp: 3050,
     population: 68,
-    debtRatio: 1.11,
+    debtRatio: 1.02,
     defenceShare: 0.019,
     ideology: makeIdeology(-0.25, 0.25, 0.3),
     borders: ['germany', 'italy', 'spain'],
     exports: ['manufacturing', 'agriculture', 'energy', 'tourism', 'defence'],
     imports: ['energy', 'technology', 'manufacturing'],
+    debtTolerance: 1.25,
     institutions: [...UN_BASE, 'icc', 'security_council', 'nato', 'eu', 'g7', 'g20'],
     veto: true,
     deterrent: true,
@@ -402,6 +437,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: ['france', 'poland', 'netherlands'],
     exports: ['manufacturing', 'technology', 'research'],
     imports: ['energy', 'agriculture', 'technology'],
+    debtTolerance: 1.2,
     institutions: [...UN_BASE, 'icc', 'nato', 'eu', 'g7', 'g20'],
     playable: true,
   },
@@ -416,12 +452,13 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     posture: 'institutional',
     gdp: 2190,
     population: 59,
-    debtRatio: 1.37,
+    debtRatio: 1.32,
     defenceShare: 0.015,
     ideology: makeIdeology(0.0, 0.05, 0.2),
     borders: ['france'],
     exports: ['manufacturing', 'tourism', 'agriculture'],
     imports: ['energy', 'technology', 'manufacturing'],
+    debtTolerance: 1.4,
     institutions: [...UN_BASE, 'icc', 'nato', 'eu', 'g7', 'g20'],
     playable: true,
   },
@@ -442,6 +479,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: ['france'],
     exports: ['tourism', 'agriculture', 'energy', 'manufacturing'],
     imports: ['energy', 'technology', 'manufacturing'],
+    debtTolerance: 1.15,
     institutions: [...UN_BASE, 'icc', 'nato', 'eu', 'g20'],
     playable: true,
   },
@@ -462,6 +500,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: ['germany'],
     exports: ['logistics', 'agriculture', 'technology', 'finance'],
     imports: ['energy', 'manufacturing', 'agriculture'],
+    debtTolerance: 1.15,
     institutions: [...UN_BASE, 'icc', 'nato', 'eu', 'g20'],
     playable: true,
   },
@@ -482,6 +521,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: [],
     exports: ['manufacturing', 'technology', 'forestry', 'defence'],
     imports: ['energy', 'manufacturing', 'agriculture'],
+    debtTolerance: 1.15,
     institutions: [...UN_BASE, 'icc', 'nato', 'eu'],
     playable: true,
   },
@@ -502,6 +542,8 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: ['united_kingdom'],
     exports: ['technology', 'finance', 'healthcare', 'agriculture'],
     imports: ['energy', 'manufacturing', 'retail'],
+    debtTolerance: 1.1,
+    playable: true,
     institutions: [...UN_BASE, 'icc', 'eu'],
   },
 
@@ -525,6 +567,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: ['germany', 'ukraine'],
     exports: ['manufacturing', 'agriculture', 'logistics'],
     imports: ['energy', 'technology', 'manufacturing'],
+    debtTolerance: 1.05,
     institutions: [...UN_BASE, 'icc', 'nato', 'eu', 'g20'],
     playable: true,
   },
@@ -565,7 +608,6 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     exports: ['manufacturing', 'agriculture', 'tourism', 'construction'],
     imports: ['energy', 'technology', 'manufacturing'],
     institutions: [...UN_BASE, 'nato', 'g20'],
-    playable: true,
   },
   {
     key: 'russia',
@@ -628,6 +670,8 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: ['egypt'],
     exports: ['technology', 'defence', 'research'],
     imports: ['energy', 'manufacturing', 'agriculture'],
+    debtTolerance: 1.15,
+    playable: true,
     institutions: [...UN_BASE],
     deterrent: true,
   },
@@ -691,7 +735,6 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     exports: ['energy', 'agriculture'],
     imports: ['manufacturing', 'technology', 'agriculture', 'retail'],
     institutions: [...UN_BASE, 'icc', 'african_union', 'opec'],
-    playable: true,
   },
   {
     key: 'south_africa',
@@ -710,6 +753,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: [],
     exports: ['mining', 'agriculture', 'manufacturing'],
     imports: ['energy', 'technology', 'manufacturing'],
+    debtTolerance: 1.15,
     institutions: [...UN_BASE, 'icc', 'g20', 'brics', 'african_union'],
     playable: true,
   },
@@ -772,6 +816,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: ['pakistan', 'china'],
     exports: ['technology', 'research', 'agriculture', 'manufacturing'],
     imports: ['energy', 'manufacturing', 'defence'],
+    debtTolerance: 1.5,
     institutions: [...UN_BASE, 'g20', 'brics'],
     deterrent: true,
     playable: true,
@@ -813,6 +858,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: ['india', 'russia', 'vietnam', 'pakistan'],
     exports: ['manufacturing', 'technology', 'construction', 'telecoms'],
     imports: ['energy', 'mining', 'agriculture'],
+    debtTolerance: 2.0,
     institutions: [...UN_BASE, 'security_council', 'g20', 'brics'],
     veto: true,
     deterrent: true,
@@ -828,12 +874,13 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     posture: 'institutional',
     gdp: 4210,
     population: 124,
-    debtRatio: 2.55,
+    debtRatio: 1.55,
     defenceShare: 0.011,
     ideology: makeIdeology(0.2, -0.05, 0.15),
     borders: [],
     exports: ['manufacturing', 'technology', 'research'],
     imports: ['energy', 'agriculture', 'mining'],
+    debtTolerance: 2.3,
     institutions: [...UN_BASE, 'icc', 'g7', 'g20'],
     playable: true,
   },
@@ -855,7 +902,6 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     exports: ['technology', 'manufacturing', 'entertainment'],
     imports: ['energy', 'agriculture', 'mining'],
     institutions: [...UN_BASE, 'icc', 'g20'],
-    playable: true,
   },
   {
     key: 'indonesia',
@@ -875,7 +921,6 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     exports: ['mining', 'energy', 'agriculture', 'manufacturing'],
     imports: ['manufacturing', 'technology', 'energy'],
     institutions: [...UN_BASE, 'g20', 'asean'],
-    playable: true,
   },
   {
     key: 'vietnam',
@@ -917,6 +962,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: [],
     exports: ['mining', 'energy', 'agriculture', 'education'],
     imports: ['manufacturing', 'technology', 'retail'],
+    debtTolerance: 1.2,
     institutions: [...UN_BASE, 'icc', 'g20'],
     playable: true,
   },
@@ -937,6 +983,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: [],
     exports: ['agriculture', 'tourism', 'forestry'],
     imports: ['manufacturing', 'energy', 'technology'],
+    debtTolerance: 1.1,
     institutions: [...UN_BASE, 'icc'],
     playable: true,
   },
@@ -965,6 +1012,7 @@ export const COUNTRY_TEMPLATES: CountryTemplate[] = [
     borders: ['france', 'spain', 'germany'],
     exports: ['manufacturing', 'finance', 'technology', 'agriculture'],
     imports: ['energy', 'manufacturing', 'technology'],
+    debtTolerance: 1.0,
     institutions: ['un', 'icc', 'wto', 'world_bank'],
     playable: true,
   },

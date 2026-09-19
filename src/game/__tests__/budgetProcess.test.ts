@@ -66,6 +66,9 @@ function party(over: Partial<Party> & { id: string }): Party {
     cabinetPosts: 0,
     cabinetDemand: 0,
     leaderTitle: 'Leader',
+    prioritySector: 'economy' as const,
+    sectorFloor: 240,
+    redLinePool: [],
     ...over,
   };
 }

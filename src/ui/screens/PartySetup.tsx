@@ -12,12 +12,19 @@ import {
   DIFFICULTY,
   ELECTORAL_SYSTEM_BLURBS,
   ELECTORAL_SYSTEM_LABELS,
-  PARTY_TEMPLATES,
   PLAYER_EMBLEMS,
   PLAYER_INK,
+  REGION_LABELS,
   affinity,
   affinityLabel,
   axisLabel,
+  baselineFundingFor,
+  findCountry,
+  findPolitics,
+  partiesFor,
+  playableCountries,
+  regionsFor,
+  type CountryKey,
   type Difficulty,
   type ElectoralSystem,
   type IdeologyAxis,
@@ -55,18 +62,42 @@ export function PartySetup() {
     glyph: PLAYER_EMBLEMS[0].glyph,
     ideology: { economic: 0, social: 0, environmental: 0 },
     difficulty: 'standard',
+    country: 'verdana',
     countryName: 'Verdana',
     electoralSystem: 'proportional',
   });
 
+  /*
+   * The chamber the player would be walking into, built the same way the
+   * run will build it. Showing the real parties rather than a summary is
+   * the point: the coalition arithmetic is the game, and a player should
+   * be able to see it before they commit to a position.
+   */
+  const chamber = useMemo(
+    () => partiesFor(form.country, baselineFundingFor(1)),
+    [form.country],
+  );
+  const politics = useMemo(() => findPolitics(form.country), [form.country]);
+  const regions = useMemo(() => regionsFor(form.country), [form.country]);
+
   const compatibility = useMemo(
     () =>
-      PARTY_TEMPLATES.map((template) => ({
-        template,
-        value: affinity(form.ideology, template.ideology),
-      })).sort((a, b) => b.value - a.value),
-    [form.ideology],
+      chamber
+        .map((template) => ({ template, value: affinity(form.ideology, template.ideology) }))
+        .sort((a, b) => b.value - a.value),
+    [form.ideology, chamber],
   );
+
+  const pickCountry = (key: CountryKey) => {
+    const country = findCountry(key);
+    setForm({
+      ...form,
+      country: key,
+      countryName: country.name,
+      /* The country's own system, until the player says otherwise. */
+      electoralSystem: findPolitics(key).electoralSystem,
+    });
+  };
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
@@ -77,6 +108,68 @@ export function PartySetup() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
         <div className="space-y-6">
+          <Panel title="Where you are standing">
+            <p className="text-xs leading-relaxed text-ink-faint">
+              Sixteen parliamentary democracies and one that does not exist. The country
+              decides how votes become seats, which parts of it vote differently from each
+              other, what the state already owes and who is outside the window. The
+              parties are invented everywhere — including here.
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              {playableCountries().map((country) => {
+                const selected = form.country === country.key;
+                return (
+                  <button
+                    key={country.key}
+                    type="button"
+                    onClick={() => pickCountry(country.key)}
+                    aria-pressed={selected}
+                    className={`border px-2 py-1.5 text-left text-xs ${
+                      selected
+                        ? 'border-ink bg-ink text-paper'
+                        : 'border-rule bg-paper text-ink hover:border-ink'
+                    }`}
+                  >
+                    <span className="block font-serif text-sm font-semibold">{country.name}</span>
+                    <span className={selected ? 'text-paper/70' : 'text-ink-faint'}>
+                      {REGION_LABELS[country.region]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <Rule />
+
+            <p className="font-serif text-sm leading-relaxed text-ink">{politics.blurb}</p>
+            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+              <dt className="text-ink-faint">Chamber</dt>
+              <dd className="tnum text-right text-ink">{politics.chamber}</dd>
+              <dt className="text-ink-faint">You would be</dt>
+              <dd className="tnum text-right text-ink">{politics.headOfGovernment}</dd>
+              <dt className="text-ink-faint">Counted by</dt>
+              <dd className="tnum text-right text-ink">
+                {ELECTORAL_SYSTEM_LABELS[politics.electoralSystem]}
+              </dd>
+              <dt className="text-ink-faint">Output</dt>
+              <dd className="tnum text-right text-ink">
+                ₡{findCountry(form.country).gdp.toLocaleString()}bn
+              </dd>
+              <dt className="text-ink-faint">People</dt>
+              <dd className="tnum text-right text-ink">
+                {findCountry(form.country).population.toFixed(1)}m
+              </dd>
+              <dt className="text-ink-faint">Inherited debt</dt>
+              <dd className="tnum text-right text-ink">
+                {Math.round(findCountry(form.country).debtRatio * 100)}% of output
+              </dd>
+              <dt className="text-ink-faint">Regions</dt>
+              <dd className="tnum text-right text-ink">{regions.length}</dd>
+              <dt className="text-ink-faint">Other parties</dt>
+              <dd className="tnum text-right text-ink">{chamber.length}</dd>
+            </dl>
+          </Panel>
+
           <Panel title="Identity">
             <label className="block text-xs font-semibold uppercase tracking-wide text-ink-faint" htmlFor="party-name">
               Party name

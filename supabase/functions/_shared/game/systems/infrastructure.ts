@@ -70,12 +70,16 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
  * unfair hand rather than a decision, and the whole point is that deferring
  * maintenance looks completely reasonable at the moment you do it.
  */
-export function buildInfrastructure(): Infrastructure {
+export function buildInfrastructure(peopleScale = 1): Infrastructure {
   return {
     assets: INFRASTRUCTURE_TEMPLATES.map((template) => ({
       key: template.key,
       condition: CONDITION_START,
-      capacity: template.capacity,
+      /* Capacity is physical — lane-kilometres, beds, megawatts — and is
+         compared against a demand that scales with the population. A
+         country of a hundred million inherits a hundred million people's
+         worth of it, in the same state of repair. */
+      capacity: Math.round(template.capacity * peopleScale * 100) / 100,
       backlog: 0,
     })),
     projects: [],
@@ -88,8 +92,12 @@ export function buildInfrastructure(): Infrastructure {
  * ------------------------------------------------------------------ */
 
 /** What maintenance costs, ₡bn a year. */
-export function maintenanceSpend(infrastructure: Infrastructure): number {
-  return FULL_MAINTENANCE_COST * clamp(infrastructure.maintenanceLevel, 0, MAINTENANCE_LEVEL_MAX);
+export function maintenanceSpend(infrastructure: Infrastructure, moneyScale = 1): number {
+  return (
+    FULL_MAINTENANCE_COST *
+    moneyScale *
+    clamp(infrastructure.maintenanceLevel, 0, MAINTENANCE_LEVEL_MAX)
+  );
 }
 
 /** What the projects under construction cost, ₡bn a year. */
@@ -105,8 +113,8 @@ export function projectSpend(infrastructure: Infrastructure): number {
 }
 
 /** Everything infrastructure costs, ₡bn a year. */
-export function infrastructureSpend(infrastructure: Infrastructure): number {
-  return maintenanceSpend(infrastructure) + projectSpend(infrastructure);
+export function infrastructureSpend(infrastructure: Infrastructure, moneyScale = 1): number {
+  return maintenanceSpend(infrastructure, moneyScale) + projectSpend(infrastructure);
 }
 
 /** The total work owed across every asset, ₡bn. */

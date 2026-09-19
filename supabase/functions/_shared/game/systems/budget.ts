@@ -30,8 +30,8 @@ import { turnReceipts } from './taxation.ts';
  * that returns diminish honestly: for health, ₡30bn → 60, ₡60bn → 75,
  * ₡120bn → 85.7. Doubling spend never doubles outcome.
  */
-export function sectorEquilibrium(key: SectorKey, funding: number): number {
-  const baseline = SECTOR_BASELINE_FUNDING[key];
+export function sectorEquilibrium(key: SectorKey, funding: number, moneyScale = 1): number {
+  const baseline = SECTOR_BASELINE_FUNDING[key] * moneyScale;
   const k = (baseline * 2) / 3;
   const f = Math.max(0, funding);
   if (f + k === 0) return 0;
@@ -50,9 +50,10 @@ export function driftSectorHealth(
   /** Points added to the equilibrium by things other than money — a carbon
       price on the environment, an excise on health. */
   externalNudge = 0,
+  moneyScale = 1,
 ): number {
   const profile = DIFFICULTY[difficulty];
-  const target = clamp01to100(sectorEquilibrium(key, funding) + externalNudge);
+  const target = clamp01to100(sectorEquilibrium(key, funding, moneyScale) + externalNudge);
   const gap = target - health;
   const rate = gap < 0 ? SECTOR_DRIFT_RATE * profile.decayPressure : SECTOR_DRIFT_RATE;
   return clamp01to100(health + gap * rate);
@@ -126,8 +127,27 @@ export interface FiscalTick {
  * decision reaches growth — deliberately one number, so the chain from a
  * funding slider to an unemployment rate stays traceable.
  */
+/**
+ * How much demand the government is adding this turn.
+ *
+ * The PRIMARY balance, not the overall one: revenue against what the state
+ * actually buys, with debt service left out.
+ *
+ * Coupons are a transfer to whoever holds the paper, and whoever holds the
+ * paper mostly saves them. Counting them as stimulus produced the defect
+ * this function was rewritten to fix — a country with a large inherited
+ * debt read its own interest bill as a boom, the boom raised inflation, the
+ * central bank raised rates, the higher rates raised the interest bill, and
+ * the loop ran until the rate cap. Governing a heavily indebted country is
+ * supposed to be hard. It is not supposed to be a source of growth.
+ *
+ * A small share is passed through, because some of it is spent.
+ */
+export const DEBT_SERVICE_PASS_THROUGH = 0.15;
+
 export function fiscalImpulse(tick: FiscalTick): number {
-  return -tick.balance;
+  const primary = tick.revenue - tick.spending;
+  return -(primary - tick.debtService * DEBT_SERVICE_PASS_THROUGH);
 }
 
 /**
@@ -217,14 +237,22 @@ export interface BudgetProjection {
 export function projectBudget(
   sectors: readonly Sector[],
   difficulty: Difficulty,
+  moneyScale = 1,
 ): BudgetProjection[] {
   return SECTOR_KEYS.map((key) => {
     const sector = findSector(sectors, key);
     return {
       key,
       currentHealth: sector.health,
-      projectedHealth: driftSectorHealth(key, sector.health, sector.funding, difficulty),
-      equilibrium: sectorEquilibrium(key, sector.funding),
+      projectedHealth: driftSectorHealth(
+        key,
+        sector.health,
+        sector.funding,
+        difficulty,
+        0,
+        moneyScale,
+      ),
+      equilibrium: sectorEquilibrium(key, sector.funding, moneyScale),
       funding: sector.funding,
     };
   });

@@ -70,6 +70,8 @@ export function computeIssueScores(
   economy: Economy,
   /** The tax code, when there is one. Without it the old proxy stands in. */
   taxes?: TaxCode,
+  /** How much this country's creditors will carry. See `debtTolerance`. */
+  debtTolerance = 1,
 ): IssueScores {
   const taxBurden = Math.max(0, revenueModifier) * ISSUE_COST_PER_REVENUE;
 
@@ -86,7 +88,7 @@ export function computeIssueScores(
       ? taxBurdenScore(taxes, economy.gdp)
       : clamp100(ISSUE_TAX_BASE - revenueModifier * ISSUE_TAX_PER_REVENUE),
     debt: clamp100(
-      100 * (1 - debtRatio(debt, economy.gdp) / ISSUE_DEBT_ZERO_AT_RATIO),
+      100 * (1 - debtRatio(debt, economy.gdp) / (ISSUE_DEBT_ZERO_AT_RATIO * debtTolerance)),
     ),
     cost_of_living: costOfLivingScore(economy, taxBurden),
   };

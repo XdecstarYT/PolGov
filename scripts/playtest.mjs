@@ -8,9 +8,11 @@ import { createGame, applyIntent } from '../src/game/index.ts';
 const difficulty = process.argv[2] ?? 'standard';
 const terms = Number(process.argv[3] ?? 2);
 const seedLabel = process.argv[4] ?? 'playtest-1';
+const country = process.argv[5] ?? 'verdana';
 
 let state = createGame({
   gameId: seedLabel,
+  country,
   difficulty,
   playerPartyName: 'Reform Coalition',
   playerColor: '#8c2f27',
@@ -112,6 +114,36 @@ const header = (s) =>
   `seats ${s.parties.find((p) => p.isPlayer).seats} ` +
   `bills ${s.career.billsPassed}/${s.career.billsPassed + s.career.billsFailed} ` +
   `phase ${s.phase}`;
+
+if (process.env.DUMP_WEEK) {
+  const want = Number(process.env.DUMP_WEEK);
+  let g = 0;
+  let seen = 0;
+  while (seen < want && state.status === 'active' && g++ < 900) {
+    if (state.phase === 'election_night') { tryTo({ type: 'advance_phase' }); formGovernment(); continue; }
+    playTurn();
+    seen += 1;
+  }
+  console.log(`--- through week ${state.turnNumber} (${state.countryName}) gdp ${state.economy.gdp.toFixed(0)} ---`);
+  const totals = new Map();
+  for (const l of state.logs) {
+    for (const e of l.entries) {
+      if (e.unit !== '\u20a1bn' && e.unit !== '\u20a1bn/turn') continue;
+      const k = `${e.kind}:${e.label}`;
+      totals.set(k, (totals.get(k) ?? 0) + e.delta);
+    }
+  }
+  for (const [k, v] of [...totals].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 14)) {
+    console.log(`  ${k.slice(0, 50).padEnd(52)} ${v.toFixed(1).padStart(11)}`);
+  }
+  console.log('  sectors  ', state.sectors.map((x) => `${x.key}=${x.funding.toFixed(0)}`).join(' '));
+  console.log('  budget   ', state.budget.lines.reduce((a, l) => a + l.enacted, 0).toFixed(0),
+    'proposed', state.budget.lines.reduce((a, l) => a + l.proposed, 0).toFixed(0),
+    'status', state.budget.status);
+  console.log('  services ', state.services.reduce((a, x) => a + x.demand, 0).toFixed(0),
+    'funded', state.services.reduce((a, x) => a + x.funding, 0).toFixed(0));
+  process.exit(0);
+}
 
 let guard = 0;
 for (let t = 0; t < terms; t++) {

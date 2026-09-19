@@ -195,6 +195,21 @@ export interface Party {
   /** Cabinet posts this partner demanded when the government formed. */
   cabinetDemand: number;
   leaderTitle: string;
+  /**
+   * What this party fights for at the budget table, and what it asks.
+   *
+   * Carried on the party rather than looked up in a content table, because
+   * the party in a run is not always the party in the content table: the
+   * chamber of a real country is generated from that country's own profile
+   * and only borrows the bench slots. A lookup by id used to find the
+   * invented country's party of the same name and hand back its demands,
+   * which in a small country was a demand three times the entire budget.
+   */
+  prioritySector: SectorKey;
+  /** Annual funding demanded for that sector, ₡bn, at this country's size. */
+  sectorFloor: number;
+  /** What it may table as a red line when a government is being formed. */
+  redLinePool: RedLine[];
 }
 
 /* ------------------------------------------------------------------ *
@@ -1455,7 +1470,36 @@ export interface GameState {
   id: string;
   ownerId: string | null;
   countryName: string;
+  /** Which country is being governed. Every real one plus the invented one. */
+  country: import('./content/world/countries.ts').CountryKey;
   difficulty: Difficulty;
+
+  /**
+   * How large this country is, against the scale the engine is calibrated at.
+   *
+   * The whole domestic engine is ratio-driven — a sector's health is a
+   * function of funding over baseline, a spread is a function of debt over
+   * output — so it runs unchanged at any size provided the absolutes move
+   * together. These two factors are what move them: `moneyScale` multiplies
+   * every figure in currency, `peopleScale` multiplies every physical
+   * capacity.
+   *
+   * A cost per head is money over people, so it carries BOTH — which is how
+   * a country with a third of the income per head ends up with services that
+   * cost a third as much per head, rather than with a permanently
+   * unaffordable health service. That is not a fudge; it is what income per
+   * head means.
+   *
+   * Both are exactly 1 for the invented country, so every measurement taken
+   * of the balance before this existed still means what it meant.
+   */
+  moneyScale: number;
+  peopleScale: number;
+  /**
+   * How much debt this country's creditors will carry, as a multiple of the
+   * baseline. A fact about who holds the paper, not a difficulty setting.
+   */
+  debtTolerance: number;
 
   turnNumber: number;
   termNumber: number;

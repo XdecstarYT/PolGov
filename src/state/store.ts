@@ -24,6 +24,7 @@ import {
   type Ideology,
   type Intent,
   type LegacyScore,
+  type CountryKey,
 } from '../game/index.ts';
 import { localStore, resolveStore, type GameStore, type GameSummary } from '../services/storage.ts';
 import { isCloudConfigured, supabase } from '../services/supabase.ts';
@@ -36,7 +37,16 @@ export interface NewGameForm {
   glyph: string;
   ideology: Ideology;
   difficulty: Difficulty;
+  /** Which country to govern. Everything else about the run follows from it. */
+  country: CountryKey;
   countryName: string;
+  /**
+   * How votes become seats.
+   *
+   * Defaults to the country's own system and can be overridden, because
+   * "what would this country look like counted another way" is one of the
+   * more interesting questions the engine can answer.
+   */
   electoralSystem: ElectoralSystem;
 }
 
@@ -173,6 +183,7 @@ export const useGame = create<AppState>((set, get) => ({
     try {
       const game = createGame({
         gameId: uuid(),
+        country: form.country,
         countryName: form.countryName,
         difficulty: form.difficulty,
         playerPartyName: form.partyName.trim() || 'Reform Coalition',

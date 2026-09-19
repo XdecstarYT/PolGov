@@ -44,6 +44,9 @@ const makeParty = (id: string, ideology = makeIdeology(0, 0, 0), isPlayer = fals
   cabinetPosts: 0,
   cabinetDemand: 0,
   leaderTitle: 'Leader',
+  prioritySector: 'economy' as const,
+  sectorFloor: 240,
+  redLinePool: [],
 });
 
 /**

@@ -76,7 +76,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
  * strength because that is the shape every peacetime force drifts into: the
  * part that shows has been protected and the part that does not has not.
  */
-export function buildMilitary(): Military {
+export function buildMilitary(peopleScale = 1): Military {
   /*
    * Not identical across the arms, because no country's are. The army is
    * the one that was protected, the air force is the one whose readiness
@@ -97,7 +97,7 @@ export function buildMilitary(): Military {
       /* The gap is the inheritance. Somebody protected the headline figure
          and did not protect the one that decides anything. */
       ...start,
-      personnel: openingPersonnel(template.key, start.strength),
+      personnel: Math.round(openingPersonnel(template.key, start.strength) * peopleScale),
     };
   });
 
@@ -109,7 +109,7 @@ export function buildMilitary(): Military {
     /* A country that never built one, and for which building one would be
        the single most consequential decision available to it. */
     deterrent: 'none',
-    veterans: 240,
+    veterans: Math.round(240 * peopleScale),
     history: [],
   };
 }

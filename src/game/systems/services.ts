@@ -79,8 +79,25 @@ export function serviceDemand(
   template: ServiceTemplate,
   demography: Demography,
   economy: Economy,
+  /**
+   * Money per head, relative to the scale the engine is calibrated at.
+   *
+   * A cost per million people is income divided by people, so a country
+   * with a third of the income per head has services that cost a third as
+   * much per head. That is not a discount — it is what a doctor's salary,
+   * a school place and a kilometre of track actually cost in a country
+   * with that income, and without it every lower-income country would open
+   * with a health service it could never have afforded to build.
+   *
+   * Fixed for the run rather than read off the live economy, so that
+   * growth makes a government richer instead of leaving it exactly where
+   * it started.
+   */
+  costScale = 1,
 ): number {
-  return template.costPerMillion * driverSize(template.driver, demography, economy);
+  return (
+    template.costPerMillion * costScale * driverSize(template.driver, demography, economy)
+  );
 }
 
 /**
@@ -107,6 +124,7 @@ export function buildServices(
   sectors: readonly Sector[],
   demography: Demography,
   economy: Economy,
+  costScale = 1,
 ): ServiceState[] {
   const allocations: Record<string, number> = {};
   for (const sector of sectors) {
@@ -114,7 +132,7 @@ export function buildServices(
   }
 
   return SERVICE_TEMPLATES.map((template) => {
-    const demand = serviceDemand(template, demography, economy);
+    const demand = serviceDemand(template, demography, economy, costScale);
     const funding = allocations[template.key] ?? 0;
     return {
       key: template.key,
@@ -183,6 +201,7 @@ export function stepServices(
    * which a couple of tests still rely on.
    */
   funding?: Record<string, number>,
+  costScale = 1,
 ): ServicesTick {
   const allocations: Record<string, number> = {};
   if (funding) {
@@ -199,7 +218,7 @@ export function stepServices(
 
   const next = services.map((service) => {
     const template = findService(service.key);
-    const demand = serviceDemand(template, demography, economy);
+    const demand = serviceDemand(template, demography, economy, costScale);
     const funding = allocations[service.key] ?? 0;
     const cover = demand > 0 ? funding / demand : 1;
 
