@@ -144,6 +144,8 @@ import {
   RESOLUTION_TARGET_RELATIONS,
   AGENCY_SCANDAL_APPROVAL,
   CRISIS_BASE_RISK,
+  GLOBAL_RESPONSE_PC_DEFAULT,
+  IS_TRADE_WEIGHT,
   months,
   OVERSIGHT_PC_COST,
   POSTURE_PC_COST,
@@ -165,6 +167,8 @@ import {
 } from './balance.ts';
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
 import { duesTotal } from './systems/organisations.ts';
+import { driftPower, globalEffects, stepWorldSim } from './systems/worldSim.ts';
+import { findGlobalEvent } from './content/globalEvents.ts';
 import {
   assess,
   launch,
@@ -377,6 +381,7 @@ export type Intent =
   | { type: 'set_collection'; human: number; signals: number; analysis: number }
   | { type: 'set_surveillance'; level: number }
   | { type: 'set_oversight'; level: number }
+  | { type: 'respond_globally'; event: string }
   | { type: 'set_budget_line'; service: ServiceKey; amount: number }
   | { type: 'set_capital_share'; service: ServiceKey; share: number }
   | { type: 'present_budget' }
@@ -1340,6 +1345,58 @@ export function resolveTurn(state: GameState): GameState {
   }
 
   /*
+   * The world, running on its own.
+   *
+   * Stepped first, before anything the player has any say in, because
+   * that is the relationship: this country reacts to the world rather than
+   * the other way round. Most of what happens here has nothing to do with
+   * Verdana, and the player's job is to notice which parts reach them.
+   */
+  const simTick = stepWorldSim(
+    next.world.pairs,
+    next.world.wars,
+    next.world.globalEvents,
+    {
+      turn: absoluteWeek(next),
+      rng,
+      tension: next.world.tension,
+      nations: next.world.nations,
+    },
+  );
+  next.world = {
+    ...next.world,
+    pairs: simTick.pairs,
+    wars: simTick.wars,
+    globalEvents: simTick.events,
+    tension: clamp01to100(next.world.tension + simTick.tension),
+    /*
+     * Countries rise, fall, and occasionally become something else
+     * overnight. Both are applied here because the nations live in the
+     * world state, and both are the reason the map in term four is not the
+     * map in term one.
+     */
+    nations: next.world.nations.map((nation) => {
+      const drifted = driftPower(nation.power, findNation(nation.key).power, rng);
+      if (simTick.upheaval && simTick.upheaval.nation === nation.key) {
+        return { ...nation, power: drifted, posture: simTick.upheaval.to };
+      }
+      return { ...nation, power: drifted };
+    }),
+  };
+  for (const report of simTick.reports) {
+    log(entries, {
+      kind: 'event',
+      label: report.label,
+      delta: report.tension,
+      cause: report.cause,
+      unit: report.tension === 0 ? '' : 'pts',
+    });
+  }
+
+  /* Everything the world is currently doing to this country, summed once. */
+  const global = globalEffects(next.world.globalEvents);
+
+  /*
    * The infrastructure.
    *
    * Stepped first, because the condition of the hospitals is part of what
@@ -1442,6 +1499,22 @@ export function resolveTurn(state: GameState): GameState {
    * demanded by. Nobody sets demand: it is recomputed from the country every
    * month, and the budget that met it last year does not meet it this one.
    */
+  /*
+   * What the world is doing to the people here. A refugee movement is a
+   * migration figure and a pandemic is a health figure, and both belong in
+   * the systems that already model those rather than in a modifier.
+   */
+  if (Math.abs(global.migration) > 0.01) {
+    next.demography = {
+      ...next.demography,
+      netMigration: next.demography.netMigration + global.migration,
+    };
+  }
+  if (global.health < 0) {
+    const health = findSector(next.sectors, 'health');
+    health.health = clamp01to100(health.health + global.health / TURNS_PER_YEAR);
+  }
+
   const servicesTick = stepServices(
     next.services,
     next.sectors,
@@ -1662,6 +1735,9 @@ export function resolveTurn(state: GameState): GameState {
     economy: next.economy,
     nationalRate: next.taxes.rates.import_tariff,
     agreements: tradeAgreements,
+    /* A closed strait or a foreign war is a multiplier on every flow, and
+       it belongs here rather than as a separate subtraction downstream. */
+    globalMultiplier: global.trade,
     turn: next.turnNumber,
   });
   next.trade = tradeTick.trade;
@@ -1922,10 +1998,11 @@ export function resolveTurn(state: GameState): GameState {
   next.economy = stepEconomy(next.economy, {
     fiscalImpulse: fiscalImpulse(fiscal),
     approval: next.approval,
-    productivityTarget: productivityTarget(
-      findSector(next.sectors, 'education').health,
-      findSector(next.sectors, 'infrastructure').health,
-    ),
+    productivityTarget:
+      productivityTarget(
+        findSector(next.sectors, 'education').health,
+        findSector(next.sectors, 'infrastructure').health,
+      ) + global.productivity,
     turn: next.turnNumber,
     /* What the shape of the tax code does, as distinct from its size. */
     taxEffects: taxEffects(next.taxes),
@@ -1956,13 +2033,18 @@ export function resolveTurn(state: GameState): GameState {
      * second a supply shock the government chose.
      */
     tradeImpulse:
-      tradeImpulse(next.trade, next.economy.gdp) + conflictTick.economicShock * TURNS_PER_YEAR,
-    importPrices: importPriceEffect(
-      next.trade,
-      next.taxes.rates.import_tariff,
-      tradeAgreements,
-      next.economy.gdp,
-    ),
+      tradeImpulse(next.trade, next.economy.gdp) +
+      conflictTick.economicShock * TURNS_PER_YEAR +
+      /* Whatever the world is doing to demand this week. It arrives in the
+         same term as a trade war, because that is what it is. */
+      global.growth / IS_TRADE_WEIGHT,
+    importPrices:
+      importPriceEffect(
+        next.trade,
+        next.taxes.rates.import_tariff,
+        tradeAgreements,
+        next.economy.gdp,
+      ) + global.inflation,
   });
 
   /*
@@ -2485,6 +2567,8 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleSetSurveillance(state, intent.level);
     case 'set_oversight':
       return handleSetOversight(state, intent.level);
+    case 'respond_globally':
+      return handleRespondGlobally(state, intent.event);
     case 'set_budget_line':
       return handleSetBudgetLine(state, intent.service, intent.amount);
     case 'set_capital_share':
@@ -4344,6 +4428,60 @@ function handleSetOversight(state: GameState, level: number): IntentResult {
         'become more likely to do something nobody asked for, which is a real cost. Nobody ' +
         'gets to have only one of those.',
     unit: 'pts',
+  });
+  return ok(next);
+}
+
+
+/**
+ * Do something about a thing that started somewhere else.
+ *
+ * Most global events offer no response at all, deliberately: a government
+ * that could act on everything would be governing a world that revolved
+ * around it. Where a response exists it is partial — it takes about half of
+ * the effect off and never all of it, because acting late on something that
+ * started somewhere else rarely works twice.
+ */
+function handleRespondGlobally(state: GameState, key: string): IntentResult {
+  let template;
+  try {
+    template = findGlobalEvent(key);
+  } catch {
+    return reject(state, 'Nothing by that name is happening.');
+  }
+  if (!template.response) {
+    return reject(
+      state,
+      `There is nothing a government here can do about ${template.headline.toLowerCase()}. ` +
+        'That is not a gap in the options; it is the position the country is in.',
+    );
+  }
+
+  const event = state.world.globalEvents.find((e) => e.key === key && !e.ended);
+  if (!event) return reject(state, 'That is over, or has not happened.');
+  if (event.respondedTurn !== null) return reject(state, 'That has already been done.');
+
+  const cost = template.response.cost || GLOBAL_RESPONSE_PC_DEFAULT;
+  if (state.politicalCapital < cost) {
+    return reject(state, `${template.response.label} costs ${cost} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, cost);
+  next.world = {
+    ...next.world,
+    globalEvents: next.world.globalEvents.map((e) =>
+      e.key === key && !e.ended ? { ...e, respondedTurn: absoluteWeek(next) } : e,
+    ),
+  };
+
+  log(entries, {
+    kind: 'note',
+    label: template.response.label,
+    delta: -cost,
+    cause: `${template.response.blurb} It takes about half of it off, and never all of it.`,
+    unit: 'PC',
   });
   return ok(next);
 }

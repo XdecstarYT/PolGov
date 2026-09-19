@@ -57,6 +57,7 @@ import {
 } from '../content/nations.ts';
 import { affinity } from '../ideology.ts';
 import { buildOrganisations, stepOrganisations } from './organisations.ts';
+import { buildPairs } from './worldSim.ts';
 import type {
   Ideology,
   IndustryState,
@@ -93,6 +94,9 @@ export function buildWorld(): World {
     sanctioned: false,
     tradeDependence: dependenceOn(template, 'theirs'),
     ourDependence: dependenceOn(template, 'ours'),
+    /* Live from here on. Countries rise, fall, and change what they are. */
+    power: template.power,
+    posture: template.posture,
   }));
 
   const treaties: Treaty[] = NATION_TEMPLATES.filter((t) => t.inheritedTreaty).map(
@@ -114,6 +118,12 @@ export function buildWorld(): World {
        declined the ones the country is not in. Both are inherited. */
     organisations: buildOrganisations(),
     resolutions: [],
+    /* And the half of the world that is not about this one: who else gets
+       on with whom, who is already fighting, and what is going wrong
+       somewhere nobody here has been. */
+    pairs: buildPairs(),
+    wars: [],
+    globalEvents: [],
     reputation: 60,
     influence: 42,
     tension: 30,
@@ -374,6 +384,9 @@ export function stepWorld(world: World, inputs: DiplomacyInputs): WorldTick {
     treaties: world.treaties,
     organisations: world.organisations,
     resolutions: world.resolutions,
+    pairs: world.pairs,
+    wars: world.wars,
+    globalEvents: world.globalEvents,
     reputation,
     influence,
     tension,

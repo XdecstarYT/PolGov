@@ -88,6 +88,7 @@ export const ALLOWED_INTENT_TYPES: ReadonlySet<Intent['type']> = new Set([
   'set_collection',
   'set_surveillance',
   'set_oversight',
+  'respond_globally',
 ]);
 
 /** Cap the journal so one request cannot ask for unbounded computation. */

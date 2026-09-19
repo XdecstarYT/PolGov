@@ -118,9 +118,16 @@ export function truthOf(
   military: Military,
   crises: readonly Crisis[],
 ): number {
-  const template = findNation(nation);
+  const base = findNation(nation);
   const state = world.nations.find((n) => n.key === nation);
   const relations = state?.relations ?? 0;
+  /* What the country IS this week, which is what an assessment is trying
+     to see — and which is not what the reference book says. */
+  const template = {
+    ...base,
+    power: state?.power ?? base.power,
+    posture: state?.posture ?? base.posture,
+  };
 
   switch (subject) {
     case 'capability':

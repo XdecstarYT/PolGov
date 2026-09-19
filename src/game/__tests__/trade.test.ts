@@ -349,17 +349,29 @@ describe('through the turn engine', () => {
       war = { ...result.state, politicalCapital: 200 };
     }
 
-    /* Week six: imports have started falling and nobody has answered yet.
-       Net exports improve and growth is HIGHER than it would have been.
-       This is the part that gets announced. */
+    /*
+     * Week six. Imports have started falling and nobody has answered yet,
+     * so the trade balance — the number that gets announced — is better
+     * than it would have been.
+     *
+     * And the numbers people actually feel are already worse. A tariff is
+     * a supply shock, the central bank does not wait to see how the
+     * politics goes, and the rate the country's debt is carried at has
+     * already moved. The thing being sold as a win is visible in the
+     * balance; the bill is visible at the till and on the gilt.
+     */
     const early = weeks(war, 6);
     expect(netExports(early.trade)).toBeGreaterThan(netExports(war.trade));
     expect(netExports(early.trade)).toBeGreaterThan(netExports(controlAt6.trade));
-    expect(early.economy.growth).toBeGreaterThan(controlAt6.economy.growth);
+    expect(early.economy.inflation).toBeGreaterThan(controlAt6.economy.inflation + 0.4);
+    expect(early.economy.policyRate).toBeGreaterThan(controlAt6.economy.policyRate);
 
-    /* Week thirty: the answer has landed, exports are down further than
-       imports, and the trade balance is worse than if nothing had been
-       done. Growth is below the control run. */
+    /*
+     * Week thirty. The answer has landed, exports are down further than
+     * imports, and the trade balance is worse than if nothing had been
+     * done — so even the number that was announced has gone. Growth is
+     * well below the control run and prices never came back.
+     */
     const late = weeks(early, 24);
     expect(netExports(late.trade)).toBeLessThan(netExports(controlAt30.trade));
     expect(late.economy.growth).toBeLessThan(controlAt30.economy.growth);

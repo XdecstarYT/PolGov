@@ -220,9 +220,12 @@ export function leanOf(
   world: World,
   target: NationKey | null,
 ): { lean: number; why: string } {
-  const country = findNation(nation);
   const state = world.nations.find((n) => n.key === nation);
   const relations = state?.relations ?? 0;
+  /* The posture it has now, not the one it was written with. A government
+     removed overnight votes differently the following week. */
+  const base = findNation(nation);
+  const country = { ...base, posture: state?.posture ?? base.posture };
 
   let lean = 0;
   const reasons: string[] = [];

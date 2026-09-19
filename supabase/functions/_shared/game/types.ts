@@ -1014,6 +1014,23 @@ export interface NationState {
   tradeDependence: number;
   /** How much of OUR trade is with them. The other half of the leverage. */
   ourDependence: number;
+  /**
+   * Their weight in the world, live.
+   *
+   * Seeded from the template and then drifting, because a country's
+   * standing is not a constant — which means the trade gravity, the
+   * balance of force in a crisis and the arithmetic of every international
+   * vote all look different in term four than they did in term one.
+   */
+  power: number;
+  /**
+   * How they behave, live.
+   *
+   * Also not a constant. A government removed overnight is a different
+   * country by the following week, and every relationship it is in moves
+   * with it.
+   */
+  posture: import('./content/nations.ts').Posture;
 }
 
 /** One month of the world record. */
@@ -1099,6 +1116,38 @@ export interface Military {
   /** Thousands. A constituency rather than a statistic, and they remember. */
   veterans: number;
   history: MilitaryPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * The world, running on its own
+ * ------------------------------------------------------------------ */
+
+/** What two OTHER countries think of each other. */
+export interface NationPair {
+  a: import('./content/nations.ts').NationKey;
+  b: import('./content/nations.ts').NationKey;
+  /** −100 hostile to +100 allied. Drifts on its own. */
+  standing: number;
+}
+
+/** A war between two countries, neither of which is this one. */
+export interface ForeignWar {
+  a: import('./content/nations.ts').NationKey;
+  b: import('./content/nations.ts').NationKey;
+  since: number;
+  /** How long it is expected to last. Everybody is wrong about this. */
+  expected: number;
+  ended: boolean;
+  endedTurn: number | null;
+}
+
+/** Something that happened somewhere else and arrived here anyway. */
+export interface GlobalEvent {
+  key: string;
+  startedTurn: number;
+  ended: boolean;
+  /** The turn a government did something about it, if one did. */
+  respondedTurn: number | null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -1268,6 +1317,14 @@ export interface Resolution {
 export interface World {
   nations: NationState[];
   treaties: Treaty[];
+  /**
+   * What other countries think of EACH OTHER, and what they are doing
+   * about it. The half of the world that is not about this one.
+   */
+  pairs: NationPair[];
+  wars: ForeignWar[];
+  /** Things that happened somewhere else and arrived here anyway. */
+  globalEvents: GlobalEvent[];
   /** Every body the country belongs to, or has chosen not to. */
   organisations: OrganisationState[];
   /** Everything put to a vote, and what the room did with it. */

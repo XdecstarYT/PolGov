@@ -1816,3 +1816,58 @@ export const OVERSIGHT_PC_COST = 16;
 
 /** What an agency scandal costs a government that argued against oversight. */
 export const AGENCY_SCANDAL_APPROVAL = -9;
+
+/* ------------------------------------------------------------------ *
+ * The world, running on its own
+ * ------------------------------------------------------------------ */
+
+/**
+ * How fast relationships between OTHER countries move.
+ *
+ * Slower than this country's own, because nothing this government does is
+ * driving them. They drift toward what geography and politics imply, and
+ * over sixteen years that is enough to redraw the map.
+ */
+export const PAIR_DRIFT_RATE = 0.004;
+
+/** And how fast a country's weight in the world changes. */
+export const POWER_DRIFT_RATE = 0.0015;
+
+/**
+ * How much a relationship moves for no reason anybody can name.
+ *
+ * A remark, a funeral, a fishing dispute. Without it the map would sit
+ * exactly where it was drawn and sixteen years would change nothing, which
+ * is the one thing the world is definitely not like.
+ */
+export const PAIR_WOBBLE = 3.0;
+
+/**
+ * And how fast one collapses once shooting starts.
+ *
+ * Far faster than anything else here, because a relationship between two
+ * countries at war does not drift anywhere — it is gone within the month,
+ * and it is the only thing in this system that moves quickly.
+ */
+export const PAIR_WAR_RATE = 0.07;
+
+/**
+ * How far a pair has to fall before they fight.
+ *
+ * Deep in hostile territory, because most bad relationships never become
+ * wars — and a model where they did would produce a world at permanent war,
+ * which is both wrong and boring.
+ */
+export const FOREIGN_WAR_THRESHOLD = -72;
+
+/**
+ * How often something happens that was not aimed here.
+ *
+ * About one a year on average, with at most three running at once, which
+ * is roughly the rate at which the real world produces things a finance
+ * ministry has to write a note about.
+ */
+export const GLOBAL_EVENT_BASE_RISK = 0.022;
+
+/** Political capital to respond to something that started somewhere else. */
+export const GLOBAL_RESPONSE_PC_DEFAULT = 14;

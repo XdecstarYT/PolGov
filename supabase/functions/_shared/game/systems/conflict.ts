@@ -133,9 +133,11 @@ export function balanceOfForce(crisis: Crisis, military: Military, world: World)
   const away = !template.neighbour;
   const ours = combatPower(military, away);
 
-  /* Their strength scales off their power, which is the only number the
-     world model keeps about them, and rises when they are at home. */
-  const theirs = template.power * 40 * (away ? 1.25 : 0.85);
+  /* Their strength scales off their power — the LIVE figure, because a
+     country that has been rising for three terms is not the country the
+     briefing described at the start of the first one. */
+  const power = world.nations.find((n) => n.key === crisis.nation)?.power ?? template.power;
+  const theirs = power * 40 * (away ? 1.25 : 0.85);
 
   /* Allies bound to defend us are in this whether they like it or not. */
   const bound = world.treaties.filter(

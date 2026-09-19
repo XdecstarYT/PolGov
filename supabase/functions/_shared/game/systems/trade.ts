@@ -273,6 +273,15 @@ export interface TradeInputs {
   nationalRate: number;
   /** Partners the country holds a trade or partnership agreement with. */
   agreements: ReadonlySet<NationKey>;
+  /**
+   * What the world is doing to every flow at once.
+   *
+   * A closed strait, a foreign war or a pandemic is a multiplier on the
+   * whole book rather than a fact about any one partner, and it belongs
+   * here so that the flows settle at the level the world allows rather
+   * than being corrected downstream.
+   */
+  globalMultiplier?: number;
   turn: number;
 }
 
@@ -313,6 +322,8 @@ export function naturalFlow(
     inputs.agreements.has(flow.nation),
   );
 
+  const world = inputs.globalMultiplier ?? 1;
+
   return {
     exports:
       gdp *
@@ -322,6 +333,7 @@ export function naturalFlow(
       treaty *
       sanctioned *
       recognised *
+      world *
       Math.max(0.1, 1 - (flow.theirTariff / 100) * TARIFF_ELASTICITY),
     imports:
       gdp *
@@ -331,6 +343,7 @@ export function naturalFlow(
       treaty *
       sanctioned *
       recognised *
+      world *
       Math.max(0.1, 1 - (ourTariff / 100) * TARIFF_ELASTICITY),
   };
 }

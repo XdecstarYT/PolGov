@@ -36,6 +36,7 @@ import { EconomyPanel } from '../components/EconomyPanel.tsx';
 import { FinancePanel } from '../components/FinancePanel.tsx';
 import { OrganisationsPanel } from '../components/OrganisationsPanel.tsx';
 import { CrisisPanel } from '../components/CrisisPanel.tsx';
+import { GlobalPanel } from '../components/GlobalPanel.tsx';
 import { DefencePanel } from '../components/DefencePanel.tsx';
 import { IntelligencePanel } from '../components/IntelligencePanel.tsx';
 import { TradePanel } from '../components/TradePanel.tsx';
@@ -146,6 +147,8 @@ export function Briefing() {
           </Panel>
         </div>
       </div>
+
+      <GlobalPanel />
 
       <WorldPanel />
 
