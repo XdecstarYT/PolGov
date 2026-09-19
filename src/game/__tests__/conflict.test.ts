@@ -39,7 +39,7 @@ import {
   stepConflicts,
 } from '../systems/conflict.ts';
 import { createStandardGame } from '../setup.ts';
-import { applyIntent } from '../turn.ts';
+import { absoluteWeek, applyIntent, resolveTurn } from '../turn.ts';
 import type { Crisis, GameState, Military, World } from '../index.ts';
 
 /** A world where somebody is genuinely hostile and the room is tense. */
@@ -334,5 +334,80 @@ describe('through the turn engine', () => {
     const was = state.world.nations.find((n) => n.key === 'ehlas')!.relations;
     const now = result.state.world.nations.find((n) => n.key === 'ehlas')!.relations;
     expect(now).toBeGreaterThan(was);
+  });
+});
+
+describe('the cheque being presented', () => {
+  /*
+   * A mutual defence treaty is the one agreement in this engine that can
+   * commit the country to a war it did not choose. The panel said so for a
+   * long time before anything ever happened — the obligation was priced,
+   * displayed, and never called.
+   */
+  it('drags the country into a war it did not start', () => {
+    const base = inOffice('treaty-called');
+
+    /* A promise a previous government made. */
+    const bound: GameState = {
+      ...base,
+      politicalCapital: 200,
+      world: {
+        ...base.world,
+        treaties: [
+          ...base.world.treaties,
+          {
+            id: 'inherited-defence',
+            kind: 'mutual_defence' as const,
+            parties: ['holm' as const],
+            signedTurn: -40,
+            signedTerm: 0,
+            obligation: 'Verdana will defend Holm.',
+            dividend: 0.3,
+          },
+        ],
+      },
+    };
+
+    /* And a war starting this week, between two countries, one of them Holm. */
+    const week = absoluteWeek(bound);
+    const attacked: GameState = {
+      ...bound,
+      world: {
+        ...bound.world,
+        wars: [
+          { a: 'holm' as const, b: 'astrun' as const, since: week, expected: 100, ended: false, endedTurn: null },
+        ],
+      },
+    };
+
+    /* Resolving the week presents it. */
+    const resolved = resolveTurn(attacked);
+    const called = resolved.crises.find((c) => c.nation === 'astrun');
+
+    expect(called).toBeDefined();
+    /* And not at the bottom of the ladder: the choice to honour it or not
+       was made in public the moment the war began. */
+    expect(called!.stage).toBe('standoff');
+
+    const entries = resolved.logs.flatMap((l) => l.entries);
+    expect(entries.some((e) => e.label.includes('has been invoked'))).toBe(true);
+  });
+
+  it('leaves a country with no such promise alone', () => {
+    const base = inOffice('treaty-none');
+    const week = absoluteWeek(base);
+    const watching: GameState = {
+      ...base,
+      world: {
+        ...base.world,
+        treaties: base.world.treaties.filter((t) => t.kind !== 'mutual_defence'),
+        wars: [
+          { a: 'holm' as const, b: 'astrun' as const, since: week, expected: 100, ended: false, endedTurn: null },
+        ],
+      },
+    };
+
+    const resolved = resolveTurn(watching);
+    expect(resolved.crises.some((c) => c.nation === 'astrun')).toBe(false);
   });
 });

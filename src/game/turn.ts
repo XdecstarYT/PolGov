@@ -257,6 +257,7 @@ import {
 import {
   TREATY_LABELS,
   applyDiplomaticAct,
+  boundToDefend,
   clampRelations,
   breakAgreement,
   canSummit,
@@ -1413,6 +1414,52 @@ export function resolveTurn(state: GameState): GameState {
       delta: report.tension,
       cause: report.cause,
       unit: report.tension === 0 ? '' : 'pts',
+    });
+  }
+
+  /*
+   * The cheque being presented.
+   *
+   * A mutual defence treaty is the one agreement in this engine that can
+   * commit the country to a war it did not choose. Until now the panel said
+   * so and nothing ever happened — the obligation was priced, displayed,
+   * and never called. It is called here: when a war starts between two
+   * other countries and one of them is a country Verdana has promised to
+   * defend, the quarrel becomes this country's, whatever the government
+   * thinks of it and whoever signed the paper.
+   */
+  for (const war of simTick.wars) {
+    if (war.ended || war.since !== absoluteWeek(next)) continue;
+    const ally = boundToDefend(next.world, war.a)
+      ? war.a
+      : boundToDefend(next.world, war.b)
+        ? war.b
+        : null;
+    if (!ally) continue;
+
+    const aggressor = ally === war.a ? war.b : war.a;
+    if (liveCrises(next.crises).some((c) => c.nation === aggressor)) continue;
+
+    const crisis = openCrisis(
+      aggressor,
+      `${findNation(ally).name} has been attacked, and Verdana is bound by treaty to defend it.`,
+      next.turnNumber,
+      next.world,
+    );
+    /* It does not start at the bottom of the ladder. An obligation called is
+       already a standoff, because the choice to honour it or not has been
+       made in public the moment the war began. */
+    next.crises = [...next.crises, { ...crisis, stage: 'standoff', escalation: 45 }];
+
+    log(entries, {
+      kind: 'event',
+      label: `The treaty with ${findNation(ally).name} has been invoked`,
+      delta: 0,
+      cause:
+        `A previous government promised to defend them and this one is being asked to. ` +
+        `Whatever is decided in the next few weeks about ${findNation(aggressor).name} will be ` +
+        'read by every country Verdana has ever signed anything with.',
+      unit: '',
     });
   }
 

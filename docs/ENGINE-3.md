@@ -111,6 +111,13 @@ by budgets passed years before. **The player never fights.** Deterrence shows
 up as a crisis that goes nowhere, which is an absence, which nobody has ever
 been thanked for.
 
+A mutual defence treaty is the one agreement that can commit the country to a
+war it did not choose. When a war starts between two other countries and one
+of them is a country Verdana promised to defend, the quarrel becomes this
+country's — and it does not start at the bottom of the ladder, because the
+choice to honour the promise or not was made in public the moment the war
+began.
+
 ## Intelligence (101–120)
 
 The only system in the game whose output the player cannot trust, which is the
@@ -156,8 +163,6 @@ this one.
 
 - Blocs are a property of nations rather than an institution that can be
   joined, led or split.
-- Alliance obligations are priced but do not automatically drag the country
-  into an ally's war.
 - Espionage against Verdana is a single penetration figure rather than named
   hostile operations with their own lifecycle.
 - Foreign aid exists as a resolution rather than as a standing programme.
