@@ -1028,6 +1028,47 @@ export interface WorldPoint {
 }
 
 /** Everything outside the borders. */
+/* ------------------------------------------------------------------ *
+ * Trade
+ * ------------------------------------------------------------------ */
+
+/** What the country sells one partner, what it buys, and on what terms. */
+export interface TradeFlow {
+  nation: import('./content/nations.ts').NationKey;
+  /** ₡bn a year sold to them. */
+  exports: number;
+  /** ₡bn a year bought from them. */
+  imports: number;
+  /**
+   * Points of tariff this government has laid on their goods, over and
+   * above the national rate. A government's own doing, and the thing the
+   * other side answers.
+   */
+  surcharge: number;
+  /** Points of tariff they charge ours. */
+  theirTariff: number;
+  /**
+   * Weeks until they answer a tariff rise.
+   *
+   * The gap between the announcement and the bill is the entire political
+   * economy of protection, so it is modelled rather than assumed away.
+   */
+  retaliationDue: number | null;
+  /** A formal objection, lodged by us or against us. */
+  dispute: 'none' | 'ours' | 'theirs';
+}
+
+export interface TradePoint {
+  turn: number;
+  exports: number;
+  imports: number;
+}
+
+export interface Trade {
+  flows: TradeFlow[];
+  history: TradePoint[];
+}
+
 /** Membership of one international body. */
 export interface OrganisationState {
   key: import('./content/organisations.ts').OrganisationKey;
@@ -1199,6 +1240,16 @@ export interface GameState {
 
   /** Everything outside the borders. */
   world: World;
+
+  /**
+   * What the country sells, what it buys, and on what terms.
+   *
+   * Kept beside the world rather than inside it because trade is the half
+   * of foreign policy with a domestic constituency: every decision here
+   * reaches the economy, the industries and a region's employment before it
+   * reaches an embassy.
+   */
+  trade: Trade;
 
   /** The budget: line items, ministries, and where it is in the process. */
   budget: Budget;

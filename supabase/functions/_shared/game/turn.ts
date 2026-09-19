@@ -137,8 +137,13 @@ import {
   MAX_ACTIVE_PROJECTS,
   PROJECT_PC_COST,
   REGIONAL_JOBS_WEIGHT,
+  COMPLAINT_RELATIONS,
+  COMPLAINT_REPUTATION,
   RESOLUTION_DEFEAT_INFLUENCE,
   RESOLUTION_TARGET_RELATIONS,
+  SURCHARGE_MAX,
+  TARIFF_PC_COST,
+  TRADE_COMPLAINT_PC_COST,
   TAX_CHANGE_PC_COST,
   TOTAL_SEATS,
   WITHDRAWAL_RELATIONS,
@@ -146,6 +151,14 @@ import {
 } from './balance.ts';
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
 import { duesTotal } from './systems/organisations.ts';
+import {
+  findFlow,
+  importPriceEffect,
+  setDispute,
+  setSurcharge,
+  stepTrade,
+  tradeImpulse,
+} from './systems/trade.ts';
 import {
   assignMinistries,
   cabinetReaction,
@@ -295,6 +308,8 @@ export type Intent =
   | { type: 'join_organisation'; organisation: OrganisationKey }
   | { type: 'leave_organisation'; organisation: OrganisationKey }
   | { type: 'propose_resolution'; kind: ResolutionKind; target?: NationKey | null }
+  | { type: 'set_tariff'; nation: NationKey; points: number }
+  | { type: 'file_trade_complaint'; nation: NationKey }
   | { type: 'set_budget_line'; service: ServiceKey; amount: number }
   | { type: 'set_capital_share'; service: ServiceKey; share: number }
   | { type: 'present_budget' }
@@ -370,6 +385,23 @@ function currentLog(state: GameState): LogEntry[] {
     state.logs.push(existing);
   }
   return existing.entries;
+}
+
+
+/**
+ * The partners the country has an agreement with.
+ *
+ * A trade treaty or a partnership removes the national tariff for that
+ * country, which is what a trade agreement actually is and why it is worth
+ * more than a warm relationship.
+ */
+function tradeAgreementsWith(world: GameState['world']): Set<NationKey> {
+  const keys = new Set<NationKey>();
+  for (const treaty of world.treaties) {
+    if (treaty.kind !== 'trade' && treaty.kind !== 'partnership') continue;
+    for (const party of treaty.parties) keys.add(party);
+  }
+  return keys;
 }
 
 /**
@@ -1512,6 +1544,53 @@ export function resolveTurn(state: GameState): GameState {
      collecting it, so the memory of a change is aged out each month. */
   next.taxes = forgetOldChanges(next.taxes, next.turnNumber);
 
+  /*
+   * Trade, stepped before the economy reads it.
+   *
+   * Flows move slowly — a supply chain is a physical object with contracts
+   * attached and does not re-route because a minister said something — but
+   * retaliation arrives all at once, on its own clock, weeks after the
+   * decision that caused it. That gap is the entire political economy of
+   * protection and it is why this is stepped as a system rather than
+   * computed as a modifier.
+   */
+  const tradeAgreements = tradeAgreementsWith(next.world);
+  const tradeTick = stepTrade(next.trade, {
+    world: next.world,
+    economy: next.economy,
+    nationalRate: next.taxes.rates.import_tariff,
+    agreements: tradeAgreements,
+    turn: next.turnNumber,
+  });
+  next.trade = tradeTick.trade;
+
+  for (const answer of tradeTick.retaliated) {
+    const template = findNation(answer.nation);
+    log(entries, {
+      kind: 'note',
+      label: `${template.name} answers`,
+      delta: answer.to,
+      cause:
+        `${template.demonym} tariffs on Verdanan goods go to ${answer.to.toFixed(0)}%. ` +
+        'The announcement here was six weeks ago; the bill arrives now, and it is paid by ' +
+        'whoever exports to them.',
+      unit: 'pts',
+    });
+  }
+  for (const key of tradeTick.disputed) {
+    const template = findNation(key);
+    log(entries, {
+      kind: 'note',
+      label: `${template.name} files a complaint`,
+      delta: 0,
+      cause:
+        `Rather than answer in kind, ${template.name} has taken it to the Commercial ` +
+        'Convention. Slower than a tariff, and worse for a government that cares what the ' +
+        'world thinks of it.',
+      unit: '',
+    });
+  }
+
   const economyBefore = next.economy;
   next.economy = stepEconomy(next.economy, {
     fiscalImpulse: fiscalImpulse(fiscal),
@@ -1544,6 +1623,18 @@ export function resolveTurn(state: GameState): GameState {
      * player in advance.
      */
     noise: { demand: rng.range(-1, 1), supply: rng.range(-1, 1) },
+    /*
+     * NX, and the price of a tariff. Both are the trade book arriving in
+     * the macroeconomy: the first is a demand term nobody voted for, the
+     * second a supply shock the government chose.
+     */
+    tradeImpulse: tradeImpulse(next.trade, next.economy.gdp),
+    importPrices: importPriceEffect(
+      next.trade,
+      next.taxes.rates.import_tariff,
+      tradeAgreements,
+      next.economy.gdp,
+    ),
   });
 
   /*
@@ -2036,6 +2127,10 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleLeaveOrganisation(state, intent.organisation);
     case 'propose_resolution':
       return handleProposeResolution(state, intent.kind, intent.target ?? null);
+    case 'set_tariff':
+      return handleSetTariff(state, intent.nation, intent.points);
+    case 'file_trade_complaint':
+      return handleFileTradeComplaint(state, intent.nation);
     case 'set_budget_line':
       return handleSetBudgetLine(state, intent.service, intent.amount);
     case 'set_capital_share':
@@ -3183,6 +3278,118 @@ function handleProposeResolution(
     label: `${template.title}${target ? ` \u2014 ${findNation(target).name}` : ''}`,
     delta: outcome.passed ? (template.effects.reputation ?? 0) : RESOLUTION_DEFEAT_INFLUENCE,
     cause: `${organisation.name}. ${describeOutcome(outcome)}`,
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Trade
+ * ------------------------------------------------------------------ */
+
+/**
+ * Put a tariff on one country's goods, or take one off.
+ *
+ * The most politically attractive and economically expensive decision
+ * available, and the engine is built to let the player find that out in
+ * that order. The sheltered industry says thank you this week. The partner
+ * answers in six. The till says nothing at all, for months, and then the
+ * inflation figure does.
+ */
+function handleSetTariff(state: GameState, key: NationKey, points: number): IntentResult {
+  const template = findNation(key);
+  if (!state.world.nations.some((n) => n.key === key)) return reject(state, 'No such country.');
+  if (!Number.isFinite(points) || points < 0 || points > SURCHARGE_MAX) {
+    return reject(state, `A surcharge runs from nothing to ${SURCHARGE_MAX} points.`);
+  }
+
+  const flow = findFlow(state.trade, key);
+  if (Math.abs(flow.surcharge - points) < 0.5) {
+    return reject(state, 'That is what they are already charged.');
+  }
+  if (state.politicalCapital < TARIFF_PC_COST) {
+    return reject(state, 'Not enough political capital to change a tariff schedule.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, TARIFF_PC_COST);
+  const rising = points > flow.surcharge;
+  next.trade = setSurcharge(next.trade, key, points);
+
+  log(entries, {
+    kind: 'note',
+    label: `Tariffs on ${template.name} ${rising ? 'raised' : 'lowered'}`,
+    delta: points - flow.surcharge,
+    cause: rising
+      ? `${points.toFixed(0)} points over the national rate. The industries this shelters will ` +
+        `say so loudly. ${template.name} will answer in about six weeks, and whoever exports ` +
+        'to them will pay for it.'
+      : `Down to ${points.toFixed(0)} points. Cheaper goods, and an industry that was being ` +
+        'protected is now not.',
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Take a trade dispute to the Convention.
+ *
+ * The institutional answer to a tariff: slower than retaliating, cheaper
+ * than a trade war, and available only to a country that is actually in the
+ * room. It is also the one move here that a government can make while
+ * telling its own side it is doing something.
+ */
+function handleFileTradeComplaint(state: GameState, key: NationKey): IntentResult {
+  const template = findNation(key);
+  if (!state.world.nations.some((n) => n.key === key)) return reject(state, 'No such country.');
+  if (!isMember(state.world.organisations, 'trade_body')) {
+    return reject(
+      state,
+      'Verdana is not in the Commercial Convention. A complaint has to be filed somewhere.',
+    );
+  }
+
+  const flow = findFlow(state.trade, key);
+  if (flow.theirTariff < 1) {
+    return reject(state, `${template.name} charges nothing worth complaining about.`);
+  }
+  if (flow.dispute === 'ours') {
+    return reject(state, 'That complaint is already before the Convention.');
+  }
+  if (state.politicalCapital < TRADE_COMPLAINT_PC_COST) {
+    return reject(state, 'Not enough political capital to take a case.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, TRADE_COMPLAINT_PC_COST);
+  next.trade = setDispute(next.trade, key, 'ours');
+
+  /*
+   * A country that uses the institutions rather than retaliating is a
+   * country the institutions think better of. That is the entire return on
+   * this action and it is not nothing.
+   */
+  next.world = {
+    ...next.world,
+    reputation: clamp01to100(next.world.reputation + COMPLAINT_REPUTATION),
+    nations: next.world.nations.map((n) =>
+      n.key === key
+        ? { ...n, relations: clampRelations(n.relations + COMPLAINT_RELATIONS) }
+        : n,
+    ),
+  };
+
+  log(entries, {
+    kind: 'note',
+    label: `Complaint filed against ${template.name}`,
+    delta: COMPLAINT_REPUTATION,
+    cause:
+      `Their ${flow.theirTariff.toFixed(0)}-point tariff goes to the Convention rather than ` +
+      'being answered in kind. Slower, cheaper, and read by every other government as a ' +
+      'statement about how this one settles arguments.',
     unit: 'pts',
   });
   return ok(next);

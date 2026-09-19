@@ -1550,3 +1550,90 @@ export const WITHDRAWAL_RELATIONS = -7;
 export const RESOLUTION_DEFEAT_INFLUENCE = -2.5;
 /** A state does not forget who named it. */
 export const RESOLUTION_TARGET_RELATIONS = -14;
+
+/* ------------------------------------------------------------------ *
+ * Trade
+ * ------------------------------------------------------------------ */
+
+/**
+ * How open the economy is.
+ *
+ * Exports and imports each around a fifth of output, with imports slightly
+ * ahead, which is a middling open economy running a small deficit — the
+ * position most countries of this size are actually in and a more
+ * interesting one to start from than balance.
+ */
+export const EXPORT_INTENSITY = 0.19;
+export const IMPORT_INTENSITY = 0.205;
+
+/**
+ * How much more a neighbour trades than its size implies.
+ *
+ * The gravity model, which is one of the most reliably predictive things in
+ * economics and almost never appears in a game. Distance is not a modifier
+ * on a relationship; it is most of the relationship.
+ */
+export const NEIGHBOUR_GRAVITY = 2.4;
+
+/** How far relations move trade at the extremes, either way. */
+export const TRADE_RELATIONS_WEIGHT = 0.25;
+/** What a trade agreement is worth on top of that. */
+export const TRADE_TREATY_BONUS = 1.22;
+/** What sanctions leave of a trading relationship. */
+export const SANCTION_TRADE_MULTIPLIER = 0.2;
+/** How much a point of tariff suppresses the flow it falls on. */
+export const TARIFF_ELASTICITY = 0.9;
+/** Supply chains are physical objects with contracts attached. */
+export const TRADE_ADJUST_RATE = 0.035;
+
+/**
+ * How long a partner takes to answer a tariff.
+ *
+ * Six weeks: long enough that the domestic benefit has been announced and
+ * the cost has not arrived, which is exactly why protection is politically
+ * attractive and economically expensive.
+ */
+export const RETALIATION_DELAY = 6;
+
+/**
+ * And how hard, by disposition.
+ *
+ * An assertive government answers a tariff with a larger one. An
+ * institutional one files a complaint instead, which is slower and worse
+ * for a government that cares what the world thinks of it.
+ */
+export const RETALIATION_RATIO: Record<string, number> = {
+  assertive: 1.35,
+  mercantile: 1.1,
+  institutional: 0.8,
+  guarded: 1.0,
+  aligned: 0.7,
+  volatile: 1.5,
+};
+
+/** Political capital to lay a tariff on one partner, or take one off. */
+export const TARIFF_PC_COST = 7;
+/** And to take a complaint to the trade body. */
+export const TRADE_COMPLAINT_PC_COST = 9;
+/** The most one government may add to another's goods, in points. */
+export const SURCHARGE_MAX = 30;
+
+/**
+ * What using the institutions is worth.
+ *
+ * A country that takes a trade dispute to the Convention rather than
+ * answering in kind is read by every other government as one that settles
+ * arguments a particular way. It also annoys the country complained about,
+ * but less than a tariff would.
+ */
+export const COMPLAINT_REPUTATION = 3;
+export const COMPLAINT_RELATIONS = -4;
+
+/**
+ * How hard net exports pull on growth.
+ *
+ * Below one, because a fall in exports is partly offset by the imports that
+ * stop coming with them, and because an economy where trade moved growth
+ * one-for-one would make every other lever in the game irrelevant.
+ */
+export const IS_TRADE_WEIGHT = 0.28;

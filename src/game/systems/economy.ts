@@ -60,6 +60,7 @@ import {
   INVESTMENT_SHARE_BASE,
   IS_CONFIDENCE_WEIGHT,
   IS_FISCAL_MULTIPLIER,
+  IS_TRADE_WEIGHT,
   IS_REAL_RATE_WEIGHT,
   NATURAL_UNEMPLOYMENT,
   NEUTRAL_REAL_RATE,
@@ -231,6 +232,7 @@ export function targetGrowth(
   fiscalImpulse: number,
   workforceGrowth = 0,
   demandNoise = 0,
+  tradeImpulse = 0,
 ): number {
   const trend = potentialGrowth(economy.productivity, workforceGrowth);
   /* A boom exhausts faster than a slump heals: above capacity you run out of
@@ -247,7 +249,12 @@ export function targetGrowth(
   const fiscalTerm = deficitShare * IS_FISCAL_MULTIPLIER;
   const { growth: shockTerm } = shockTotals(economy.shocks);
 
-  return trend + gapTerm + rateTerm + confidenceTerm + fiscalTerm + shockTerm + demandNoise;
+  /* NX. A small term in a normal year and the whole story in a trade war. */
+  const tradeTerm = tradeImpulse * IS_TRADE_WEIGHT;
+
+  return (
+    trend + gapTerm + rateTerm + confidenceTerm + fiscalTerm + tradeTerm + shockTerm + demandNoise
+  );
 }
 
 /**
@@ -361,6 +368,20 @@ export interface EconomyInputs {
    * it. Engine 2D can, and this is how it says so.
    */
   employmentGap?: number;
+  /**
+   * Net exports as a share of output, in points of annual growth.
+   *
+   * The open-economy term the textbooks put at the end of Y = C + I + G + NX
+   * and most games leave out entirely. It is here because a trade war is a
+   * contractionary policy that no chancellor announced and no chamber voted
+   * for, and the player should be able to watch it arrive.
+   */
+  tradeImpulse?: number;
+  /**
+   * What tariffs are doing to the price level, in points of annual
+   * inflation. Paid at the border, felt at the till.
+   */
+  importPrices?: number;
   /** The turn being resolved, for the history record. */
   turn: number;
   /**
@@ -411,7 +432,13 @@ export function stepEconomy(economy: Economy, inputs: EconomyInputs): Economy {
     economy.cycleMomentum * CYCLE_PERSISTENCE + (inputs.noise?.demand ?? 0) * CYCLE_DEMAND_NOISE;
   const priceMomentum =
     economy.priceMomentum * CYCLE_PERSISTENCE + (inputs.noise?.supply ?? 0) * CYCLE_SUPPLY_NOISE;
-  const wanted = targetGrowth(economy, inputs.fiscalImpulse, workforceGrowth, cycleMomentum);
+  const wanted = targetGrowth(
+    economy,
+    inputs.fiscalImpulse,
+    workforceGrowth,
+    cycleMomentum,
+    inputs.tradeImpulse ?? 0,
+  );
   /*
    * Clamped because nothing real goes past here, and because without it an
    * absurd input runs away: a fiscal impulse of several times national
@@ -446,7 +473,9 @@ export function stepEconomy(economy: Economy, inputs: EconomyInputs): Economy {
   const priced: Economy = { ...economy, unemployment, outputGap };
   const wantedInflation = targetInflation(
     priced,
-    priceMomentum + (inputs.taxEffects?.prices ?? 0),
+    /* Tariffs are a supply shock a government chose. They sit here with the
+       weather and the tax code, because that is what they are. */
+    priceMomentum + (inputs.taxEffects?.prices ?? 0) + (inputs.importPrices ?? 0),
   );
   const inflation = economy.inflation + (wantedInflation - economy.inflation) * 0.45;
   /* Expectations follow realised inflation, which is why it is sticky. */

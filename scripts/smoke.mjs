@@ -71,6 +71,16 @@ await step('look at the institutions', async () => {
   await page.screenshot({ path: `${OUT}/04b-organisations.png`, fullPage: true });
 });
 
+await step('look at the trade schedule', async () => {
+  await page.getByRole('heading', { name: 'The schedule' }).waitFor();
+  await page
+    .locator('section:has(> header h2:text-is("The schedule")) button[aria-expanded]')
+    .first()
+    .click();
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: `${OUT}/04c-trade.png`, fullPage: true });
+});
+
 await step('open the red box', async () => {
   await page.getByRole('button', { name: /Open the red box/ }).click();
   await page.waitForTimeout(400);

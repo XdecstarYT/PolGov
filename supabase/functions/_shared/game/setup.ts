@@ -33,6 +33,7 @@ import { buildDemography } from './systems/demography.ts';
 import { buildInfrastructure } from './systems/infrastructure.ts';
 import { buildServices } from './systems/services.ts';
 import { buildWorld } from './systems/diplomacy.ts';
+import { buildTrade } from './systems/trade.ts';
 import { assignMinistries, buildBudget } from './systems/budgetProcess.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
 import { buildSenate } from './systems/parliament.ts';
@@ -50,6 +51,7 @@ import type {
   Sector,
 } from './types.ts';
 import type { District } from './systems/districts.ts';
+import type { NationKey } from './content/nations.ts';
 
 export interface NewGameOptions {
   gameId: string;
@@ -251,6 +253,11 @@ export function createGame(options: NewGameOptions): GameState {
        because every government inherits both. */
     world: buildWorld(),
 
+    /* And a trade book built by decades of geography and somebody else's
+       agreements. The first thing worth noticing about it is how little of
+       it is the new government's to decide. */
+    trade: buildTrade(buildEconomy().gdp, buildWorld(), inheritedTradeAgreements()),
+
     /* Somebody else's budget. Nobody arrives with a blank sheet; they arrive
        with the last government's spending and a manifesto that contradicts
        it. The portfolios are handed out once a coalition exists. */
@@ -338,6 +345,21 @@ export function createStandardGame(gameId = 'test-game'): GameState {
     playerGlyph: '★',
     playerIdeology: { economic: -0.1, social: 0.2, environmental: 0.2 },
   });
+}
+
+/**
+ * The trade agreements the country already has.
+ *
+ * Built from the inherited treaties, because a new government's trade
+ * schedule was written by somebody else and it matters from week one.
+ */
+function inheritedTradeAgreements(): Set<NationKey> {
+  const keys = new Set<NationKey>();
+  for (const treaty of buildWorld().treaties) {
+    if (treaty.kind !== 'trade' && treaty.kind !== 'partnership') continue;
+    for (const party of treaty.parties) keys.add(party);
+  }
+  return keys;
 }
 
 /** Hand the portfolios to whoever will be holding them. */
