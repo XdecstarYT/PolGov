@@ -87,6 +87,12 @@ await step('look at the forces', async () => {
   await page.screenshot({ path: `${OUT}/04d-defence.png`, fullPage: true });
 });
 
+await step('look at the agencies', async () => {
+  await page.getByRole('heading', { name: 'The agencies' }).waitFor();
+  await page.getByRole('heading', { name: 'Assessments' }).waitFor();
+  await page.screenshot({ path: `${OUT}/04e-intelligence.png`, fullPage: true });
+});
+
 await step('open the red box', async () => {
   await page.getByRole('button', { name: /Open the red box/ }).click();
   await page.waitForTimeout(400);
@@ -146,7 +152,7 @@ await step('end the turn', async () => {
 await page.screenshot({ path: `${OUT}/08-report.png`, fullPage: true });
 
 await step('dark mode', async () => {
-  await page.getByRole('button', { name: 'Dark' }).click();
+  await page.getByRole('button', { name: 'Dark', exact: true }).click();
   await page.waitForTimeout(300);
 });
 await page.screenshot({ path: `${OUT}/09-report-dark.png`, fullPage: true });
@@ -159,7 +165,7 @@ await step('advance into the next week', async () => {
 /* The second briefing is the first one with any history on it, so it is the
    one worth looking at: the economy traces and the trend line are empty on
    turn one and tell you nothing about whether they render. */
-await page.getByRole('button', { name: 'Light' }).click();
+await page.getByRole('button', { name: 'Light', exact: true }).click();
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${OUT}/10-briefing-turn2.png`, fullPage: true });
 

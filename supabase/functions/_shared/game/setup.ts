@@ -35,6 +35,7 @@ import { buildServices } from './systems/services.ts';
 import { buildWorld } from './systems/diplomacy.ts';
 import { buildTrade } from './systems/trade.ts';
 import { buildMilitary } from './systems/military.ts';
+import { buildIntelligence } from './systems/intelligence.ts';
 import { assignMinistries, buildBudget } from './systems/budgetProcess.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
 import { buildSenate } from './systems/parliament.ts';
@@ -267,6 +268,10 @@ export function createGame(options: NewGameOptions): GameState {
     /* No quarrels yet. They arrive, which is the correct shape: the
        decision a government faces is never whether to have a crisis. */
     crises: [],
+
+    /* Somebody is already inside. They always are, and a country that
+       believed otherwise would be the only one in history. */
+    intelligence: buildIntelligence(),
 
     /* Somebody else's budget. Nobody arrives with a blank sheet; they arrive
        with the last government's spending and a manifesto that contradicts

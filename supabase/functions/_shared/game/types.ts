@@ -1102,6 +1102,58 @@ export interface Military {
 }
 
 /* ------------------------------------------------------------------ *
+ * Intelligence
+ * ------------------------------------------------------------------ */
+
+/**
+ * What the agencies say, and what is actually true.
+ *
+ * Both are stored, and only one of them is ever shown. The gap between
+ * them is the entire subject: the paper says high confidence, the paper is
+ * wrong, and asking for a better paper does not help.
+ */
+export interface Assessment {
+  id: string;
+  nation: import('./content/nations.ts').NationKey;
+  subject: import('./content/intelligence.ts').AssessmentSubject;
+  turn: number;
+  /** The number on the paper. */
+  estimate: number;
+  /** The number that is true. Never shown to the player. */
+  truth: number;
+  confidence: 'low' | 'moderate' | 'high';
+  /** Marked once enough time has passed that the answer is visible. */
+  verdict: 'unknown' | 'sound' | 'wrong';
+}
+
+/** Something done quietly, which is deniable until it is not. */
+export interface Operation {
+  id: string;
+  kind: import('./content/intelligence.ts').OperationKey;
+  nation: import('./content/nations.ts').NationKey;
+  startedTurn: number;
+  dueTurn: number;
+  /** The chance of surfacing, fixed at launch under that week's conditions. */
+  exposure: number;
+  status: 'running' | 'succeeded' | 'failed' | 'exposed';
+}
+
+export interface Intelligence {
+  /** Where the collection budget goes. The three sum to one. */
+  posture: { human: number; signals: number; analysis: number };
+  /** How good collection actually is, 0–100. People, not equipment. */
+  capability: number;
+  /** How much of what this country does is known to others. */
+  penetration: number;
+  /** Which rung of the surveillance ladder is in force. */
+  powers: number;
+  /** How closely the agencies are watched, 0–100. */
+  oversight: number;
+  assessments: Assessment[];
+  operations: Operation[];
+}
+
+/* ------------------------------------------------------------------ *
  * Conflict
  * ------------------------------------------------------------------ */
 
@@ -1369,6 +1421,14 @@ export interface GameState {
 
   /** Quarrels with other states, and how far up the ladder each one is. */
   crises: Crisis[];
+
+  /**
+   * What the agencies say, what they have done, and who is inside.
+   *
+   * The only system in the game whose output the player cannot trust,
+   * which is the most accurate thing about it.
+   */
+  intelligence: Intelligence;
 
   /** The budget: line items, ministries, and where it is in the process. */
   budget: Budget;

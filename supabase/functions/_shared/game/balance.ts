@@ -1762,3 +1762,57 @@ export const SETTLE_PC_COST = 22;
 /** And to send forces somewhere, or change the whole doctrine. */
 export const DEPLOY_PC_COST = 16;
 export const PROGRAMME_PC_COST = 14;
+
+/* ------------------------------------------------------------------ *
+ * Intelligence
+ * ------------------------------------------------------------------ */
+
+/** Where the agencies' funding stops being upkeep and starts being reach. */
+export const INTEL_FUNDING_PIVOT = 0.75;
+
+/** Capability is people and relationships, so it moves like people do. */
+export const CAPABILITY_ADJUST_RATE = 0.008;
+
+/**
+ * How fast somebody gets inside.
+ *
+ * Upward, always, because somebody is always trying. The only thing that
+ * reduces it is looking for them, which is unglamorous and nobody funds it.
+ */
+export const PENETRATION_DRIFT = 0.055;
+
+/**
+ * How much oversight raises the chance an operation surfaces.
+ *
+ * The honest half of the oversight argument: an agency nobody is watching
+ * is genuinely harder to catch. That is a real argument for weak oversight,
+ * and the price of winning it is SCANDAL_OVERSIGHT_GUARD below.
+ */
+export const OVERSIGHT_EXPOSURE_WEIGHT = 0.85;
+
+/** Below this, an agency nobody is watching starts doing things nobody asked for. */
+export const SCANDAL_OVERSIGHT_GUARD = 55;
+
+/** Points of unrest a fully surveilled country avoids each week. */
+export const SURVEILLANCE_UNREST_WEIGHT = 0.9;
+
+/**
+ * How often an assessment is more certain of itself than it should be.
+ *
+ * Scaled by the difficulty of the question, because analysts systematically
+ * understate the spread on exactly the questions where the political demand
+ * for an answer is highest. That is not cynicism about analysts; it is the
+ * documented shape of every famous intelligence failure, and it is the only
+ * way a game can produce one honestly.
+ */
+export const OVERCONFIDENCE_BASE = 0.08;
+
+/** How long before an assessment can be marked right or wrong. */
+export const ASSESSMENT_DECAY_WEEKS = 26;
+
+/** Political capital to reshape collection, or to change the oversight regime. */
+export const POSTURE_PC_COST = 10;
+export const OVERSIGHT_PC_COST = 16;
+
+/** What an agency scandal costs a government that argued against oversight. */
+export const AGENCY_SCANDAL_APPROVAL = -9;

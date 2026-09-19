@@ -142,7 +142,11 @@ import {
   COMPLAINT_REPUTATION,
   RESOLUTION_DEFEAT_INFLUENCE,
   RESOLUTION_TARGET_RELATIONS,
+  AGENCY_SCANDAL_APPROVAL,
   CRISIS_BASE_RISK,
+  months,
+  OVERSIGHT_PC_COST,
+  POSTURE_PC_COST,
   DEESCALATE_PC_COST,
   DEESCALATION_APPROVAL,
   DEPLOY_PC_COST,
@@ -161,6 +165,20 @@ import {
 } from './balance.ts';
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
 import { duesTotal } from './systems/organisations.ts';
+import {
+  assess,
+  launch,
+  operationOdds,
+  scandalRisk,
+  stepIntelligence,
+} from './systems/intelligence.ts';
+import {
+  findOperation,
+  findPower,
+  findSubject,
+  type AssessmentSubject,
+  type OperationKey,
+} from './content/intelligence.ts';
 import {
   atWar,
   deEscalate as deEscalateCrisis,
@@ -354,6 +372,11 @@ export type Intent =
   | { type: 'escalate_crisis'; crisisId: string }
   | { type: 'de_escalate_crisis'; crisisId: string }
   | { type: 'settle_crisis'; crisisId: string }
+  | { type: 'commission_assessment'; subject: AssessmentSubject; nation: NationKey }
+  | { type: 'launch_operation'; operation: OperationKey; nation: NationKey }
+  | { type: 'set_collection'; human: number; signals: number; analysis: number }
+  | { type: 'set_surveillance'; level: number }
+  | { type: 'set_oversight'; level: number }
   | { type: 'set_budget_line'; service: ServiceKey; amount: number }
   | { type: 'set_capital_share'; service: ServiceKey; share: number }
   | { type: 'present_budget' }
@@ -1757,6 +1780,112 @@ export function resolveTurn(state: GameState): GameState {
     }
   }
 
+  /*
+   * The agencies.
+   *
+   * Stepped before the crises, because what the player believes about the
+   * other side is an input to what they do about it — and because an
+   * operation that surfaces this week is a crisis all by itself.
+   */
+  const intelTick = stepIntelligence(next.intelligence, {
+    cover: (lineFor(next.budget, 'agencies').enacted) /
+      Math.max(1, next.services.find((sv) => sv.key === 'agencies')?.demand ?? 1),
+    world: next.world,
+    military: next.military,
+    crises: next.crises,
+    turn: absoluteWeek(next),
+    rng,
+  });
+  next.intelligence = intelTick.intelligence;
+
+  for (const { operation, template } of intelTick.concluded) {
+    const them = findNation(operation.nation);
+    if (operation.status === 'exposed') {
+      /*
+       * It surfaced. The cost is diplomatic and domestic at once, and it
+       * is very often presented to a government that did not order it.
+       */
+      next.approval = clampApproval(next.approval + template.scandal.approval);
+      next.world = {
+        ...next.world,
+        reputation: clamp01to100(next.world.reputation + template.scandal.reputation),
+        nations: next.world.nations.map((n) =>
+          n.key === operation.nation
+            ? { ...n, relations: clampRelations(n.relations + template.scandal.relations) }
+            : n,
+        ),
+      };
+      log(entries, {
+        kind: 'event',
+        label: `${template.name} in ${them.name} — exposed`,
+        delta: template.scandal.approval,
+        cause:
+          `It was authorised ${Math.round((absoluteWeek(next) - operation.startedTurn) / 4.33)} ` +
+          'months ago and it is on every front page now. Deniable was always a description of ' +
+          'a period of time rather than of the operation.',
+        unit: 'pts',
+      });
+    } else if (operation.status === 'succeeded') {
+      if (template.effect.relations) {
+        next.world = {
+          ...next.world,
+          nations: next.world.nations.map((n) =>
+            n.key === operation.nation
+              ? { ...n, relations: clampRelations(n.relations + template.effect.relations!) }
+              : n,
+          ),
+        };
+      }
+      if (template.effect.tension) {
+        next.world = {
+          ...next.world,
+          tension: clamp01to100(next.world.tension + template.effect.tension),
+        };
+      }
+      log(entries, {
+        kind: 'note',
+        label: `${template.name} in ${them.name}`,
+        delta: template.effect.capability ?? 0,
+        cause: `${template.purpose} Nobody outside the building will ever know it happened.`,
+        unit: 'pts',
+        informational: true,
+      });
+    } else {
+      log(entries, {
+        kind: 'note',
+        label: `${template.name} in ${them.name} — failed`,
+        delta: 0,
+        cause:
+          'It did not work and it did not surface, which is the second-best outcome and the ' +
+          'one nobody is told about.',
+        unit: '',
+        informational: true,
+      });
+    }
+  }
+
+  /*
+   * And the cost of winning the oversight argument: an agency nobody is
+   * watching, doing something nobody asked for.
+   */
+  if (rng.chance(scandalRisk(next.intelligence))) {
+    next.approval = clampApproval(next.approval + AGENCY_SCANDAL_APPROVAL);
+    next.intelligence = {
+      ...next.intelligence,
+      oversight: clamp01to100(next.intelligence.oversight + 12),
+    };
+    log(entries, {
+      kind: 'event',
+      label: 'The agencies did something nobody asked for',
+      delta: AGENCY_SCANDAL_APPROVAL,
+      cause:
+        'Nobody in the building thought they were doing anything unusual, which is the part ' +
+        'the inquiry will find hardest to explain. Oversight has been tightened, in public, ' +
+        'by a government that argued against tightening it.',
+      unit: 'pts',
+    });
+  }
+
   const conflictTick = stepConflicts(next.crises, {
     military: next.military,
     world: next.world,
@@ -2346,6 +2475,16 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleDeEscalateCrisis(state, intent.crisisId);
     case 'settle_crisis':
       return handleSettleCrisis(state, intent.crisisId);
+    case 'commission_assessment':
+      return handleCommissionAssessment(state, intent.subject, intent.nation);
+    case 'launch_operation':
+      return handleLaunchOperation(state, intent.operation, intent.nation);
+    case 'set_collection':
+      return handleSetCollection(state, intent.human, intent.signals, intent.analysis);
+    case 'set_surveillance':
+      return handleSetSurveillance(state, intent.level);
+    case 'set_oversight':
+      return handleSetOversight(state, intent.level);
     case 'set_budget_line':
       return handleSetBudgetLine(state, intent.service, intent.amount);
     case 'set_capital_share':
@@ -3951,6 +4090,259 @@ function handleSettleCrisis(state: GameState, id: string): IntentResult {
             'none of them are described as.'
           : 'Worse terms than were available a year ago. The position was decided by budgets ' +
             'and this is the bill for them.',
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+
+/* ------------------------------------------------------------------ *
+ * The agencies
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ask a question nobody can fully answer.
+ *
+ * The estimate that comes back is the truth plus noise, and the confidence
+ * on it is a judgement about the noise rather than about this particular
+ * answer. Nobody is lying. The process worked. The number can still be
+ * wrong, and there is nothing on the paper that says which case this is.
+ */
+function handleCommissionAssessment(
+  state: GameState,
+  subject: AssessmentSubject,
+  nation: NationKey,
+): IntentResult {
+  const template = findSubject(subject);
+  if (!state.world.nations.some((n) => n.key === nation)) return reject(state, 'No such country.');
+  if (state.politicalCapital < template.cost) {
+    return reject(state, `An assessment of that costs ${template.cost} PC.`);
+  }
+
+  const recent = state.intelligence.assessments.find(
+    (a) => a.nation === nation && a.subject === subject && absoluteWeek(state) - a.turn < months(3),
+  );
+  if (recent) {
+    return reject(
+      state,
+      'The agencies reported on that within the quarter. Asking again produces the same ' +
+        'paper with a different date on it.',
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, template.cost);
+
+  const rng = new Rng(next.rngState);
+  const assessment = assess(
+    subject,
+    nation,
+    next.intelligence,
+    next.world,
+    next.military,
+    next.crises,
+    absoluteWeek(next),
+    rng,
+  );
+  next.rngState = rng.state;
+  next.intelligence = {
+    ...next.intelligence,
+    assessments: [...next.intelligence.assessments, assessment],
+  };
+
+  log(entries, {
+    kind: 'note',
+    label: `${template.name}: ${findNation(nation).name}`,
+    delta: assessment.estimate,
+    cause:
+      `${template.question} The assessment puts it at ${assessment.estimate.toFixed(0)} of 100, ` +
+      `at ${assessment.confidence} confidence. What the confidence describes is the spread, ` +
+      'not this answer.',
+    unit: '',
+  });
+  return ok(next);
+}
+
+/**
+ * Do something quietly.
+ *
+ * Deniable, which is a description of a period of time rather than of the
+ * operation. The exposure risk is fixed at launch under this week's
+ * conditions, so an operation authorised by a careless government surfaces
+ * under a careful one — and it is the careful one that pays.
+ */
+function handleLaunchOperation(
+  state: GameState,
+  key: OperationKey,
+  nation: NationKey,
+): IntentResult {
+  let template;
+  try {
+    template = findOperation(key);
+  } catch {
+    return reject(state, 'No such operation.');
+  }
+  if (!state.world.nations.some((n) => n.key === nation)) return reject(state, 'No such country.');
+  if (state.politicalCapital < template.cost) {
+    return reject(state, `That operation costs ${template.cost} PC to authorise.`);
+  }
+  if (
+    state.intelligence.operations.some(
+      (o) => o.kind === key && o.nation === nation && o.status === 'running',
+    )
+  ) {
+    return reject(state, 'That is already running there.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, template.cost);
+  next.intelligence = launch(next.intelligence, key, nation, absoluteWeek(next));
+
+  const odds = operationOdds(key, next.intelligence);
+  log(entries, {
+    kind: 'note',
+    label: `${template.name} authorised — ${findNation(nation).name}`,
+    delta: 0,
+    cause:
+      `${template.purpose} About ${Math.round(odds.success * 100)}% to work and ` +
+      `${Math.round(odds.exposure * 100)}% to surface, and the second of those is fixed now ` +
+      'rather than when it lands.',
+    unit: '',
+    informational: true,
+  });
+  return ok(next);
+}
+
+/**
+ * Point the collection somewhere.
+ *
+ * A country that spent a decade on signals and is now asked about
+ * intentions has bought the wrong thing, and cannot fix it inside a term —
+ * which is why this is a decision rather than a dial.
+ */
+function handleSetCollection(
+  state: GameState,
+  human: number,
+  signals: number,
+  analysis: number,
+): IntentResult {
+  const total = human + signals + analysis;
+  if (![human, signals, analysis].every((x) => Number.isFinite(x) && x >= 0)) {
+    return reject(state, 'A collection posture is three shares of one budget.');
+  }
+  if (Math.abs(total - 1) > 0.02) {
+    return reject(state, 'The three shares have to add to the whole of it.');
+  }
+  if (state.politicalCapital < POSTURE_PC_COST) {
+    return reject(state, 'Not enough political capital to reshape the agencies.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, POSTURE_PC_COST);
+  next.intelligence = { ...next.intelligence, posture: { human, signals, analysis } };
+
+  log(entries, {
+    kind: 'note',
+    label: 'Collection re-pointed',
+    delta: 0,
+    cause:
+      `${Math.round(human * 100)}% on people, ${Math.round(signals * 100)}% on signals, ` +
+      `${Math.round(analysis * 100)}% on working out what it means. The last of those is the ` +
+      'one that gets cut and the one that decides whether any of the rest was worth having.',
+    unit: '',
+  });
+  return ok(next);
+}
+
+/**
+ * Move up or down the surveillance ladder.
+ *
+ * The only lever in this system with a constituency on both sides, which is
+ * why it is the one that ends governments. It genuinely does reduce what
+ * goes wrong at home — a model that pretended otherwise would be arguing
+ * rather than simulating — and it genuinely does cost the country something
+ * that is not measured here.
+ */
+function handleSetSurveillance(state: GameState, level: number): IntentResult {
+  let template;
+  try {
+    template = findPower(level);
+  } catch {
+    return reject(state, 'No such powers.');
+  }
+  if (state.intelligence.powers === level) {
+    return reject(state, 'Those are the powers already in force.');
+  }
+
+  const rising = level > state.intelligence.powers;
+  const cost = rising ? template.cost : Math.round(template.cost * 0.4);
+  if (state.politicalCapital < cost) {
+    return reject(state, `Legislating that costs ${cost} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, cost);
+  next.intelligence = { ...next.intelligence, powers: level };
+  /* Repealing gives back most of what taking them cost, but not all: the
+     argument was had in public and the public remembers having it. */
+  const approval = rising
+    ? template.approval
+    : Math.abs(findPower(state.intelligence.powers).approval) * 0.7;
+  next.approval = clampApproval(next.approval + approval);
+
+  log(entries, {
+    kind: 'approval',
+    label: template.name,
+    delta: approval,
+    cause: rising
+      ? `${template.blurb} It will reduce what goes wrong at home, measurably, and the ` +
+        `objection from ${template.objectors.length} parts of the electorate does not go away ` +
+        'because the government won the vote.'
+      : 'Powers given back. Cheaper than taking them, and the argument was had in public.',
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Decide how closely the agencies are watched.
+ *
+ * Both directions have a real argument. An agency nobody is watching is
+ * harder to catch, which is genuinely useful; and it is also the one that
+ * eventually does something nobody asked for, under a government that will
+ * have to explain it.
+ */
+function handleSetOversight(state: GameState, level: number): IntentResult {
+  if (!Number.isFinite(level) || level < 0 || level > 100) {
+    return reject(state, 'Oversight runs from none to complete.');
+  }
+  if (Math.abs(state.intelligence.oversight - level) < 1) {
+    return reject(state, 'That is the regime already in force.');
+  }
+  if (state.politicalCapital < OVERSIGHT_PC_COST) {
+    return reject(state, 'Not enough political capital to change the oversight regime.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, OVERSIGHT_PC_COST);
+  const tightening = level > next.intelligence.oversight;
+  next.intelligence = { ...next.intelligence, oversight: level };
+
+  log(entries, {
+    kind: 'note',
+    label: tightening ? 'Oversight tightened' : 'Oversight relaxed',
+    delta: level - state.intelligence.oversight,
+    cause: tightening
+      ? 'Operations become easier to catch, and the thing that ends governments becomes less ' +
+        'likely. Both halves of that are true at once.'
+      : 'Operations become harder to catch, which is a real advantage, and the agencies ' +
+        'become more likely to do something nobody asked for, which is a real cost. Nobody ' +
+        'gets to have only one of those.',
     unit: 'pts',
   });
   return ok(next);
