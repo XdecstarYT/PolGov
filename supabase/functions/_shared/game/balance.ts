@@ -1523,3 +1523,30 @@ export const SUPPLY_PC_PER_SEAT = 0.45;
 export const SUPPLY_DISTANCE_COST = 0.85;
 /** What a deal with the other side costs in your own party's cohesion. */
 export const SUPPLY_COHESION_COST = -3.5;
+
+/* ------------------------------------------------------------------ *
+ * The rooms where nobody is in charge
+ * ------------------------------------------------------------------ */
+
+/**
+ * What walking out of an international body costs.
+ *
+ * Not paid to the body. Paid to every government watching, which is all of
+ * them, and in the one currency a country cannot print: the expectation
+ * that its commitments mean something. The dues stop immediately and this
+ * does not come back for years.
+ */
+export const WITHDRAWAL_REPUTATION = -9;
+/** And every member of the room it left takes it personally. */
+export const WITHDRAWAL_RELATIONS = -7;
+
+/**
+ * Putting a resolution and losing it.
+ *
+ * Worse than not putting it. The room has now formally declined, and that
+ * is a fact about this government that anybody can cite — which is why a
+ * foreign ministry counts the votes before it tables anything.
+ */
+export const RESOLUTION_DEFEAT_INFLUENCE = -2.5;
+/** A state does not forget who named it. */
+export const RESOLUTION_TARGET_RELATIONS = -14;

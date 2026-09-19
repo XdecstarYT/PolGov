@@ -62,6 +62,7 @@ import type {
   GameState,
   LogEntry,
   Party,
+  Resolution,
   SectorKey,
 } from './types.ts';
 import {
@@ -136,10 +137,15 @@ import {
   MAX_ACTIVE_PROJECTS,
   PROJECT_PC_COST,
   REGIONAL_JOBS_WEIGHT,
+  RESOLUTION_DEFEAT_INFLUENCE,
+  RESOLUTION_TARGET_RELATIONS,
   TAX_CHANGE_PC_COST,
   TOTAL_SEATS,
+  WITHDRAWAL_RELATIONS,
+  WITHDRAWAL_REPUTATION,
 } from './balance.ts';
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
+import { duesTotal } from './systems/organisations.ts';
 import {
   assignMinistries,
   cabinetReaction,
@@ -161,8 +167,22 @@ import {
   supplyCost,
 } from './systems/budgetProcess.ts';
 import {
+  RESOLUTION_TEMPLATES,
+  findOrganisation,
+  type OrganisationKey,
+  type ResolutionKind,
+} from './content/organisations.ts';
+import {
+  admissionCheck,
+  describeOutcome,
+  findMembership,
+  isMember,
+  voteOnResolution,
+} from './systems/organisations.ts';
+import {
   TREATY_LABELS,
   applyDiplomaticAct,
+  clampRelations,
   breakAgreement,
   canSummit,
   findNation,
@@ -272,6 +292,9 @@ export type Intent =
   | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
   | { type: 'propose_treaty'; nation: NationKey; kind: TreatyKind }
   | { type: 'withdraw_treaty'; treatyId: string }
+  | { type: 'join_organisation'; organisation: OrganisationKey }
+  | { type: 'leave_organisation'; organisation: OrganisationKey }
+  | { type: 'propose_resolution'; kind: ResolutionKind; target?: NationKey | null }
   | { type: 'set_budget_line'; service: ServiceKey; amount: number }
   | { type: 'set_capital_share'; service: ServiceKey; share: number }
   | { type: 'present_budget' }
@@ -1034,9 +1057,10 @@ export function resolveTurn(state: GameState): GameState {
     next.debt,
     next.finance.bonds,
     next.taxes,
-    /* Keeping what exists, and building what does not. Both are spending,
-       and the first is the one nobody notices being cut. */
-    infrastructureSpend(next.infrastructure),
+    /* Keeping what exists, building what does not, and the subscriptions
+       to every room the country has a seat in. All three are spending, and
+       all three are the kind nobody notices until they stop. */
+    infrastructureSpend(next.infrastructure) + duesTotal(next.world.organisations),
   );
   next.treasury += fiscal.treasuryDelta;
   next.debt = Math.max(0, next.debt + fiscal.debtDelta);
@@ -1158,6 +1182,25 @@ export function resolveTurn(state: GameState): GameState {
               ? `${template.name} is counted a friend again.`
               : `The relationship with ${template.name} has moved.`,
         unit: '',
+      });
+    }
+
+    /*
+     * Dues are already inside programme spending — they are a bill like any
+     * other. They are reported separately because they are the least
+     * glamorous and most accurate thing that can be said about
+     * multilateralism: it is billed whether or not the room was used.
+     */
+    if (tick.dues > 0) {
+      log(entries, {
+        kind: 'treasury',
+        label: 'Dues to international bodies',
+        delta: -tick.dues,
+        cause:
+          `${next.world.organisations.filter((o) => o.member).length} memberships, billed ` +
+          'whether or not the government used the room.',
+        unit: '₡bn',
+        informational: true,
       });
     }
   }
@@ -1987,6 +2030,12 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleProposeTreaty(state, intent.nation, intent.kind);
     case 'withdraw_treaty':
       return handleWithdrawTreaty(state, intent.treatyId);
+    case 'join_organisation':
+      return handleJoinOrganisation(state, intent.organisation);
+    case 'leave_organisation':
+      return handleLeaveOrganisation(state, intent.organisation);
+    case 'propose_resolution':
+      return handleProposeResolution(state, intent.kind, intent.target ?? null);
     case 'set_budget_line':
       return handleSetBudgetLine(state, intent.service, intent.amount);
     case 'set_capital_share':
@@ -2928,6 +2977,213 @@ function handleSecureSupply(state: GameState, partyId: string): IntentResult {
       'joined the government, they have not endorsed a word of it, and they will say so ' +
       'at length. Your own benches have noticed what it cost.',
     unit: 'PC',
+  });
+  return ok(next);
+}
+
+
+/* ------------------------------------------------------------------ *
+ * The rooms where nobody is in charge
+ * ------------------------------------------------------------------ */
+
+/**
+ * Apply to join a body.
+ *
+ * Admission is by consent of the members, so the test is the worst
+ * relationship in the room rather than the average one. A government that
+ * has been warm to eleven countries and cold to the twelfth has not earned
+ * a seat; it has earned eleven votes and a closed door, which is how
+ * accession actually works.
+ */
+function handleJoinOrganisation(state: GameState, key: OrganisationKey): IntentResult {
+  const template = findOrganisation(key);
+  const membership = findMembership(state.world.organisations, key);
+  if (membership.member) return reject(state, `Verdana is already in the ${template.name}.`);
+  if (state.politicalCapital < template.applicationCost) {
+    return reject(state, `An application costs ${template.applicationCost} PC.`);
+  }
+
+  const check = admissionCheck(template, state.world);
+  if (!check.admissible) {
+    const blocker = check.blocker ? findNation(check.blocker).name : 'a member';
+    return reject(
+      state,
+      `${blocker} will not have it. Admission needs every member at ${template.entryRelations} ` +
+        `relations or better, and they are at ${check.worst.toFixed(0)}.`,
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, template.applicationCost);
+  next.world = {
+    ...next.world,
+    organisations: next.world.organisations.map((o) =>
+      o.key === key
+        ? { ...o, member: true, joinedTurn: next.turnNumber, suspended: false, standing: 45 }
+        : o,
+    ),
+  };
+
+  log(entries, {
+    kind: 'note',
+    label: `Acceded to the ${template.name}`,
+    delta: -template.dues,
+    cause: `${template.obligation} Dues are ₡${template.dues.toFixed(1)}bn a year from now on.`,
+    unit: '₡bn',
+  });
+  return ok(next);
+}
+
+/**
+ * Walk out.
+ *
+ * Free, immediate, and read by every government in the world as a statement
+ * about what this one's commitments are worth. The dues stop; the
+ * reputation does not come back for years.
+ */
+function handleLeaveOrganisation(state: GameState, key: OrganisationKey): IntentResult {
+  const template = findOrganisation(key);
+  const membership = findMembership(state.world.organisations, key);
+  if (!membership.member) return reject(state, `Verdana is not in the ${template.name}.`);
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.world = {
+    ...next.world,
+    reputation: clamp01to100(next.world.reputation + WITHDRAWAL_REPUTATION),
+    organisations: next.world.organisations.map((o) =>
+      o.key === key ? { ...o, member: false, joinedTurn: null, standing: 0 } : o,
+    ),
+    /* Every member takes it personally, in proportion to how much the body
+       mattered to them. Leaving a room is done to the people in it. */
+    nations: next.world.nations.map((nation) =>
+      template.members.includes(nation.key)
+        ? { ...nation, relations: clampRelations(nation.relations + WITHDRAWAL_RELATIONS) }
+        : nation,
+    ),
+  };
+
+  log(entries, {
+    kind: 'note',
+    label: `Withdrew from the ${template.name}`,
+    delta: WITHDRAWAL_REPUTATION,
+    cause:
+      `₡${template.dues.toFixed(1)}bn a year saved, and ${template.members.length} governments ` +
+      'now know what this one\u2019s commitments are worth. That part does not come back for years.',
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Put a resolution.
+ *
+ * The one action in this engine whose outcome the player cannot influence
+ * on the day. Every member votes its own interests; the count was decided
+ * over the preceding years, in embassies and summits and agreements kept.
+ * A government can be entirely right and lose, which is not the engine
+ * being unfair — it is the engine being about diplomacy.
+ */
+function handleProposeResolution(
+  state: GameState,
+  kind: ResolutionKind,
+  target: NationKey | null,
+): IntentResult {
+  const template = RESOLUTION_TEMPLATES.find((r) => r.kind === kind);
+  if (!template) return reject(state, 'No such resolution.');
+
+  const organisation = findOrganisation(template.organisation);
+  if (!isMember(state.world.organisations, template.organisation)) {
+    return reject(
+      state,
+      `Verdana has no seat in the ${organisation.name}. A country cannot put a resolution to a ` +
+        'room it is not in.',
+    );
+  }
+  if (state.politicalCapital < template.proposeCost) {
+    return reject(state, `Putting this costs ${template.proposeCost} PC.`);
+  }
+  if (target && !state.world.nations.some((n) => n.key === target && n.recognised)) {
+    return reject(state, 'A resolution cannot name a state this country does not recognise.');
+  }
+  if (template.needsTarget && !target) {
+    return reject(
+      state,
+      `${template.title} has to name a state. A condemnation of nobody in particular is not a ` +
+        'resolution, it is a press release.',
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, template.proposeCost);
+
+  const rng = new Rng(next.rngState);
+  const outcome = voteOnResolution(template, next.world, target, rng);
+  next.rngState = rng.state;
+
+  const resolution: Resolution = {
+    id: `res-${kind}-${next.turnNumber}`,
+    kind,
+    organisation: template.organisation,
+    title: template.title,
+    target,
+    turn: next.turnNumber,
+    for: outcome.for,
+    against: outcome.against,
+    abstain: outcome.abstain,
+    passed: outcome.passed,
+    vetoedBy: outcome.vetoedBy,
+    threshold: outcome.threshold,
+    quorum: outcome.quorum,
+    votes: outcome.votes,
+  };
+  next.world = {
+    ...next.world,
+    resolutions: [...next.world.resolutions, resolution],
+  };
+
+  if (outcome.passed) {
+    next.world = {
+      ...next.world,
+      reputation: clamp01to100(next.world.reputation + (template.effects.reputation ?? 0)),
+      influence: clamp01to100(next.world.influence + (template.effects.influence ?? 0)),
+      tension: clamp01to100(next.world.tension + (template.effects.tension ?? 0)),
+    };
+    if (template.effects.approval) {
+      next.approval = clampApproval(next.approval + template.effects.approval);
+    }
+    /* What it does costs money, every year, from now on. */
+    if (template.cost > 0) next.revenueModifier -= template.cost;
+
+    /* The state it names does not forget who put it. */
+    if (target) {
+      next.world = {
+        ...next.world,
+        nations: next.world.nations.map((n) =>
+          n.key === target
+            ? { ...n, relations: clampRelations(n.relations + RESOLUTION_TARGET_RELATIONS) }
+            : n,
+        ),
+      };
+    }
+  } else {
+    /* Putting a resolution and losing it is worse than not putting it. The
+       room has now formally declined, and that is a fact about this
+       government that everybody can cite. */
+    next.world = {
+      ...next.world,
+      influence: clamp01to100(next.world.influence + RESOLUTION_DEFEAT_INFLUENCE),
+    };
+  }
+
+  log(entries, {
+    kind: 'note',
+    label: `${template.title}${target ? ` \u2014 ${findNation(target).name}` : ''}`,
+    delta: outcome.passed ? (template.effects.reputation ?? 0) : RESOLUTION_DEFEAT_INFLUENCE,
+    cause: `${organisation.name}. ${describeOutcome(outcome)}`,
+    unit: 'pts',
   });
   return ok(next);
 }

@@ -226,6 +226,14 @@ export interface ResolutionTemplate {
   organisation: OrganisationKey;
   /** What it does, in one line, without an opinion about whether it is good. */
   blurb: string;
+  /**
+   * Must it name a state?
+   *
+   * A condemnation of nobody in particular is not a resolution, it is a
+   * press release. The ones that name a country are also the ones that cost
+   * something to put, because the country named remembers who put it.
+   */
+  needsTarget?: boolean;
   /** Political capital to put it on the agenda. */
   proposeCost: number;
   /** ₡bn a year it costs the country if it passes. */
@@ -251,6 +259,7 @@ export interface ResolutionTemplate {
 export const RESOLUTION_TEMPLATES: ResolutionTemplate[] = [
   {
     kind: 'condemnation',
+    needsTarget: true,
     title: 'Resolution of Condemnation',
     organisation: 'assembly',
     blurb: 'Formally deplores a named state’s conduct. Binds nobody and is remembered by everybody.',
@@ -262,6 +271,7 @@ export const RESOLUTION_TEMPLATES: ResolutionTemplate[] = [
   },
   {
     kind: 'sanctions',
+    needsTarget: true,
     title: 'Multilateral Sanctions',
     organisation: 'council',
     blurb: 'Collective economic measures. They work only if everyone holds, and somebody never does.',
@@ -295,6 +305,7 @@ export const RESOLUTION_TEMPLATES: ResolutionTemplate[] = [
   },
   {
     kind: 'investigation',
+    needsTarget: true,
     title: 'International Investigation',
     organisation: 'court',
     blurb: 'An independent inquiry with a published finding nobody can pre-agree to.',

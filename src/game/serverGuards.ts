@@ -70,6 +70,9 @@ export const ALLOWED_INTENT_TYPES: ReadonlySet<Intent['type']> = new Set([
   'set_capital_share',
   'present_budget',
   'secure_supply',
+  'join_organisation',
+  'leave_organisation',
+  'propose_resolution',
 ]);
 
 /** Cap the journal so one request cannot ask for unbounded computation. */

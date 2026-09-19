@@ -56,6 +56,7 @@ import {
   type NationTemplate,
 } from '../content/nations.ts';
 import { affinity } from '../ideology.ts';
+import { buildOrganisations, stepOrganisations } from './organisations.ts';
 import type {
   Ideology,
   IndustryState,
@@ -67,7 +68,7 @@ import type {
 } from '../types.ts';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-const clampRelations = (v: number) => clamp(v, RELATIONS_MIN, RELATIONS_MAX);
+export const clampRelations = (v: number) => clamp(v, RELATIONS_MIN, RELATIONS_MAX);
 
 /* ------------------------------------------------------------------ *
  * Starting state
@@ -109,6 +110,10 @@ export function buildWorld(): World {
   return {
     nations,
     treaties,
+    /* Somebody joined these before the player was born, and somebody
+       declined the ones the country is not in. Both are inherited. */
+    organisations: buildOrganisations(),
+    resolutions: [],
     reputation: 60,
     influence: 42,
     tension: 30,
@@ -277,12 +282,14 @@ export interface DiplomacyInputs {
 
 export interface WorldTick {
   world: World;
-  /** Countries that crossed into friendly or hostile this month. */
+  /** Countries that crossed into friendly or hostile this week. */
   shifted: { key: NationKey; to: ReturnType<typeof standingWith> }[];
+  /** Dues payable to every body the country belongs to, ₡bn this week. */
+  dues: number;
 }
 
 /**
- * Advance the world by one month.
+ * Advance the world by one week.
  *
  * Relations drift toward what ideology, geography and trade imply, slowed by
  * an embassy where there is one. Nothing here is fast: a relationship is a
@@ -329,27 +336,47 @@ export function stepWorld(world: World, inputs: DiplomacyInputs): WorldTick {
   const standing =
     nations.reduce((sum, n) => sum + n.relations * findNation(n.key).power, 0) / totalPower;
 
+  /*
+   * Membership pays, slowly. The influence a seat in a room is worth is
+   * small per week and compounds over a term, which is the honest shape of
+   * multilateralism: nothing a government joins helps it this year.
+   */
+  const bodies = stepOrganisations(world.organisations);
+
   /* Influence: what the country can actually get done in a room. Built from
-     standing, reputation and the number of agreements it is part of. */
+     standing, reputation, the agreements it is part of, and the rooms it is
+     entitled to speak in. */
   const influence = clamp(
-    40 + standing * 0.35 + (world.reputation - 60) * 0.3 + world.treaties.length * 1.6,
+    40 +
+      standing * 0.35 +
+      (world.reputation - 60) * 0.3 +
+      world.treaties.length * 1.6 +
+      world.organisations.filter((o) => o.member && !o.suspended).length * 1.2 +
+      bodies.influence,
     0,
     100,
   );
+
+  /* And a country inside the institutions is a country other governments
+     expect to behave, which is what reputation is. */
+  const reputation = clamp(world.reputation + bodies.reputation, 0, 100);
+  const tension = clamp(world.tension - bodies.stability, 0, 100);
 
   const point: WorldPoint = {
     turn: inputs.turn,
     standing,
     influence,
-    tension: world.tension,
+    tension,
   };
 
   const next: World = {
     nations,
     treaties: world.treaties,
-    reputation: world.reputation,
+    organisations: world.organisations,
+    resolutions: world.resolutions,
+    reputation,
     influence,
-    tension: world.tension,
+    tension,
     history: [...world.history, point].slice(-WORLD_HISTORY_LIMIT),
   };
 
@@ -357,7 +384,7 @@ export function stepWorld(world: World, inputs: DiplomacyInputs): WorldTick {
     .map((n) => ({ key: n.key, to: standingWith(n) }))
     .filter((n) => before.get(n.key) !== n.to);
 
-  return { world: next, shifted };
+  return { world: next, shifted, dues: bodies.dues };
 }
 
 /* ------------------------------------------------------------------ *

@@ -1028,9 +1028,51 @@ export interface WorldPoint {
 }
 
 /** Everything outside the borders. */
+/** Membership of one international body. */
+export interface OrganisationState {
+  key: import('./content/organisations.ts').OrganisationKey;
+  member: boolean;
+  /** The turn this government joined, or 0 for one it inherited. */
+  joinedTurn: number | null;
+  /** Rights suspended: the obligations continue, the benefits do not. */
+  suspended: boolean;
+  /** How the other members regard this one, 0–100. */
+  standing: number;
+}
+
+/** A resolution that was put, and what the room did with it. */
+export interface Resolution {
+  id: string;
+  kind: import('./content/organisations.ts').ResolutionKind;
+  organisation: import('./content/organisations.ts').OrganisationKey;
+  title: string;
+  /** The state it is about, where it is about one. */
+  target: import('./content/nations.ts').NationKey | null;
+  turn: number;
+  for: number;
+  against: number;
+  abstain: number;
+  passed: boolean;
+  vetoedBy: import('./content/nations.ts').NationKey | null;
+  /** The bar this room set, kept so the record can be read without it. */
+  threshold: number;
+  quorum: number;
+  /** How each member voted and why, kept so a loss can be read back. */
+  votes: {
+    nation: import('./content/nations.ts').NationKey;
+    vote: 'for' | 'against' | 'abstain';
+    why: string;
+    veto: boolean;
+  }[];
+}
+
 export interface World {
   nations: NationState[];
   treaties: Treaty[];
+  /** Every body the country belongs to, or has chosen not to. */
+  organisations: OrganisationState[];
+  /** Everything put to a vote, and what the room did with it. */
+  resolutions: Resolution[];
   /**
    * Reputation: what other governments expect of this one.
    *

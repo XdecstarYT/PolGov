@@ -41,6 +41,8 @@ export * from './systems/eventEngine.ts';
 export * from './systems/legacy.ts';
 export * from './systems/legislature.ts';
 export * from './systems/budgetProcess.ts';
+export * from './systems/organisations.ts';
+export * from './content/organisations.ts';
 
 export { BILL_TEMPLATES, BILL_CATEGORY_LABELS } from './content/bills.ts';
 export { EVENT_TEMPLATES, EVENT_CATEGORY_LABELS } from './content/events.ts';
