@@ -185,3 +185,124 @@ describe('the client cannot set its own approval', () => {
     );
   });
 });
+
+describe('the snapshot guards everything, not only the first three numbers', () => {
+  /*
+   * These systems were added after the validator was written, and a
+   * validator that stopped where it used to would have let a tampered
+   * client hand itself a fully ready army, a perfect intelligence service
+   * or a budget it had not passed — none of which is reachable through any
+   * intent, which is precisely why the snapshot is where it would be done.
+   */
+  const base = () => governing();
+
+  it('accepts a state the engine itself produced', () => {
+    expect(validateSnapshot(base())).toBeNull();
+  });
+
+  it('refuses a force that was not paid for', () => {
+    const state = base();
+    const tampered: GameState = {
+      ...state,
+      military: {
+        ...state.military,
+        arms: state.military.arms.map((a) => ({ ...a, readiness: 400 })),
+      },
+    };
+    expect(validateSnapshot(tampered)).toContain('readiness out of range');
+  });
+
+  it('refuses an intelligence service that sees everything', () => {
+    const state = base();
+    const tampered: GameState = {
+      ...state,
+      intelligence: { ...state.intelligence, capability: 1000 },
+    };
+    expect(validateSnapshot(tampered)).toContain('capability out of range');
+  });
+
+  it('refuses a collection posture that is more than one budget', () => {
+    const state = base();
+    const tampered: GameState = {
+      ...state,
+      intelligence: {
+        ...state.intelligence,
+        posture: { human: 1, signals: 1, analysis: 1 },
+      },
+    };
+    expect(validateSnapshot(tampered)).toContain('does not add up');
+  });
+
+  it('refuses a budget line that was never voted', () => {
+    const state = base();
+    const tampered: GameState = {
+      ...state,
+      budget: {
+        ...state.budget,
+        lines: state.budget.lines.map((l) => ({ ...l, enacted: -5 })),
+      },
+    };
+    expect(validateSnapshot(tampered)).toContain('budget line invalid');
+  });
+
+  it('refuses trade that runs backwards', () => {
+    const state = base();
+    const tampered: GameState = {
+      ...state,
+      trade: {
+        ...state.trade,
+        flows: state.trade.flows.map((f) => ({ ...f, exports: -100 })),
+      },
+    };
+    expect(validateSnapshot(tampered)).toContain('trade flow invalid');
+  });
+
+  it('refuses a world where everybody has been made an ally', () => {
+    const state = base();
+    const tampered: GameState = {
+      ...state,
+      world: {
+        ...state.world,
+        nations: state.world.nations.map((n) => ({ ...n, relations: 500 })),
+      },
+    };
+    expect(validateSnapshot(tampered)).toContain('out of range');
+  });
+
+  it('refuses a country with no economy', () => {
+    const state = base();
+    const tampered: GameState = { ...state, economy: { ...state.economy, gdp: 0 } };
+    expect(validateSnapshot(tampered)).toContain('output invalid');
+  });
+
+  it('refuses a force that is deployed more than once over', () => {
+    const state = base();
+    const tampered: GameState = {
+      ...state,
+      military: {
+        ...state.military,
+        deployments: [
+          {
+            id: 'x',
+            nation: 'holm',
+            kind: 'combat',
+            commitment: 0.9,
+            cost: 10,
+            startedTurn: 1,
+            mandate: 'x',
+          },
+          {
+            id: 'y',
+            nation: 'lorne',
+            kind: 'combat',
+            commitment: 0.9,
+            cost: 10,
+            startedTurn: 1,
+            mandate: 'y',
+          },
+        ],
+      },
+    };
+    expect(validateSnapshot(tampered)).toContain('commitment invalid');
+  });
+});
