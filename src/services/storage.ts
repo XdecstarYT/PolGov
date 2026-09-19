@@ -13,6 +13,7 @@
  */
 
 import type { GameState } from '../game/index.ts';
+import { migrateState } from '../game/migrate.ts';
 import { isCloudConfigured, supabase } from './supabase.ts';
 import {
   billRows,
@@ -81,7 +82,10 @@ class LocalStore implements GameStore {
   async load(id: string): Promise<GameState | null> {
     try {
       const raw = localStorage.getItem(KEY_PREFIX + id);
-      return raw ? (JSON.parse(raw) as GameState) : null;
+      /* Through the migration, because a save written before a subsystem
+         existed is a state with a hole in it, and reading one directly is a
+         white screen rather than a message. */
+      return raw ? migrateState(JSON.parse(raw)) : null;
     } catch {
       return null;
     }

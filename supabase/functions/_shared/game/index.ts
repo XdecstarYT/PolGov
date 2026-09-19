@@ -50,6 +50,7 @@ export * from './content/forces.ts';
 export * from './systems/intelligence.ts';
 export * from './content/intelligence.ts';
 export * from './systems/worldSim.ts';
+export * from './migrate.ts';
 export * from './content/globalEvents.ts';
 
 export { BILL_TEMPLATES, BILL_CATEGORY_LABELS } from './content/bills.ts';

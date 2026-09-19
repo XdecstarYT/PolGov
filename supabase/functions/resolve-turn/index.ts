@@ -26,11 +26,8 @@ import { corsHeaders, json, preflight } from '../_shared/http.ts';
  * function never creates a game, so it never needs it.
  */
 import { applyIntents, resolveTurn, type Intent } from '../_shared/game/turn.ts';
-import {
-  validateIntents,
-  validateSnapshot,
-} from '../_shared/game/serverGuards.ts';
-import type { GameState } from '../_shared/game/types.ts';
+import { validateIntents, validateSnapshot } from '../_shared/game/serverGuards.ts';
+import { migrateState } from '../_shared/game/migrate.ts';
 
 
 
@@ -85,7 +82,13 @@ Deno.serve(async (req: Request) => {
   if (row.owner_id !== auth.user.id) return json({ error: 'Not your game.' }, 403);
   if (row.status !== 'active') return json({ error: 'That run has ended.' }, 409);
 
-  const stored = row.snapshot as GameState | null;
+  /*
+   * Through the migration first, for the same reason the client does it: a
+   * snapshot written before a subsystem existed is a state with a hole in
+   * it, and replaying a turn against one throws inside the engine rather
+   * than returning something a caller can act on.
+   */
+  const stored = migrateState(row.snapshot);
   if (!stored) return json({ error: 'That run has no saved state.' }, 409);
 
   const problem = validateSnapshot(stored);
