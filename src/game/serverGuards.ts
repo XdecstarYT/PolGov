@@ -66,6 +66,9 @@ export const ALLOWED_INTENT_TYPES: ReadonlySet<Intent['type']> = new Set([
   'negotiation_form_government',
   'negotiation_abandon',
   'acknowledge_election',
+  'set_budget_line',
+  'set_capital_share',
+  'present_budget',
 ]);
 
 /** Cap the journal so one request cannot ask for unbounded computation. */

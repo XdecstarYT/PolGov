@@ -33,6 +33,7 @@ import { buildDemography } from './systems/demography.ts';
 import { buildInfrastructure } from './systems/infrastructure.ts';
 import { buildServices } from './systems/services.ts';
 import { buildWorld } from './systems/diplomacy.ts';
+import { assignMinistries, buildBudget } from './systems/budgetProcess.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
 import { buildSenate } from './systems/parliament.ts';
 import { MMP_DISTRICT_SHARE } from './balance.ts';
@@ -250,6 +251,11 @@ export function createGame(options: NewGameOptions): GameState {
        because every government inherits both. */
     world: buildWorld(),
 
+    /* Somebody else's budget. Nobody arrives with a blank sheet; they arrive
+       with the last government's spending and a manifesto that contradicts
+       it. The portfolios are handed out once a coalition exists. */
+    budget: assignBudgetMinistries(buildBudget(sectors), parties),
+
     /* The debt is issued as a real book with staggered maturities, so the
        refinancing problem exists from turn one and was left by somebody
        else — which is the position a new government is actually in. */
@@ -332,4 +338,12 @@ export function createStandardGame(gameId = 'test-game'): GameState {
     playerGlyph: '★',
     playerIdeology: { economic: -0.1, social: 0.2, environmental: 0.2 },
   });
+}
+
+/** Hand the portfolios to whoever will be holding them. */
+function assignBudgetMinistries(
+  budget: ReturnType<typeof buildBudget>,
+  parties: readonly Party[],
+): ReturnType<typeof buildBudget> {
+  return { ...budget, ministries: assignMinistries(budget.ministries, parties) };
 }

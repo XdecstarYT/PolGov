@@ -123,6 +123,11 @@ import {
   RESERVE_CONTRIBUTION_PC_COST,
   DIPLOMACY_EFFECTS,
   DIPLOMACY_PC_COSTS,
+  BUDGET_DEFEAT_APPROVAL,
+  BUDGET_DEFEAT_MOOD,
+  BUDGET_DEFEAT_PC,
+  BUDGET_LINE_PC_COST,
+  BUDGET_PRESENT_PC_COST,
   MAINTENANCE_LEVEL_MAX,
   MAX_TREATIES,
   STATE_VISIT_APPROVAL,
@@ -131,8 +136,27 @@ import {
   PROJECT_PC_COST,
   REGIONAL_JOBS_WEIGHT,
   TAX_CHANGE_PC_COST,
+  TOTAL_SEATS,
 } from './balance.ts';
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
+import {
+  assignMinistries,
+  cabinetReaction,
+  divideOnBudget,
+  enactBudget,
+  enactedTotal,
+  findMinistry,
+  indexEntitlements,
+  isStatutory,
+  lapseBudget,
+  lineBounds,
+  lineFor,
+  ministryFor,
+  proposedTotal,
+  rejectBudget,
+  sectorsFromBudget,
+  serviceFunding,
+} from './systems/budgetProcess.ts';
 import {
   TREATY_LABELS,
   applyDiplomaticAct,
@@ -155,6 +179,7 @@ import {
   type InfrastructureKey,
 } from './systems/infrastructure.ts';
 import type { NationKey } from './content/nations.ts';
+import type { ServiceKey } from './content/services.ts';
 import {
   apportionSeats,
   isApportionmentDue,
@@ -244,6 +269,9 @@ export type Intent =
   | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
   | { type: 'propose_treaty'; nation: NationKey; kind: TreatyKind }
   | { type: 'withdraw_treaty'; treatyId: string }
+  | { type: 'set_budget_line'; service: ServiceKey; amount: number }
+  | { type: 'set_capital_share'; service: ServiceKey; share: number }
+  | { type: 'present_budget' }
   | { type: 'set_maintenance'; level: number }
   | { type: 'start_project'; asset: InfrastructureKey; units: number }
   | { type: 'cancel_project'; projectId: string }
@@ -315,6 +343,53 @@ function currentLog(state: GameState): LogEntry[] {
     state.logs.push(existing);
   }
   return existing.entries;
+}
+
+/**
+ * The weeks in which a budget can be written.
+ *
+ * A financial year is fifty-two weeks and the budget for the next one is
+ * argued over in the first thirteen. Outside that window the lines are
+ * fixed, because a government that could rewrite its spending in any week
+ * would never have to live with a decision.
+ */
+export function isBudgetSeason(turnNumber: number): boolean {
+  return ((turnNumber - 1) % TURNS_PER_YEAR) < BUDGET_TURN_INTERVAL;
+}
+
+/** The last week a budget can be put to the chamber before it rolls over. */
+export function budgetDeadline(turnNumber: number): number {
+  const yearStart = turnNumber - ((turnNumber - 1) % TURNS_PER_YEAR);
+  return yearStart + BUDGET_TURN_INTERVAL - 1;
+}
+
+/**
+ * Has the year turned over without a budget?
+ *
+ * True on exactly one turn: the first week after the deadline, when nothing
+ * was enacted during the season that just closed. Checking the enacted turn
+ * rather than the stage is what makes a government that simply never opened
+ * the document face the same consequence as one that lost the vote.
+ */
+/**
+ * Keep the five sector figures honest.
+ *
+ * The sectors are a summary of the twenty lines, not a separate account, and
+ * every other system reads them — the treasury prices spending off them and
+ * the electorate judges them. So whenever the lines move without a vote,
+ * which is what an entitlement does, the summary has to follow immediately.
+ * If it did not, a pension bill that rose by ₡15bn would cost the treasury
+ * nothing, which is the most expensive kind of nothing there is.
+ */
+function syncSectorsToBudget(state: GameState): void {
+  const summary = sectorsFromBudget(state.budget);
+  for (const sector of state.sectors) sector.funding = summary[sector.key];
+}
+
+function budgetHasLapsed(state: GameState): boolean {
+  const seasonEnd = budgetDeadline(state.turnNumber);
+  if (state.turnNumber !== seasonEnd + 1) return false;
+  return state.budget.enactedTurn <= seasonEnd - BUDGET_TURN_INTERVAL;
 }
 
 export function isBudgetTurn(turnNumber: number): boolean {
@@ -524,11 +599,63 @@ export function beginTurn(state: GameState): GameState {
     kind: 'political_capital',
     label: 'Political capital',
     delta: regen,
-    cause: `Monthly regeneration at ${Math.round(next.approval)}% approval`,
+    cause: `Weekly regeneration at ${Math.round(next.approval)}% approval`,
     unit: 'PC',
   });
 
   next.budgetUnlocked = false;
+
+  /*
+   * The financial year opens and the law presents its bill first. Pensions,
+   * welfare and disability are re-priced off the population before anybody
+   * writes a line, because they are a rate in law times a headcount rather
+   * than a decision. Whatever they have taken is no longer available.
+   */
+  if ((next.turnNumber - 1) % TURNS_PER_YEAR === 0) {
+    const indexed = indexEntitlements(next.budget, next.demography, next.economy);
+    next.budget = indexed.budget;
+    syncSectorsToBudget(next);
+    const moved = indexed.changes.reduce((sum, c) => sum + (c.to - c.from), 0);
+    if (Math.abs(moved) >= 0.5) {
+      log(entries, {
+        kind: 'note',
+        label: 'Entitlements re-priced',
+        delta: moved,
+        cause:
+          `${indexed.changes.map((c) => findService(c.service).name).join(', ')} ` +
+          `${moved > 0 ? 'rose' : 'fell'} by ₡${Math.abs(moved).toFixed(0)}bn because the number of ` +
+          'people entitled changed. Nobody voted for this and nobody can vote against it.',
+        unit: '₡bn',
+        informational: true,
+      });
+    }
+  }
+
+  /*
+   * The deadline falls. A government that has not put a budget to the
+   * chamber by the end of the first quarter does not get an extension: the
+   * state carries on at last year's cash figures while the demands on it
+   * grow, which is a cut nobody voted for and the worst way to make one.
+   */
+  if (budgetHasLapsed(next)) {
+    next.budget = lapseBudget(next.budget, next.turnNumber);
+    syncSectorsToBudget(next);
+    next.approval = clampApproval(next.approval + BUDGET_DEFEAT_APPROVAL);
+    for (const partner of coalitionPartners(next.parties)) {
+      partner.coalitionMood = clampMood((partner.coalitionMood ?? 50) + BUDGET_DEFEAT_MOOD);
+    }
+    log(entries, {
+      kind: 'legislature',
+      label: 'No budget for the year',
+      delta: BUDGET_DEFEAT_APPROVAL,
+      cause:
+        `The financial year opened with no appropriation. Departments carry on at ` +
+        `₡${enactedTotal(next.budget).toFixed(0)}bn, which is what they had last year and ` +
+        'less than they need this year. Nobody in the chamber had to vote for that.',
+      unit: 'pts',
+    });
+    if (next.budget.defeats >= 2) next.confidenceCrisis = true;
+  }
 
   /* Campaigning fades. A push in month nine is worth little by month twelve. */
   if (next.campaign) {
@@ -1114,7 +1241,14 @@ export function resolveTurn(state: GameState): GameState {
    * demanded by. Nobody sets demand: it is recomputed from the country every
    * month, and the budget that met it last year does not meet it this one.
    */
-  const servicesTick = stepServices(next.services, next.sectors, next.demography, next.economy);
+  const servicesTick = stepServices(
+    next.services,
+    next.sectors,
+    next.demography,
+    next.economy,
+    /* Straight off the budget's line items. The player set these one by one. */
+    serviceFunding(next.budget),
+  );
   next.services = servicesTick.services;
   for (const key of servicesTick.newlyStrained) {
     const template = findService(key);
@@ -1124,7 +1258,7 @@ export function resolveTurn(state: GameState): GameState {
       label: `${template.name} — under strain`,
       delta: 0,
       cause:
-        `Demand has grown to ₡${service.demand.toFixed(1)}bn a month against ` +
+        `Demand has grown to ₡${service.demand.toFixed(1)}bn a year against ` +
         `₡${service.funding.toFixed(1)}bn allocated. Nobody cut it; it is being asked for more.` +
         (service.waitMonths > 0
           ? ` People are waiting ${service.waitMonths.toFixed(1)} months.`
@@ -1424,7 +1558,16 @@ export function resolveTurn(state: GameState): GameState {
   const beforeApproval = next.approval;
   next.approval = driftApproval(next.approval, target.target);
   const approvalDelta = next.approval - beforeApproval;
-  if (Math.abs(approvalDelta) >= 0.05) {
+  /*
+   * Logged whenever it moves at all, with no threshold. Every other figure
+   * in the report suppresses movement too small to show, because a list of
+   * ±0.01 entries is not a report. Approval is the exception: it is the
+   * number the whole run is scored on, it is the only one every other system
+   * feeds into, and a week where it slid a fortieth of a point unexplained
+   * is exactly the week a player goes looking. The sum of the approval lines
+   * is the change in approval, always.
+   */
+  if (approvalDelta !== 0) {
     log(entries, {
       kind: 'approval',
       label: 'Approval',
@@ -1820,6 +1963,12 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleProposeTreaty(state, intent.nation, intent.kind);
     case 'withdraw_treaty':
       return handleWithdrawTreaty(state, intent.treatyId);
+    case 'set_budget_line':
+      return handleSetBudgetLine(state, intent.service, intent.amount);
+    case 'set_capital_share':
+      return handleSetCapitalShare(state, intent.service, intent.share);
+    case 'present_budget':
+      return handlePresentBudget(state);
     case 'set_maintenance':
       return handleSetMaintenance(state, intent.level);
     case 'start_project':
@@ -2478,6 +2627,200 @@ function handleWithdrawTreaty(state: GameState, treatyId: string): IntentResult 
       'party to the agreement, and it takes years to rebuild.',
     unit: 'pts',
   });
+  return ok(next);
+}
+
+/**
+ * Move a single line of the budget.
+ *
+ * Bounded, because nobody halves a department in a year: staff are on
+ * contracts, buildings are leased, and a minister told to find forty per
+ * cent resigns. A government that wants to change the shape of the state has
+ * to win twice.
+ */
+function handleSetBudgetLine(
+  state: GameState,
+  service: ServiceKey,
+  amount: number,
+): IntentResult {
+  if (!isBudgetSeason(state.turnNumber)) {
+    return reject(state, 'The budget is written in the first thirteen weeks of the year.');
+  }
+  if (state.budget.stage === 'presented') {
+    return reject(state, 'The budget is before the chamber. It cannot be rewritten now.');
+  }
+
+  const line = lineFor(state.budget, service);
+  const bounds = lineBounds(line);
+  if (!Number.isFinite(amount) || amount < 0) return reject(state, 'That is not a figure.');
+  if (isStatutory(service)) {
+    return reject(
+      state,
+      `${findService(service).name} is not an appropriation. It is a rate set in law paid to ` +
+        'everyone who qualifies, so the figure is a headcount. Change it with a bill, ' +
+        'not with a budget.',
+    );
+  }
+  if (amount < bounds.min - 1e-6) {
+    const ministry = ministryFor(service);
+    return reject(
+      state,
+      `${findService(service).name} cannot fall below ₡${bounds.min.toFixed(0)}bn in one year.` +
+        (line.committedYears > 0
+          ? ` ${ministry.name} has it contracted for another ${line.committedYears} years.`
+          : ' Staff are on contracts and buildings are leased.'),
+    );
+  }
+  if (amount > bounds.max + 1e-6) {
+    return reject(
+      state,
+      `${findService(service).name} cannot rise above ₡${bounds.max.toFixed(0)}bn in one year. ` +
+        'A department cannot absorb money faster than it can hire.',
+    );
+  }
+  if (state.politicalCapital < BUDGET_LINE_PC_COST) {
+    return reject(state, 'Not enough political capital to move a line.');
+  }
+
+  const next = clone(state);
+  spendPc(next, BUDGET_LINE_PC_COST);
+  next.budget = {
+    ...next.budget,
+    stage: 'drafting',
+    lines: next.budget.lines.map((l) =>
+      l.service === service ? { ...l, proposed: Math.round(amount * 10) / 10 } : l,
+    ),
+  };
+  return ok(next);
+}
+
+/**
+ * Shift a line between running costs and investment.
+ *
+ * Capital spending is the only line in the budget that leaves something
+ * behind. It is also the first thing cut, because what it leaves behind is
+ * not finished until somebody else is in office — and once committed it
+ * binds the next three budgets, which is how a government that wants to tie
+ * its successors' hands actually does it.
+ */
+function handleSetCapitalShare(
+  state: GameState,
+  service: ServiceKey,
+  share: number,
+): IntentResult {
+  if (!isBudgetSeason(state.turnNumber)) {
+    return reject(state, 'The budget is written in the first thirteen weeks of the year.');
+  }
+  if (!Number.isFinite(share) || share < 0 || share > 0.8) {
+    return reject(state, 'A line can be up to four-fifths capital, and no more.');
+  }
+  if (state.politicalCapital < BUDGET_LINE_PC_COST) {
+    return reject(state, 'Not enough political capital to move a line.');
+  }
+
+  const next = clone(state);
+  spendPc(next, BUDGET_LINE_PC_COST);
+  next.budget = {
+    ...next.budget,
+    stage: 'drafting',
+    lines: next.budget.lines.map((l) =>
+      l.service === service ? { ...l, capitalShare: Math.round(share * 100) / 100 } : l,
+    ),
+  };
+  return ok(next);
+}
+
+/**
+ * Put the budget to the chamber.
+ *
+ * The most important vote a government takes and the one it cannot avoid.
+ * Note what cannot be done here: there is no whipping. A budget is a
+ * confidence matter and everybody already knows how they are voting. What
+ * decides it is what was done to the departments in the weeks before, which
+ * is the entire point of writing it line by line.
+ */
+function handlePresentBudget(state: GameState): IntentResult {
+  if (!isBudgetSeason(state.turnNumber)) {
+    return reject(state, 'A budget is put to the chamber in the first quarter of the year.');
+  }
+  if (state.budget.stage === 'presented') {
+    return reject(state, 'It is already before the chamber.');
+  }
+  if (state.politicalCapital < BUDGET_PRESENT_PC_COST) {
+    return reject(state, 'Not enough political capital to take a budget to the floor.');
+  }
+
+  const next = clone(state);
+  spendPc(next, BUDGET_PRESENT_PC_COST);
+  const entries = currentLog(next);
+
+  /*
+   * The cabinet reacts to the document before the chamber divides on it,
+   * and the reaction is the same either way: a minister who has been cut is
+   * a minister who has been cut, whether or not the budget carries. This is
+   * where writing a line in somebody else's department comes back.
+   */
+  const reactions = cabinetReaction(next.budget, next.parties);
+  for (const reaction of reactions) {
+    if (!reaction.heldBy || Math.abs(reaction.mood) < 0.5) continue;
+    const party = next.parties.find((p) => p.id === reaction.heldBy);
+    if (!party || party.coalitionMood === null) continue;
+    party.coalitionMood = clampMood(party.coalitionMood + reaction.mood);
+  }
+
+  const loudest = [...reactions].sort((a, b) => a.change - b.change)[0];
+  if (loudest && loudest.change < -0.01) {
+    log(entries, {
+      kind: 'coalition',
+      label: 'The cabinet reads it',
+      delta: null,
+      cause: loudest.line,
+    });
+  }
+
+  const division = divideOnBudget(next.budget, next.parties, TOTAL_SEATS);
+  next.budget = { ...next.budget, division };
+
+  if (division.passed) {
+    next.budget = enactBudget(next.budget, next.turnNumber);
+    /* The five sector figures are a summary of the twenty lines now. */
+    const summary = sectorsFromBudget(next.budget);
+    for (const sector of next.sectors) sector.funding = summary[sector.key];
+
+    log(entries, {
+      kind: 'legislature',
+      label: `Budget for year ${next.budget.year} carried`,
+      delta: 0,
+      cause:
+        `${division.for} to ${division.against}. ` +
+        `₡${proposedTotal(next.budget).toFixed(0)}bn appropriated.` +
+        (division.rebels.length > 0
+          ? ` ${division.rebels.reduce((s, r) => s + r.seats, 0)} of the government's own seats voted against it.`
+          : ''),
+      unit: '',
+    });
+  } else {
+    next.budget = rejectBudget(next.budget);
+    next.approval = clampApproval(next.approval + BUDGET_DEFEAT_APPROVAL);
+    spendPc(next, Math.min(next.politicalCapital, BUDGET_DEFEAT_PC));
+    for (const partner of coalitionPartners(next.parties)) {
+      partner.coalitionMood = clampMood((partner.coalitionMood ?? 50) + BUDGET_DEFEAT_MOOD);
+    }
+
+    if (next.budget.defeats >= 2) next.confidenceCrisis = true;
+
+    log(entries, {
+      kind: 'legislature',
+      label: 'Budget defeated',
+      delta: BUDGET_DEFEAT_APPROVAL,
+      cause:
+        `${division.against} to ${division.for}. Last year's ₡${enactedTotal(next.budget).toFixed(0)}bn ` +
+        'rolls on, which after a year of inflation is a cut nobody voted for. A government that ' +
+        'cannot pass a budget is not having a difficult week.',
+      unit: 'pts',
+    });
+  }
+
   return ok(next);
 }
 
@@ -3914,6 +4257,7 @@ function handleFormGovernment(state: GameState): IntentResult {
 
   next.negotiation = null;
   next.phase = 'briefing';
+  handOutPortfolios(next, entries);
   return ok(beginTurn(next));
 }
 
@@ -3952,5 +4296,48 @@ function handleAbandonNegotiation(state: GameState): IntentResult {
     cause:
       'No coalition agreement was signed. The government will have to find its majority vote by vote.',
   });
+  handOutPortfolios(next, entries);
   return ok(beginTurn(next));
+}
+
+/**
+ * Hand out the departments.
+ *
+ * The cabinet posts conceded at the negotiating table stop being a number
+ * here and become eight named departments with budgets attached. A partner
+ * who extracted three posts now runs three ministries, and every line the
+ * player writes next spring is a line in somebody else's department.
+ */
+function handOutPortfolios(state: GameState, entries: LogEntry[]): void {
+  state.budget = {
+    ...state.budget,
+    ministries: assignMinistries(state.budget.ministries, state.parties),
+  };
+
+  const byParty = new Map<string, string[]>();
+  for (const ministry of state.budget.ministries) {
+    if (!ministry.heldBy) continue;
+    const list = byParty.get(ministry.heldBy) ?? [];
+    list.push(findMinistry(ministry.key).title);
+    byParty.set(ministry.heldBy, list);
+  }
+  if (byParty.size === 0) return;
+
+  const shares = [...byParty.entries()].map(([partyId, titles]) => {
+    const party = state.parties.find((p) => p.id === partyId);
+    return `${party?.shortName ?? 'A partner'} takes ${formatList(titles)}`;
+  });
+
+  log(entries, {
+    kind: 'coalition',
+    label: 'Cabinet formed',
+    delta: null,
+    cause: `${shares.join('; ')}. Every remaining department answers to you.`,
+  });
+}
+
+/** "a, b and c" — because a list of departments reads as a sentence. */
+function formatList(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }

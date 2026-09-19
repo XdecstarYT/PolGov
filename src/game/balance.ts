@@ -1431,3 +1431,73 @@ export const PACT_MINIMUM_RELATIONS = -25;
 
 /** Months of world history kept. */
 export const WORLD_HISTORY_LIMIT = 120;
+
+/* ------------------------------------------------------------------ *
+ * The budget engine
+ *
+ * A budget is the most important vote a government takes. Everything
+ * else it does is optional; this is the one it cannot avoid, cannot
+ * delay past the year, and cannot lose without the whole thing coming
+ * down. The mechanics below exist to make losing it possible.
+ * ------------------------------------------------------------------ */
+
+/** Political capital to move a single line, however far. */
+export const BUDGET_LINE_PC_COST = 2;
+/** Political capital to put the finished budget to the chamber. */
+export const BUDGET_PRESENT_PC_COST = 14;
+
+/**
+ * How far a line can move in one budget, as a share of what it was.
+ *
+ * Nobody halves a department in a year. Staff are on contracts, buildings
+ * are leased, and a minister who is told to find forty per cent resigns.
+ * A budget is a series of small movements repeated over years, which is
+ * why a government that wants to change the shape of the state has to win
+ * twice.
+ */
+export const BUDGET_MAX_CUT = 0.25;
+export const BUDGET_MAX_RISE = 0.4;
+
+/** Coalition mood lost per percentage point cut from a partner's ministry. */
+export const MINISTRY_CUT_MOOD = 0.55;
+/** Mood gained per point ADDED, which is worth much less. Gratitude is cheap. */
+export const MINISTRY_RISE_MOOD = 0.18;
+
+/**
+ * How much a minister's own party backs the budget in the division.
+ *
+ * A partner whose ministry was cut hard votes for the budget anyway — they
+ * are in the government — but their backbenchers do not, and that is where
+ * budgets are actually lost.
+ */
+export const MINISTRY_REBELLION_PER_POINT = 0.011;
+
+/** Approval cost of losing a budget vote. A government that cannot pass one. */
+export const BUDGET_DEFEAT_APPROVAL = -9;
+/** Political capital cost of having to come back with another one. */
+export const BUDGET_DEFEAT_PC = 20;
+/** Coalition mood cost across every partner when the budget falls. */
+export const BUDGET_DEFEAT_MOOD = -12;
+
+/**
+ * Years a capital commitment binds the budget for.
+ *
+ * Capital spending is contracted. A successor who wants the money back has
+ * to break a contract, which costs more than the money — this is why so
+ * much of any government's budget was decided by somebody else.
+ */
+export const CAPITAL_COMMITMENT_YEARS = 3;
+
+/** Share of a capital line that reaches infrastructure condition, per year. */
+export const CAPITAL_TO_CONDITION = 0.035;
+
+/**
+ * The share of the budget nobody votes on.
+ *
+ * Pensions, debt service and standing legal entitlements are paid whether
+ * or not a budget passes, because they are statute rather than
+ * appropriation. It is the single most important fact about public
+ * finance and almost no game says it: most of the budget is not a
+ * decision, and the argument is always about the remaining fifth.
+ */
+export const STATUTORY_SERVICES = ['pensions', 'welfare', 'disability'] as const;

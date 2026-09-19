@@ -129,7 +129,7 @@ describe('intent validation', () => {
      * you are reading it: check the new intent validates its own inputs and
      * rejects the phases it does not belong in, then update the number.
      */
-    expect(ALLOWED_INTENT_TYPES.size).toBe(54);
+    expect(ALLOWED_INTENT_TYPES.size).toBe(57);
   });
 });
 
@@ -141,8 +141,14 @@ describe('the client cannot set its own approval', () => {
    * rules allow.
    */
   it('offers no intent that assigns a resource directly', () => {
+    /*
+     * Anchored at both ends, because the resources are exactly these five
+     * names. `set_capital_share` is not one of them: it moves a budget line
+     * between running costs and investment, which is a field of a document
+     * the chamber then votes on, not a number the client hands itself.
+     */
     for (const type of ALLOWED_INTENT_TYPES) {
-      expect(type).not.toMatch(/^set_(approval|capital|treasury|debt|seats)/);
+      expect(type).not.toMatch(/^set_(approval|capital|treasury|debt|seats)$/);
     }
   });
 
