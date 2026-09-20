@@ -167,6 +167,43 @@ describe('elections change the balance of power', () => {
     }
   });
 
+  it('ends the run cleanly when the country turns the player out', () => {
+    /*
+     * The whole path, because each step of it looked fine on its own and
+     * a sweep showed runs sitting at zero seats and still "active" — the
+     * harness had simply stopped at election night. Worth asserting end to
+     * end so that if it ever DOES stall there, something says so.
+     */
+    const base = createStandardGame('turned-out');
+    const ruined: GameState = {
+      ...base,
+      approval: 4,
+      debt: 20000,
+      sectors: base.sectors.map((sector) => ({ ...sector, health: 18 })),
+      economy: {
+        ...base.economy,
+        growth: -4,
+        unemployment: 15,
+        inflation: 12,
+        phase: 'recession',
+      },
+    };
+
+    let state = runElection(ruined);
+    expect(state.phase).toBe('election_night');
+    expect(state.status).toBe('active');
+
+    state = applyIntent(state, { type: 'acknowledge_election' }).state;
+    expect(state.phase).toBe('coalition');
+
+    /* No majority to be had and not the largest party: the country has
+       invited somebody else, and the run is over. */
+    const after = applyIntent(state, { type: 'negotiation_abandon' });
+    expect(after.error).toBeUndefined();
+    expect(after.state.status).toBe('defeated');
+    expect(after.state.phase).toBe('career_summary');
+  });
+
   it('rewards a record as steeply as it punishes one', () => {
     /*
      * The other end, because a game that only punishes is not a loop. The
