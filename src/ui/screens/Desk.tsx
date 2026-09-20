@@ -49,7 +49,7 @@ const PHASE_ORDER: { phase: Phase; label: string; player: boolean }[] = [
 ];
 
 export function Desk() {
-  const { game, theme, toggleTheme, quitToTitle } = useGame();
+  const { game, theme, toggleTheme, quitToTitle, exportGame, setScreen } = useGame();
   if (!game) return null;
 
   const player = playerParty(game.parties);
@@ -109,6 +109,20 @@ export function Desk() {
             <div className="flex shrink-0 items-center gap-1.5">
               <Button variant="quiet" onClick={toggleTheme} title="Switch between light and dark">
                 {theme === 'dark' ? 'Light' : 'Dark'}
+              </Button>
+              <Button
+                variant="quiet"
+                onClick={() => setScreen('how-to-play')}
+                title="What the phases are, what capital is for, and how a run ends"
+              >
+                Help
+              </Button>
+              <Button
+                variant="quiet"
+                onClick={() => void exportGame()}
+                title="Write this run out as a file you can keep"
+              >
+                Export
               </Button>
               <Button variant="quiet" onClick={() => void quitToTitle()}>
                 Save &amp; exit

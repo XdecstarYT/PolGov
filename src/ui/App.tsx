@@ -9,6 +9,7 @@
 import { useEffect } from 'react';
 import { useGame } from '../state/store.ts';
 import { Title } from './screens/Title.tsx';
+import { HowToPlay } from './screens/HowToPlay.tsx';
 import { PartySetup } from './screens/PartySetup.tsx';
 import { Desk } from './screens/Desk.tsx';
 import { CoalitionRoom } from './screens/CoalitionRoom.tsx';
@@ -57,6 +58,7 @@ export function App() {
       )}
 
       {screen === 'title' && <Title />}
+      {screen === 'how-to-play' && <HowToPlay />}
       {screen === 'setup' && <PartySetup />}
       {screen === 'game' && game && <GameScreen />}
     </>

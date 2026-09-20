@@ -27,9 +27,10 @@ import {
   type CountryKey,
 } from '../game/index.ts';
 import { localStore, resolveStore, type GameStore, type GameSummary } from '../services/storage.ts';
+import { downloadRun, readRun } from '../services/transfer.ts';
 import { isCloudConfigured, supabase } from '../services/supabase.ts';
 
-export type Screen = 'title' | 'setup' | 'game';
+export type Screen = 'title' | 'how-to-play' | 'setup' | 'game';
 
 export interface NewGameForm {
   partyName: string;
@@ -79,6 +80,10 @@ interface AppState {
   startGame: (form: NewGameForm) => Promise<void>;
   openGame: (id: string) => Promise<void>;
   deleteGame: (id: string) => Promise<void>;
+  /** Hand the run in play, or a named save, back to the player as a file. */
+  exportGame: (id?: string) => Promise<void>;
+  /** Read a run back in from a file and put it in the save list. */
+  importGame: (text: string) => Promise<void>;
   quitToTitle: () => Promise<void>;
 
   dispatch: (intent: Intent) => Promise<void>;
@@ -236,6 +241,61 @@ export const useGame = create<AppState>((set, get) => ({
       set({
         busy: false,
         error: error instanceof Error ? error.message : 'Could not open that run.',
+      });
+    }
+  },
+
+  /**
+   * Write a run out.
+   *
+   * The run in play if there is one, otherwise a named save loaded for the
+   * purpose. Never throws into the interface: a browser that refuses the
+   * download says so in the error line and leaves the run where it was.
+   */
+  async exportGame(id) {
+    try {
+      const { game, store: existing } = get();
+      const store = existing ?? (await resolveStore());
+      const target = id ? await store.load(id) : game;
+      if (!target) throw new Error('There is no run to export.');
+      if (!downloadRun(target)) {
+        throw new Error('This browser would not save the file.');
+      }
+      set({ announcement: `Exported ${target.countryName}, term ${target.termNumber}.` });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Could not export that run.' });
+    }
+  },
+
+  /**
+   * Read a run back in.
+   *
+   * Through `migrateState`, exactly as a stored save is, so a run exported
+   * from an older build opens here. A run already on this device is given
+   * a fresh id rather than overwriting the one being played, because
+   * nobody expects a restore to destroy the thing it was restoring.
+   */
+  async importGame(text) {
+    set({ busy: true, error: null });
+    try {
+      const store = get().store ?? (await resolveStore());
+      const saves = await store.list();
+      const result = readRun(text, saves.map((s) => s.id));
+      if (!result.ok) throw new Error(result.reason);
+
+      await store.save(result.state);
+      set({
+        store,
+        saves: await store.list(),
+        busy: false,
+        announcement: result.renamed
+          ? 'Imported as a second copy: a run with that id is already here.'
+          : `Imported ${result.state.countryName}, term ${result.state.termNumber}.`,
+      });
+    } catch (error) {
+      set({
+        busy: false,
+        error: error instanceof Error ? error.message : 'Could not read that file.',
       });
     }
   },

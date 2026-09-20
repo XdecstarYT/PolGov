@@ -13,8 +13,19 @@ import { DIFFICULTY } from '../../game/index.ts';
 import type { Difficulty } from '../../game/index.ts';
 
 export function Title() {
-  const { saves, store, userEmail, setScreen, openGame, deleteGame, signIn, signOut, busy } =
-    useGame();
+  const {
+    saves,
+    store,
+    userEmail,
+    setScreen,
+    openGame,
+    deleteGame,
+    exportGame,
+    importGame,
+    signIn,
+    signOut,
+    busy,
+  } = useGame();
   const [email, setEmail] = useState('');
   const [showAuth, setShowAuth] = useState(false);
 
@@ -49,9 +60,12 @@ export function Title() {
               politics; the budget takes a year, a procurement programme takes a decade, and the
               population takes longer than anybody is in office.
             </p>
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap gap-2">
               <Button variant="primary" onClick={() => setScreen('setup')}>
                 Found a party
+              </Button>
+              <Button onClick={() => setScreen('how-to-play')}>
+                {saves.length > 0 ? 'How to play' : 'How to play — read this first'}
               </Button>
             </div>
 
@@ -92,6 +106,13 @@ export function Title() {
                     <Button onClick={() => openGame(save.id)}>Resume</Button>
                     <Button
                       variant="quiet"
+                      onClick={() => void exportGame(save.id)}
+                      title={`Save the ${save.partyName} run to a file`}
+                    >
+                      Export
+                    </Button>
+                    <Button
+                      variant="quiet"
                       onClick={() => deleteGame(save.id)}
                       title={`Delete the ${save.partyName} run`}
                     >
@@ -121,6 +142,32 @@ export function Title() {
                 </>
               )}
             </p>
+
+            <div className="mt-4 border-t border-rule pt-4">
+              <p className="text-xs leading-relaxed text-ink-faint">
+                Either way, a run can be written out as a file and read back — on another
+                machine, into another browser, or years later. The file is the whole run, and
+                one exported from an older build opens here.
+              </p>
+              <label
+                className="mt-2.5 inline-block cursor-pointer border border-rule px-2.5 py-1.5 text-sm text-ink hover:border-ink"
+                htmlFor="import-run"
+              >
+                Import a run from a file
+              </label>
+              <input
+                id="import-run"
+                type="file"
+                accept="application/json,.json"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!file) return;
+                  void file.text().then((text) => importGame(text));
+                }}
+              />
+            </div>
 
             {isCloudConfigured && (
               <div className="mt-4">
