@@ -1975,3 +1975,83 @@ export const DRAFT_BILL_LIMIT = 3;
  * puts the ceiling on the whole cast's memory at about thirty kilobytes.
  */
 export const REMARK_LIMIT = 400;
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Society, class and the cost of living
+ * ------------------------------------------------------------------ */
+
+/**
+ * The poverty line, as a share of median disposable income.
+ *
+ * Sixty per cent is the figure used by most statistical offices and it has
+ * the property that matters here: it is relative, so it does not fall
+ * because the whole country got poorer at once.
+ */
+export const POVERTY_LINE_SHARE = 0.6;
+
+/** How fast income shares respond to the cycle and the tax code. Slow. */
+export const INCOME_SHARE_DRIFT = 0.006;
+
+/**
+ * How fast wealth shares respond to asset prices.
+ *
+ * Faster than income, because a change in the discount rate reprices every
+ * holding in the country at once while a wage settlement takes a year to
+ * negotiate. This asymmetry is why inequality in wealth can move a great
+ * deal inside one term and inequality in income cannot.
+ */
+export const WEALTH_SHARE_DRIFT = 0.012;
+
+/** How fast a household's disposable income converges on what it should be. */
+export const DISPOSABLE_ADJUST_RATE = 0.22;
+
+/** How fast saving responds to a squeeze. Quickly — it is the shock absorber. */
+export const SAVINGS_ADJUST_RATE = 0.06;
+
+/** How hard a housing shortage pushes on what housing costs. */
+export const HOUSING_SHORTAGE_WEIGHT = 0.55;
+
+/** Housing cannot take less than this share of a typical income, %. */
+export const HOUSING_BURDEN_FLOOR = 12;
+
+/** Nor more than this, %. Beyond it households leave rather than pay. */
+export const HOUSING_BURDEN_CEILING = 58;
+
+/** How much housing costs feed the headline cost-of-living index. */
+export const COST_OF_LIVING_HOUSING_WEIGHT = 0.62;
+
+/** And how much energy does. */
+export const COST_OF_LIVING_ENERGY_WEIGHT = 0.18;
+
+/** How fast ownership gives way to renting under price pressure. */
+export const TENURE_DRIFT = 0.006;
+
+/** The share of bottom-band households reaching the top two, at the start. */
+export const MOBILITY_START = 26;
+
+/** What a point of school quality is worth to that number. */
+export const MOBILITY_EDUCATION_WEIGHT = 0.22;
+
+/** And a point of housing quality. */
+export const MOBILITY_HOUSING_WEIGHT = 0.1;
+
+/**
+ * And what concentrated wealth takes off it.
+ *
+ * The largest of the three, because past a certain gap no wage closes it:
+ * the thing being competed for is a deposit, and deposits are priced off
+ * the stock of wealth rather than the flow of income.
+ */
+export const MOBILITY_WEALTH_WEIGHT = 0.55;
+
+/** How fast what housing costs converges on what the shortage implies. */
+export const HOUSING_ADJUST_RATE = 0.004;
+
+/**
+ * How far behind the country a band must be falling to count as squeezed.
+ *
+ * Points of disposable income against the national change. A shock that
+ * lowers every household equally squeezes nobody in particular, and a
+ * report that named all five bands every time would be noise.
+ */
+export const SQUEEZE_GAP = 1.5;

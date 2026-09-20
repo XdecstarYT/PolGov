@@ -1571,6 +1571,15 @@ export interface GameState {
   /** The people: how many, how old, where, and how many of them work. */
   demography: Demography;
 
+  /**
+   * Who the country's money belongs to, and what it buys them.
+   *
+   * The join between the budget and the electorate: every decision about a
+   * tax rate or a service is a decision about particular households, and
+   * this is where that lands before it reaches the polling.
+   */
+  society: Society;
+
   /** What the country is built out of, and what is being built. */
   infrastructure: Infrastructure;
 
@@ -1688,4 +1697,90 @@ export interface GameState {
 export interface ApprovalPoint {
   turn: number;
   approval: number;
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Society
+ * ------------------------------------------------------------------ */
+
+/** One band of the distribution, as households rather than as a statistic. */
+export interface ClassBand {
+  key: import('./content/classes.ts').ClassKey;
+  /** Share of households in the band, 0–1. Fixed; people move between bands
+      only over generations, which is what social mobility measures. */
+  households: number;
+  /** Share of national income, 0–1. */
+  incomeShare: number;
+  /** Share of national net worth, 0–1. */
+  wealthShare: number;
+  /** Owned outright, mortgaged, renting. Sums to 1. */
+  tenure: { owned: number; mortgaged: number; renting: number };
+  /** Household debt as a multiple of annual income. */
+  debtToIncome: number;
+  /** Share of income saved, %. Negative is running savings down. */
+  savingsRate: number;
+  /**
+   * Income after tax, housing and energy, indexed to 100 at the start of
+   * the run. The number a household actually experiences, and the one that
+   * can fall while gross income rises.
+   */
+  disposableIndex: number;
+}
+
+export interface SocietyPoint {
+  turn: number;
+  incomeGini: number;
+  wealthGini: number;
+  povertyRate: number;
+  costOfLiving: number;
+  lowerDisposable: number;
+  medianDisposable: number;
+}
+
+export interface Society {
+  bands: ClassBand[];
+  /**
+   * How concentrated this country's distribution is, relative to the
+   * engine's reference country. Carried on the state because every target
+   * in the weekly step is measured against where THIS country started —
+   * otherwise an unequal country would spend a run being pulled toward an
+   * average it has never been at.
+   */
+  inequality: number;
+  /** Households with net worth above the top threshold, per thousand. */
+  highNetWorthPerThousand: number;
+  incomeGini: number;
+  wealthGini: number;
+  /** Below 60% of median disposable income, %. */
+  povertyRate: number;
+  /** Chance a household from the bottom band reaches the top two, %. */
+  socialMobility: number;
+  /** Share of net worth that was inherited rather than earned, %. */
+  inheritedWealthShare: number;
+  /** Indexed to 100 at the start of the run. */
+  costOfLiving: number;
+  /**
+   * The general price level alone, indexed to 100.
+   *
+   * Kept apart from `costOfLiving` because the two are different kinds of
+   * thing: this compounds, because inflation is a rate, while housing and
+   * energy shift the level and then hold it there.
+   */
+  basePrices: number;
+  /**
+   * Real output per household, indexed to 100 at the start.
+   *
+   * The only thing that makes a country better off in aggregate, and the
+   * base each band's disposable income is measured against — so a band can
+   * lose ground while this rises, which is the distinction the whole
+   * distribution exists to make.
+   */
+  realIncomeIndex: number;
+  /** What housing takes from a typical household, % of income. */
+  housingCostBurden: number;
+  /** Household debt as a share of annual output, %. */
+  householdDebt: number;
+  /** Household saving, % of disposable income. */
+  householdSavings: number;
+  history: SocietyPoint[];
 }

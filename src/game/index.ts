@@ -50,6 +50,8 @@ export * from './systems/organisations.ts';
 export * from './content/organisations.ts';
 export * from './systems/trade.ts';
 export * from './systems/military.ts';
+export * from './systems/society.ts';
+export * from './content/classes.ts';
 export * from './systems/conflict.ts';
 export * from './content/forces.ts';
 export * from './systems/intelligence.ts';

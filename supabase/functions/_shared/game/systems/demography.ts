@@ -129,6 +129,18 @@ export function dependencyRatio(demography: Demography): number {
     : Infinity;
 }
 
+/**
+ * Annual growth in the population, %.
+ *
+ * Output per head is output minus this, which is the only reason it is
+ * worth computing separately: a country can grow its economy by three per
+ * cent and leave every household in it exactly where it was.
+ */
+export function populationGrowth(previous: Demography, current: Demography): number {
+  if (previous.population <= 0) return 0;
+  return ((current.population - previous.population) / previous.population) * 100 * TURNS_PER_YEAR;
+}
+
 /** Annual growth in the labour force, %. What the economy's speed limit reads. */
 export function workforceGrowth(previous: Demography, current: Demography): number {
   if (previous.workforce <= 0) return 0;

@@ -20,6 +20,7 @@
 import { createStandardGame } from './setup.ts';
 import { buildIntelligence } from './systems/intelligence.ts';
 import { buildMilitary } from './systems/military.ts';
+import { buildSociety } from './systems/society.ts';
 import { buildTrade } from './systems/trade.ts';
 import { buildPairs } from './systems/worldSim.ts';
 import { buildOrganisations } from './systems/organisations.ts';
@@ -54,6 +55,12 @@ export function migrateState(raw: unknown): GameState | null {
    * scales. It was the invented one, at the scale the engine is calibrated
    * at, which is exactly what these defaults say.
    */
+  /* A save written before the distribution existed was a country sitting
+     at the opening one, which is exactly what buildSociety describes. */
+  if (!next.society) next.society = buildSociety();
+  if (typeof next.society.inequality !== 'number' || !(next.society.inequality > 0)) {
+    next.society.inequality = 1;
+  }
   if (!next.country) next.country = 'verdana';
   if (typeof next.moneyScale !== 'number' || !(next.moneyScale > 0)) next.moneyScale = 1;
   if (typeof next.peopleScale !== 'number' || !(next.peopleScale > 0)) next.peopleScale = 1;

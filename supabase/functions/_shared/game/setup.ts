@@ -35,6 +35,7 @@ import { buildServices } from './systems/services.ts';
 import { buildWorld } from './systems/diplomacy.ts';
 import { buildTrade } from './systems/trade.ts';
 import { buildMilitary } from './systems/military.ts';
+import { buildSociety } from './systems/society.ts';
 import { buildIntelligence } from './systems/intelligence.ts';
 import { assignMinistries, buildBudget } from './systems/budgetProcess.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
@@ -383,6 +384,10 @@ export function createGame(options: NewGameOptions): GameState {
 
     /* Everything at capacity, nothing quite new, and no backlog yet. The
        trap only reads as one if the player is the one who walks into it. */
+    /* The distribution the government inherited. Nobody in the run chose
+       it, and it is what every budget decision is measured against. */
+    society: buildSociety(politics.inequality),
+
     infrastructure: buildInfrastructure(peopleScale),
 
     /* Every service funded to exactly the demand the country is making of

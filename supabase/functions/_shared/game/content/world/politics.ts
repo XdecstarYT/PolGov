@@ -304,6 +304,18 @@ export interface PoliticsProfile {
    * the second is about whether a coalition can exist at all.
    */
   polarisation: number;
+  /**
+   * How concentrated income and net worth are, relative to the engine's
+   * reference country. One is the reference; above one is more unequal.
+   *
+   * Real states differ here more than they differ on almost anything else,
+   * and a game in which every country opened with the same distribution
+   * would be throwing away the most consequential fact about several of
+   * them. The figures are ordinary rankings — which countries sit above
+   * and below which — rather than any claim about why, and nothing in the
+   * engine treats a higher or lower number as better.
+   */
+  inequality: number;
   /** Which families have a real presence, largest first, with their weight. */
   families: { family: PartyFamily; weight: number }[];
   regions: RegionProfile[];
@@ -321,6 +333,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'fptp',
     centre: lean(0.05, 0.05, 0.05),
     polarisation: 0.9,
+    inequality: 1.12,
     families: [
       { family: 'social_democratic', weight: 1.25 },
       { family: 'conservative', weight: 1.2 },
@@ -350,6 +363,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'mixed_member',
     centre: lean(-0.05, 0.1, 0.25),
     polarisation: 0.85,
+    inequality: 0.94,
     families: [
       { family: 'christian_democratic', weight: 1.15 },
       { family: 'social_democratic', weight: 1.0 },
@@ -378,6 +392,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'two_round',
     centre: lean(-0.1, 0.05, 0.15),
     polarisation: 1.15,
+    inequality: 0.92,
     families: [
       { family: 'centrist', weight: 1.0 },
       { family: 'nationalist', weight: 1.0 },
@@ -407,6 +422,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'mixed_member',
     centre: lean(0, -0.05, 0.1),
     polarisation: 1.1,
+    inequality: 1.02,
     families: [
       { family: 'conservative', weight: 1.0 },
       { family: 'social_democratic', weight: 0.95 },
@@ -436,6 +452,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'proportional',
     centre: lean(-0.1, 0.15, 0.15),
     polarisation: 1.05,
+    inequality: 1.05,
     families: [
       { family: 'social_democratic', weight: 1.15 },
       { family: 'conservative', weight: 1.1 },
@@ -464,6 +481,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'proportional',
     centre: lean(0.05, 0.25, 0.2),
     polarisation: 1.0,
+    inequality: 0.9,
     families: [
       { family: 'liberal', weight: 0.9 },
       { family: 'nationalist', weight: 0.85 },
@@ -492,6 +510,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'proportional',
     centre: lean(-0.2, 0.35, 0.4),
     polarisation: 0.85,
+    inequality: 0.82,
     families: [
       { family: 'social_democratic', weight: 1.3 },
       { family: 'nationalist', weight: 0.85 },
@@ -520,6 +539,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'preferential',
     centre: lean(0, 0.25, 0.2),
     polarisation: 0.8,
+    inequality: 1.0,
     families: [
       { family: 'centrist', weight: 1.0 },
       { family: 'conservative', weight: 0.9 },
@@ -546,6 +566,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'proportional',
     centre: lean(0.05, -0.2, -0.05),
     polarisation: 1.2,
+    inequality: 0.95,
     families: [
       { family: 'conservative', weight: 1.2 },
       { family: 'liberal', weight: 1.1 },
@@ -574,6 +595,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'fptp',
     centre: lean(-0.05, 0.3, 0.2),
     polarisation: 0.85,
+    inequality: 1.02,
     families: [
       { family: 'centrist', weight: 1.2 },
       { family: 'conservative', weight: 1.15 },
@@ -600,6 +622,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'preferential',
     centre: lean(0.1, 0.15, 0.05),
     polarisation: 0.85,
+    inequality: 1.04,
     families: [
       { family: 'social_democratic', weight: 1.2 },
       { family: 'conservative', weight: 1.15 },
@@ -625,6 +648,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'mixed_member',
     centre: lean(-0.05, 0.3, 0.25),
     polarisation: 0.8,
+    inequality: 1.03,
     families: [
       { family: 'social_democratic', weight: 1.1 },
       { family: 'conservative', weight: 1.15 },
@@ -651,6 +675,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'mixed_member',
     centre: lean(0.15, -0.15, 0.1),
     polarisation: 0.7,
+    inequality: 0.96,
     families: [
       { family: 'conservative', weight: 1.6 },
       { family: 'centrist', weight: 0.75 },
@@ -678,6 +703,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'fptp',
     centre: lean(0, -0.2, 0),
     polarisation: 1.1,
+    inequality: 1.22,
     families: [
       { family: 'nationalist', weight: 1.5 },
       { family: 'centrist', weight: 1.0 },
@@ -706,6 +732,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'proportional',
     centre: lean(-0.3, 0.2, 0.1),
     polarisation: 1.15,
+    inequality: 1.55,
     families: [
       { family: 'social_democratic', weight: 1.4 },
       { family: 'liberal', weight: 0.9 },
@@ -732,6 +759,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'proportional',
     centre: lean(0.1, -0.1, 0),
     polarisation: 1.25,
+    inequality: 1.14,
     families: [
       { family: 'conservative', weight: 1.1 },
       { family: 'nationalist', weight: 0.9 },
@@ -759,6 +787,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     electoralSystem: 'proportional',
     centre: lean(0, 0.1, 0.1),
     polarisation: 1.0,
+    inequality: 1.0,
     families: [
       { family: 'centrist', weight: 1.0 },
       { family: 'social_democratic', weight: 1.0 },

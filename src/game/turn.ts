@@ -173,6 +173,8 @@ import {
   REMARK_LIMIT,
 } from './balance.ts';
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
+import { stepSociety } from './systems/society.ts';
+import { findClass } from './content/classes.ts';
 import { duesTotal } from './systems/organisations.ts';
 import { readDraft, type RawDraft } from './systems/drafting.ts';
 import { findPersona, remember, stepCast } from './systems/personas.ts';
@@ -277,6 +279,7 @@ import {
   canStartProject,
   commission,
   findInfrastructure,
+  utilisation,
   industryEffects,
   infrastructureSpend,
   sectorEffects,
@@ -291,6 +294,7 @@ import {
   apportionSeats,
   isApportionmentDue,
   skillsDrag,
+  populationGrowth,
   stepDemography,
   workforceGrowth,
 } from './systems/demography.ts';
@@ -1666,6 +1670,72 @@ export function resolveTurn(state: GameState): GameState {
     costScaleOf(next),
   );
   next.services = servicesTick.services;
+
+  /*
+   * And what all of that did to households.
+   *
+   * The distribution is stepped here, after the services and before the
+   * macroeconomy reads the week, because everything it needs has just been
+   * settled: what the budget funded, what housing is short by, what the
+   * energy industry is charging. It is the join between the budget screen
+   * and the polling — the point at which "a two-point rise in the sales
+   * tax" stops being a number and becomes a household with less to spend.
+   */
+  {
+    const housingAsset = next.infrastructure.assets.find((a) => a.key === 'housing');
+    const energy = next.industries.find((i) => i.key === 'energy');
+    const transfers =
+      next.services
+        .filter((x) => x.key === 'pensions' || x.key === 'welfare')
+        .reduce((sum, x) => sum + x.funding, 0) / Math.max(1, next.economy.gdp);
+
+    const societyTick = stepSociety(next.society, {
+      economy: next.economy,
+      taxes: next.taxes,
+      /* Demand against capacity. A country that stopped building houses
+         twenty years ago is where a housing crisis actually comes from. */
+      housingPressure: housingAsset
+        ? Math.max(0.6, Math.min(2.2, utilisation(housingAsset, next.demography.population)))
+        : 1,
+      educationQuality: findSector(next.sectors, 'education').health,
+      housingQuality: next.services.find((x) => x.key === 'housing_assistance')?.quality ?? 60,
+      /* An industry in trouble charges more for the thing it sells, and
+         this is the one whose price every household pays. */
+      energyPrices: energy ? Math.max(0.7, Math.min(2.4, 1 + (70 - energy.health) / 90)) : 1,
+      transferShare: transfers * 100,
+      populationGrowth: populationGrowth(demographyBefore, next.demography),
+      turn: absoluteWeek(next),
+    });
+    next.society = societyTick.society;
+
+    for (const key of societyTick.squeezed) {
+      const band = next.society.bands.find((b) => b.key === key)!;
+      log(entries, {
+        kind: 'sector',
+        label: `${findClass(key).label} — falling behind`,
+        delta: band.disposableIndex - 100,
+        cause:
+          `What this band has left after tax, housing and energy is ` +
+          `${band.disposableIndex.toFixed(0)} against 100 when you took office, and it is ` +
+          `falling faster than the country. Nobody legislated for this; it is what the ` +
+          `prices did to a household that spends ` +
+          `${Math.round(findClass(key).essentialsShare * 100)}% of its money on essentials.`,
+        unit: 'idx',
+      });
+    }
+    if (societyTick.povertyAlarm) {
+      log(entries, {
+        kind: 'sector',
+        label: 'A fifth of the country below the line',
+        delta: next.society.povertyRate,
+        cause:
+          'Relative poverty has passed twenty per cent. It is measured against the middle ' +
+          'rather than against a basket, so it did not rise because prices rose — it rose ' +
+          'because the bottom fell further behind the median than it was.',
+        unit: '%',
+      });
+    }
+  }
   for (const key of servicesTick.newlyStrained) {
     const template = findService(key);
     const service = next.services.find((s) => s.key === key)!;
