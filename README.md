@@ -39,7 +39,7 @@ prose for every piece of narrative text.
 npm run build     # production build into dist/
 npm run preview   # serve the production build
 npm test          # 910 unit tests over the game math
-npm run verify    # typecheck + tests + build + secret audit
+npm run verify    # typecheck + tests + build + secret audit + engine mirror
 ```
 
 And two checks that need the built site being served (`npm run preview` in
@@ -99,7 +99,9 @@ supabase functions deploy resolve-turn
 `npm run sync:engine` must run first. It copies `src/game` verbatim into
 `supabase/functions/_shared/game` so the server runs **the same rules** as the
 client rather than a second implementation that can drift. Never edit the copy
-— it is destroyed on every sync.
+— it is destroyed on every sync. `npm run check:engine` fails if the copy is
+out of date, and `npm run verify` and CI both run it, so the two cannot
+silently diverge.
 
 ### 4. The Groq key
 

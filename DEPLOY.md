@@ -61,7 +61,8 @@ supabase functions deploy ai-narrator
 `resolve-turn` is what makes the cloud mode authoritative: the client sends
 intents, the server re-runs them against its own copy of the engine, and a
 snapshot that does not match is rejected. `supabase/functions/_shared/game`
-is that copy — keep it in step with `npm run sync:engine`, which CI checks.
+is that copy — keep it in step with `npm run sync:engine`. Both `npm run
+verify` and CI fail if it has drifted.
 
 ---
 
@@ -93,7 +94,7 @@ than a degraded one.
 ## 4. Before you publish
 
 ```bash
-npm run verify     # typecheck, test, build, secret audit
+npm run verify     # typecheck, test, build, secret audit, engine mirror
 node scripts/smoke.mjs   # drives a whole turn in a real browser
 ```
 
