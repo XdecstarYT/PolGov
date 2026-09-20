@@ -49,6 +49,7 @@
 import { makeIdeology } from '../ideology.ts';
 import { SECTOR_KEYS } from '../balance.ts';
 import { INDUSTRY_TEMPLATES } from '../content/industries.ts';
+import { BILL_TEMPLATES } from '../content/bills.ts';
 import type {
   Bill,
   BillCategory,
@@ -147,19 +148,51 @@ const PRICE = {
   debt: 1,
 };
 
+/**
+ * How good a deal a drafted bill may be — measured off the designed ones.
+ *
+ * The rule is: **as good as the best bill somebody sat down and wrote, and
+ * no better.** Not a number chosen by hand, because a number chosen by
+ * hand is a number that goes stale. Both allowances are computed from
+ * `BILL_TEMPLATES` at module load, so adding a generous bill to the order
+ * paper widens what a player may draft by exactly as much, and nobody has
+ * to remember that these two things are connected.
+ *
+ * The first version of this file used 1.15, picked by intuition, and it
+ * held drafted bills to a standard that NONE of the forty-eight designed
+ * bills met — their median is around two and a half. An honest
+ * tax-and-spend draft came back cut to a third of what it asked for while
+ * the hand-written bill next to it on the order paper did the same thing
+ * untouched. That is not a stricter game; it is an inconsistent one.
+ */
+function calibrate(): { ratio: number; free: number } {
+  let ratio = 1;
+  let free = 0;
+
+  for (const template of BILL_TEMPLATES) {
+    const { benefit, cost } = weigh(template.effects);
+    if (benefit <= 0) continue;
+    if (cost > 0) ratio = Math.max(ratio, benefit / cost);
+    else free = Math.max(free, benefit);
+  }
+
+  return { ratio, free };
+}
+
+const CALIBRATION = calibrate();
+
 /** How much more a bill may give than it takes, before it is cut back. */
-export const BENEFIT_ALLOWANCE = 1.15;
+export const BENEFIT_ALLOWANCE = CALIBRATION.ratio;
 
 /**
  * And how much a bill may give away for nothing at all.
  *
  * Small popular measures that cost the treasury nothing do exist — an
- * inquiry, a right of appeal, a bank holiday — and a rule that priced
- * every one of them out would be wrong about how legislatures work. The
- * allowance is roughly three points of approval, which is a good week and
- * not a re-election.
+ * inquiry, a right of appeal, a freedom-of-information regime — and five
+ * of the designed bills are exactly that. The allowance is the most
+ * generous of them.
  */
-export const FREE_ALLOWANCE = 30;
+export const FREE_ALLOWANCE = CALIBRATION.free;
 
 /* ------------------------------------------------------------------ *
  * What arrives from outside

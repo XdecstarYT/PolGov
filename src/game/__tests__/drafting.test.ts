@@ -22,6 +22,7 @@ import {
   type RawDraft,
 } from '../systems/drafting.ts';
 import { DRAFT_BILL_LIMIT, DRAFT_BILL_PC_COST, SECTOR_KEYS } from '../balance.ts';
+import { BILL_TEMPLATES } from '../content/bills.ts';
 import { createStandardGame } from '../setup.ts';
 import { applyIntent } from '../turn.ts';
 import { ALLOWED_INTENT_TYPES } from '../serverGuards.ts';
@@ -288,6 +289,70 @@ describe('through the turn engine', () => {
        computes an opinion about every other bill. */
     expect(after.passChance).toBeGreaterThan(0);
     expect(after.passChance).toBeLessThan(100);
+  });
+});
+
+describe('the envelope is measured off the designed bills', () => {
+  it('lets a drafted bill be as good a deal as the best one somebody wrote', () => {
+    /*
+     * The rule, and the reason it is computed rather than chosen. An
+     * earlier version used 1.15, picked by intuition, and held drafted
+     * bills to a standard NONE of the forty-eight designed bills met —
+     * their median is around two and a half. An honest tax-and-spend
+     * draft came back cut to a third while the hand-written bill next to
+     * it on the order paper did the same thing untouched.
+     */
+    let best = 0;
+    let freest = 0;
+    for (const template of BILL_TEMPLATES) {
+      const { benefit, cost } = weigh(template.effects);
+      if (benefit <= 0) continue;
+      if (cost > 0) best = Math.max(best, benefit / cost);
+      else freest = Math.max(freest, benefit);
+    }
+
+    expect(BENEFIT_ALLOWANCE).toBeCloseTo(best, 6);
+    expect(FREE_ALLOWANCE).toBeCloseTo(freest, 6);
+    /* And the designed bills really are more generous than intuition
+       suggests, which is the whole finding. */
+    expect(BENEFIT_ALLOWANCE).toBeGreaterThan(3);
+  });
+
+  it('passes an honest tax-and-spend bill through untouched', () => {
+    const honest = draft(
+      {
+        category: 'education',
+        magnitude: 'major',
+        effects: {
+          sectorDeltas: { education: 5 },
+          fundingDeltas: { education: 42 },
+          revenueDelta: 38,
+          approval: -2.5,
+        },
+      },
+      'Free school meals for every primary pupil, paid for by ending a tax break',
+    );
+
+    expect(honest.notes).toEqual([]);
+    expect(honest.bill.effects.revenueDelta).toBe(38);
+    expect(honest.bill.effects.sectorDeltas!.education).toBe(5);
+    expect(honest.bill.effects.fundingDeltas!.education).toBe(42);
+    expect(honest.bill.effects.approval).toBe(-2.5);
+  });
+
+  it('still guts a bill that asks for everything and offers nothing', () => {
+    const wish = draft({
+      magnitude: 'major',
+      effects: {
+        approval: 40,
+        treasury: 5000,
+        revenueDelta: 900,
+        sectorDeltas: { economy: 60, health: 60, education: 60 },
+      },
+    });
+    expect(wish.notes.some((n) => n.includes('Scaled back'))).toBe(true);
+    expect(wish.bill.effects.approval!).toBeLessThan(2);
+    expect(wish.bill.effects.revenueDelta!).toBeLessThan(30);
   });
 });
 
