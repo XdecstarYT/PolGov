@@ -110,7 +110,7 @@ export function maintenanceSpend(infrastructure: Infrastructure, moneyScale = 1)
 export function buildCostOf(
   template: InfrastructureTemplate,
   units: number,
-  moneyScale = 1,
+  moneyScale: number,
 ): number {
   return template.buildCost * units * moneyScale;
 }
@@ -376,7 +376,7 @@ export function commission(
   units: number,
   turn: number,
   term: number,
-  moneyScale = 1,
+  moneyScale: number,
 ): InfrastructureProject {
   return {
     id: `${template.key}-${turn}`,

@@ -58,6 +58,8 @@ function tick(
     week: 1,
     rng: new Rng(3),
     atWar: false,
+    /* Verdana's scale: these tests are about the mechanics, not the money. */
+    moneyScale: 1,
     ...over,
   });
 }
@@ -180,7 +182,7 @@ describe('what a force can actually do', () => {
 
   it('counts nothing that is already somewhere else', () => {
     const military = buildMilitary();
-    const terms = deploymentTerms('combat', 1.2);
+    const terms = deploymentTerms('combat', 1.2, 1);
     const committed = deploy(
       military,
       {
@@ -219,7 +221,7 @@ describe('what a force can actually do', () => {
   });
 
   it('wears a deployed force out faster than money repairs it', () => {
-    const terms = deploymentTerms('combat', 1.4);
+    const terms = deploymentTerms('combat', 1.4, 1);
     const home = years(buildMilitary(), 2, 1.3);
     const away = years(
       deploy(
@@ -240,7 +242,7 @@ describe('what a force can actually do', () => {
 
 describe('procurement', () => {
   it('is already late on the day it is announced', () => {
-    const started = startProgramme(buildMilitary(), 'frigates', 100);
+    const started = startProgramme(buildMilitary(), 'frigates', 100, 1);
     const programme = started.programmes[0]!;
     const template = findProgramme('frigates');
 
@@ -254,7 +256,7 @@ describe('procurement', () => {
 
   it('slips and overruns, and then lands', () => {
     const template = findProgramme('combat_air');
-    let military = startProgramme(buildMilitary(), 'combat_air', 1);
+    let military = startProgramme(buildMilitary(), 'combat_air', 1, 1);
     let delivered = false;
 
     for (let week = 2; week <= 20 * TURNS_PER_YEAR && !delivered; week += 1) {
@@ -290,7 +292,7 @@ describe('procurement', () => {
   });
 
   it('is cheapest to cancel and hardest, because the jobs are in somebody’s seat', () => {
-    const started = startProgramme(buildMilitary(), 'frigates', 1);
+    const started = startProgramme(buildMilitary(), 'frigates', 1, 1);
     const id = started.programmes[0]!.id;
     const stopped = cancelProgramme(started, id);
     expect(stopped.programmes[0]!.cancelled).toBe(true);
@@ -301,7 +303,7 @@ describe('procurement', () => {
   });
 
   it('is a treadmill: a programme buys back what the years took', () => {
-    let running = startProgramme(buildMilitary(), 'cyber_capability', 1);
+    let running = startProgramme(buildMilitary(), 'cyber_capability', 1, 1);
     let idle = buildMilitary();
     let landed = 0;
 

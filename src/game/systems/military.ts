@@ -181,7 +181,7 @@ export function deploymentCost(military: Military): number {
 }
 
 /** ₡bn a year the doctrine adds to, or takes off, the defence line. */
-export function doctrineCost(military: Military, moneyScale = 1): number {
+export function doctrineCost(military: Military, moneyScale: number): number {
   return findDoctrine(military.doctrine).surcharge * moneyScale;
 }
 
@@ -193,7 +193,7 @@ export function doctrineCost(military: Military, moneyScale = 1): number {
  * exception: the same hull is a rounding error to one treasury and a
  * decade of argument to another.
  */
-export function programmeCost(template: { cost: number }, moneyScale = 1): number {
+export function programmeCost(template: { cost: number }, moneyScale: number): number {
   return template.cost * moneyScale;
 }
 
@@ -260,7 +260,7 @@ export interface MilitaryInputs {
   /** True while the country is fighting, which changes everything. */
   atWar: boolean;
   /** National money against Verdana's, so a quoted price means something. */
-  moneyScale?: number;
+  moneyScale: number;
 }
 
 export interface MilitaryTick {
@@ -457,7 +457,7 @@ export function startProgramme(
   military: Military,
   key: string,
   turn: number,
-  moneyScale = 1,
+  moneyScale: number,
 ): Military {
   const template = findProgramme(key);
   return {
@@ -517,7 +517,7 @@ export function withdraw(military: Military, id: string): Military {
 export function deploymentTerms(
   kind: Deployment['kind'],
   scale: number,
-  moneyScale = 1,
+  moneyScale: number,
 ): { commitment: number; cost: number } {
   const base = { peacekeeping: 1.0, alliance: 1.2, combat: 1.8, training: 0.4 }[kind];
   return {

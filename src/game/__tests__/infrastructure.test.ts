@@ -220,10 +220,10 @@ describe('what it does to everything else', () => {
 describe('building things', () => {
   it('takes years, and most of them open under somebody else', () => {
     for (const template of INFRASTRUCTURE_TEMPLATES) {
-      const project = commission(template, 1, 1, 1);
+      const project = commission(template, 1, 1, 1, 1);
       expect(project.remainingTurns).toBeGreaterThan(TURNS_PER_YEAR);
     }
-    const nuclear = commission(findInfrastructure('nuclear'), 1, 1, 1);
+    const nuclear = commission(findInfrastructure('nuclear'), 1, 1, 1, 1);
     /* Nine years. Two elections away, minimum. */
     expect(termsAway(nuclear)).toBeGreaterThanOrEqual(2);
   });
@@ -232,7 +232,7 @@ describe('building things', () => {
     const template = findInfrastructure('internet');
     let infra: Infrastructure = {
       ...buildInfrastructure(),
-      projects: [commission(template, 10, 1, 1)],
+      projects: [commission(template, 10, 1, 1, 1)],
     };
     const before = infra.assets.find((a) => a.key === 'internet')!.capacity;
 
@@ -251,7 +251,7 @@ describe('building things', () => {
     const template = findInfrastructure('schools');
     const infra: Infrastructure = {
       ...buildInfrastructure(),
-      projects: [commission(template, 4, 1, 1)],
+      projects: [commission(template, 4, 1, 1, 1)],
     };
     const annual = projectSpend(infra);
     expect(annual).toBeCloseTo(
@@ -265,7 +265,7 @@ describe('building things', () => {
     const busy: Infrastructure = {
       ...buildInfrastructure(),
       projects: Array.from({ length: MAX_ACTIVE_PROJECTS }, (_, i) =>
-        commission(findInfrastructure('roads'), 1, i, 1),
+        commission(findInfrastructure('roads'), 1, i, 1, 1),
       ),
     };
     expect(canStartProject(buildInfrastructure())).toBe(true);

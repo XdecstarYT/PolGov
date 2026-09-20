@@ -305,7 +305,7 @@ export function DefencePanel() {
           </Button>
           {target !== '' && (
             <span className="text-xs text-ink-faint">
-              {Math.round(deploymentTerms('peacekeeping', 0.8).commitment * 100)}% of the force and{' '}
+              {Math.round(deploymentTerms('peacekeeping', 0.8, game.moneyScale).commitment * 100)}% of the force and{' '}
               {money(deploymentTerms('peacekeeping', 0.8, game.moneyScale).cost)} a year, and what
               goes is not
               available for anything else.
