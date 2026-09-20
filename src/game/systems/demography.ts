@@ -55,7 +55,6 @@ import {
   SKILLS_SHORTAGE_WEIGHT,
   SKILLS_START,
   URBANISATION_DRIFT,
-  URBANISATION_START,
   VITAL_RATE_ADJUST,
   TURNS_PER_YEAR,
 } from '../balance.ts';
@@ -66,6 +65,7 @@ import type {
   Region,
   RegionalPopulation,
 } from '../types.ts';
+import { REGION_KIND_URBAN } from '../content/world/politics.ts';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -84,8 +84,25 @@ export function buildDemography(
        to match them. Apportionment is what keeps that true. */
     population: population * (region.seats / totalSeats),
     netFlow: 0,
-    urban: URBANISATION_START,
+    /*
+     * Each region's own, from what kind of place it is. Handing every
+     * region the national figure made the countryside statistically
+     * identical to the capital, which meant the rural gap was exactly
+     * zero in every country and every run — a whole dimension of the game
+     * reporting nothing because the data behind it was a constant.
+     */
+    urban: REGION_KIND_URBAN[region.kind],
   }));
+
+  /*
+   * The national urbanisation rate is not a constant — it is what the
+   * regions add up to. Asserting it gave every country the same 71%,
+   * which made Japan as rural as India and left one of them with no
+   * countryside at all once the rural gap was being measured against it.
+   */
+  const totalPopulation = regional.reduce((sum, r) => sum + r.population, 0) || 1;
+  const urbanisation =
+    regional.reduce((sum, r) => sum + r.population * r.urban, 0) / totalPopulation;
 
   const workforce = population * AGE_WORKING_START * PARTICIPATION_START;
 
@@ -100,7 +117,7 @@ export function buildDemography(
     netMigration: MIGRATION_BASE,
     immigration: MIGRATION_BASE + 2.4,
     emigration: 2.4,
-    urbanisation: URBANISATION_START,
+    urbanisation,
     density: population / 0.42,
     householdSize: HOUSEHOLD_SIZE_START,
     participation: PARTICIPATION_START,

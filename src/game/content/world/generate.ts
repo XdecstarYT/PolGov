@@ -558,6 +558,7 @@ export function regionsFor(key: CountryKey): RegionTemplate[] {
   return profile.regions.map((region, i) => ({
     id: region.id,
     name: region.name,
+    kind: region.kind,
     character: REGION_KIND_CHARACTER[region.kind],
     seats: seats[i]!,
     lean: makeIdeology(

@@ -36,6 +36,7 @@ import { buildWorld } from './systems/diplomacy.ts';
 import { buildTrade } from './systems/trade.ts';
 import { buildMilitary } from './systems/military.ts';
 import { buildSociety } from './systems/society.ts';
+import { buildLiving } from './systems/living.ts';
 import { buildIntelligence } from './systems/intelligence.ts';
 import { assignMinistries, buildBudget } from './systems/budgetProcess.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
@@ -198,6 +199,7 @@ export function buildRegions(country: CountryKey = 'verdana'): Region[] {
   return regionsFor(country).map((template) => ({
     id: template.id,
     name: template.name,
+    kind: template.kind,
     character: template.character,
     seats: template.seats,
     lean: template.lean,
@@ -387,6 +389,9 @@ export function createGame(options: NewGameOptions): GameState {
     /* The distribution the government inherited. Nobody in the run chose
        it, and it is what every budget decision is measured against. */
     society: buildSociety(politics.inequality),
+
+    /* And what that distribution is like to live inside. */
+    living: buildLiving(),
 
     infrastructure: buildInfrastructure(peopleScale),
 

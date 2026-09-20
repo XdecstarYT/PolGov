@@ -66,6 +66,33 @@ export type RegionKind =
   | 'resource'
   | 'university';
 
+/**
+ * How much of each kind of place lives in a town, 0–1.
+ *
+ * The figure a national urbanisation rate conceals. A country that is 71%
+ * urban is not 71% urban everywhere: it is a capital that is almost
+ * entirely so and an agrarian region that is largely not, and the
+ * difference between those two is where regional politics comes from.
+ * Without this every region was handed the national average, which made
+ * the countryside statistically identical to the capital and the rural
+ * gap exactly zero.
+ */
+export const REGION_KIND_URBAN: Record<RegionKind, number> = {
+  capital: 0.97,
+  metropolitan: 0.94,
+  university: 0.88,
+  suburban: 0.86,
+  post_industrial: 0.8,
+  industrial: 0.8,
+  coastal: 0.66,
+  /* Neither of the bottom two is as rural as the word suggests: a mining
+     county and a farming one are both mostly market towns by the time
+     anybody counts, which is why the developed world is four-fifths urban
+     and does not feel it. */
+  resource: 0.55,
+  agrarian: 0.42,
+};
+
 export const REGION_KIND_LABELS: Record<RegionKind, string> = {
   capital: 'Capital region',
   metropolitan: 'Metropolitan',

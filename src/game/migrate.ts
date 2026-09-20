@@ -21,6 +21,7 @@ import { createStandardGame } from './setup.ts';
 import { buildIntelligence } from './systems/intelligence.ts';
 import { buildMilitary } from './systems/military.ts';
 import { buildSociety } from './systems/society.ts';
+import { buildLiving } from './systems/living.ts';
 import { buildTrade } from './systems/trade.ts';
 import { buildPairs } from './systems/worldSim.ts';
 import { buildOrganisations } from './systems/organisations.ts';
@@ -58,6 +59,7 @@ export function migrateState(raw: unknown): GameState | null {
   /* A save written before the distribution existed was a country sitting
      at the opening one, which is exactly what buildSociety describes. */
   if (!next.society) next.society = buildSociety();
+  if (!next.living) next.living = buildLiving();
   if (typeof next.society.inequality !== 'number' || !(next.society.inequality > 0)) {
     next.society.inequality = 1;
   }

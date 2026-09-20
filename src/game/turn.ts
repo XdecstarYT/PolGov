@@ -174,6 +174,8 @@ import {
 } from './balance.ts';
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
 import { stepSociety } from './systems/society.ts';
+import { accessOf, stepLiving } from './systems/living.ts';
+import { findAccess } from './content/access.ts';
 import { findClass } from './content/classes.ts';
 import { duesTotal } from './systems/organisations.ts';
 import { readDraft, type RawDraft } from './systems/drafting.ts';
@@ -1723,6 +1725,65 @@ export function resolveTurn(state: GameState): GameState {
         unit: 'idx',
       });
     }
+    /*
+     * And what all of it is like to live in.
+     *
+     * Access rather than quality: a health service can be excellent and
+     * unreachable, and the difference between those two is most of what a
+     * government is actually judged on. Stepped here because every input
+     * — the services, the assets, the distribution — has just settled.
+     */
+    const livingTick = stepLiving(next.living, {
+      society: next.society,
+      serviceQuality: Object.fromEntries(next.services.map((x) => [x.key, x.quality])),
+      serviceWait: Object.fromEntries(next.services.map((x) => [x.key, x.waitMonths])),
+      assetCondition: Object.fromEntries(next.infrastructure.assets.map((a) => [a.key, a.condition])),
+      assetPressure: Object.fromEntries(
+        next.infrastructure.assets.map((a) => [
+          a.key,
+          utilisation(a, next.demography.population),
+        ]),
+      ),
+      unemployment: next.economy.unemployment,
+      environmentHealth: findSector(next.sectors, 'environment').health,
+      /*
+       * A stand-in until Engine 5 builds the police properly: recorded
+       * crime rises where the service is thin and where households are
+       * under pressure, which is the direction the evidence points even
+       * where the size of the effect is argued about.
+       */
+      crimeRate: Math.max(
+        4,
+        34 -
+          (next.services.find((x) => x.key === 'police')?.quality ?? 60) * 0.22 +
+          next.society.povertyRate * 0.35,
+      ),
+      urbanisation: next.demography.urbanisation,
+      regional: next.demography.regional.map((r) => ({
+        regionId: r.regionId,
+        population: r.population,
+        netFlow: r.netFlow,
+        urban: r.urban,
+      })),
+      turn: absoluteWeek(next),
+    });
+    next.living = livingTick.living;
+
+    for (const key of livingTick.failing) {
+      const template = findAccess(key);
+      log(entries, {
+        kind: 'sector',
+        label: `${template.label} — out of reach`,
+        delta: accessOf(next.living, key).level,
+        cause:
+          `${template.blurb} Access has fallen below the point households notice it, and it ` +
+          `is ${accessOf(next.living, key).gradient.toFixed(0)} points worse at the bottom of ` +
+          `the distribution than the top. The service figures will not show this; they measure ` +
+          `what it is like for the people who get it.`,
+        unit: 'idx',
+      });
+    }
+
     if (societyTick.povertyAlarm) {
       log(entries, {
         kind: 'sector',

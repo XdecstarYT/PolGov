@@ -332,7 +332,15 @@ export interface GameEvent {
 export interface Region {
   id: string;
   name: string;
-  /** One line of fictional character, shown on the campaign map. */
+  /**
+   * What kind of place it is — capital, agrarian, coastal and so on.
+   *
+   * Decides how much of it lives in a town, which a national urbanisation
+   * rate conceals entirely: a country that is 71% urban is a capital that
+   * is nearly all of it and farmland that is largely none.
+   */
+  kind: import('./content/world/politics.ts').RegionKind;
+  /** One line of character, shown on the campaign map. */
   character: string;
   seats: number;
   /**
@@ -1580,6 +1588,12 @@ export interface GameState {
    */
   society: Society;
 
+  /**
+   * What it is like to live here: what households can actually reach, and
+   * how they feel about the direction of travel.
+   */
+  living: Living;
+
   /** What the country is built out of, and what is being built. */
   infrastructure: Infrastructure;
 
@@ -1783,4 +1797,50 @@ export interface Society {
   /** Household saving, % of disposable income. */
   householdSavings: number;
   history: SocietyPoint[];
+}
+
+/** One of the twelve things a household needs to be able to get. */
+export interface AccessState {
+  key: import('./content/access.ts').AccessKey;
+  /** How reliably a typical household can actually get it, 0–100. */
+  level: number;
+  /**
+   * How many points worse it is at the bottom of the distribution than at
+   * the top. Wide where price does the rationing, narrow where a queue does.
+   */
+  gradient: number;
+}
+
+export interface LivingPoint {
+  turn: number;
+  standardOfLiving: number;
+  qualityOfLife: number;
+  lifeSatisfaction: number;
+  happiness: number;
+}
+
+export interface Living {
+  access: AccessState[];
+  /** Access to the twelve domains, weighted by need. 0–100. */
+  standardOfLiving: number;
+  /** That, plus the parts of a life that are not consumption. 0–100. */
+  qualityOfLife: number;
+  /** Tracks the LEVEL, slowly and without decaying. 0–100. */
+  lifeSatisfaction: number;
+  /**
+   * Tracks the CHANGE, quickly, and decays to neutral.
+   *
+   * The hedonic treadmill: a country held steady at an excellent standard
+   * produces no happiness at all. This is why a competent government can
+   * be unpopular on its own record.
+   */
+  happiness: number;
+  /** Best region's standard less the worst's, points. */
+  regionalInequality: number;
+  /** How far cities sit above everywhere else, points. */
+  urbanAdvantage: number;
+  /** How far the countryside sits below the national standard, points. */
+  ruralGap: number;
+  regional: { regionId: string; standard: number }[];
+  history: LivingPoint[];
 }

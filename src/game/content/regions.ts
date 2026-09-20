@@ -7,6 +7,7 @@
  */
 
 import type { Ideology } from '../types.ts';
+import type { RegionKind } from './world/politics.ts';
 import { makeIdeology } from '../ideology.ts';
 import type { SegmentKey } from './segments.ts';
 
@@ -15,6 +16,11 @@ export interface RegionTemplate {
   name: string;
   character: string;
   seats: number;
+  /**
+   * What kind of place it is, which is what decides how much of it lives
+   * in a town. A national urbanisation rate conceals this completely.
+   */
+  kind: RegionKind;
   /**
    * Summary position of the electorate here, kept for display and for the
    * campaign map. The authoritative model is `composition` below — this is
@@ -33,6 +39,7 @@ export interface RegionTemplate {
 export const REGION_TEMPLATES: RegionTemplate[] = [
   {
     id: 'halloway',
+    kind: 'industrial',
     name: 'Halloway Basin',
     character: 'Heavy industry along the river. Dense, unionised, and used to being courted.',
     seats: 30,
@@ -52,6 +59,7 @@ export const REGION_TEMPLATES: RegionTemplate[] = [
   },
   {
     id: 'ashmere',
+    kind: 'university',
     name: 'Ashmere Coast',
     character: 'Port cities and universities. Young, mobile, and quick to punish complacency.',
     seats: 24,
@@ -71,6 +79,7 @@ export const REGION_TEMPLATES: RegionTemplate[] = [
   },
   {
     id: 'callow',
+    kind: 'agrarian',
     name: 'Callow Downs',
     character: 'Arable country and market towns. Turnout is high and loyalty runs in families.',
     seats: 22,
@@ -88,6 +97,7 @@ export const REGION_TEMPLATES: RegionTemplate[] = [
   },
   {
     id: 'ternhill',
+    kind: 'capital',
     name: 'Ternhill',
     character: 'The capital and its commuter belt. Professional, well-informed, and marginal.',
     seats: 26,
@@ -106,6 +116,7 @@ export const REGION_TEMPLATES: RegionTemplate[] = [
   },
   {
     id: 'estmoor',
+    kind: 'post_industrial',
     name: 'Estmoor',
     character: 'Mill towns past their peak. Long memories, thin patience, decisive when it moves.',
     seats: 20,
@@ -123,6 +134,7 @@ export const REGION_TEMPLATES: RegionTemplate[] = [
   },
   {
     id: 'karrow',
+    kind: 'agrarian',
     name: 'Karrow Highlands',
     character: 'Sparse uplands and protected watershed. Few seats, but they move as a bloc.',
     seats: 16,
@@ -140,6 +152,7 @@ export const REGION_TEMPLATES: RegionTemplate[] = [
   },
   {
     id: 'sable',
+    kind: 'resource',
     name: 'Sable Reach',
     character: 'Energy fields and refineries. One industry, one argument, and it never changes.',
     seats: 22,
@@ -157,6 +170,7 @@ export const REGION_TEMPLATES: RegionTemplate[] = [
   },
   {
     id: 'vell',
+    kind: 'coastal',
     name: 'Vell Archipelago',
     character: 'Fishing harbours and summer trade. Small electorates, outsized swings.',
     seats: 20,

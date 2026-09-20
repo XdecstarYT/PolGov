@@ -1230,6 +1230,14 @@ export const PARTICIPATION_JOBS_WEIGHT = 0.004;
 export const PARTICIPATION_ADJUST_RATE = perMonth(0.05);
 
 /** Share of the population in cities at the start. */
+/**
+ * Deprecated: the national urban share is now derived.
+ *
+ * It is the population-weighted average of the regions' own shares, which
+ * is what it always was in reality — a country is 71% urban because of
+ * where its people live, not the other way round. Kept only so an older
+ * save that stored the figure still reads.
+ */
 export const URBANISATION_START = 0.71;
 /** Per year, how much of the rural share moves to cities on its own. */
 export const URBANISATION_DRIFT = 0.0022;
@@ -2055,3 +2063,52 @@ export const HOUSING_ADJUST_RATE = 0.004;
  * report that named all five bands every time would be noise.
  */
 export const SQUEEZE_GAP = 1.5;
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Living standards
+ * ------------------------------------------------------------------ */
+
+/** How fast access converges on what the state is actually providing. */
+export const ACCESS_ADJUST_RATE = 0.02;
+
+/**
+ * How fast satisfaction converges on the standard of living.
+ *
+ * Slow, and it never stops: a country that is genuinely well run
+ * eventually reports being content with it, however long that takes.
+ */
+export const SATISFACTION_ADJUST_RATE = 0.012;
+
+/** How fast the mood reacts to things getting better or worse. */
+export const HAPPINESS_ADJUST_RATE = 0.09;
+
+/**
+ * How fast the mood forgets.
+ *
+ * The other half of the treadmill. Improvement that stops being
+ * improvement stops being felt, which is why a government cannot bank
+ * goodwill and spend it in the fourth year.
+ */
+export const HAPPINESS_DECAY = 0.035;
+
+/** Points of mood per point-per-year of change in quality of life. */
+export const HAPPINESS_CHANGE_SCALE = 3.2;
+
+/**
+ * Points of standard of living per unit of urban share above the national rate.
+ *
+ * What a town has that a village does not: the hospital, the line, the
+ * jobs, the connection. Real urban–rural gaps in developed countries run
+ * to several points on most measures of access, and considerably more on
+ * transport and work.
+ */
+export const URBAN_STANDARD_TILT = 20;
+
+/**
+ * Points of standard of living per per-cent-a-year of net internal migration.
+ *
+ * Deliberately small. People move because of the standard of living, so a
+ * large weight here would run the causality backwards and let the flow
+ * decide the thing that caused it.
+ */
+export const FLOW_STANDARD_TILT = 0.6;
