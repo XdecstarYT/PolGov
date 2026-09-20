@@ -205,6 +205,32 @@ await page.getByRole('button', { name: 'Light', exact: true }).click();
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${OUT}/10-briefing-turn2.png`, fullPage: true });
 
+/*
+ * And the rest of what a player actually does with a run: ask for help in
+ * the middle of one, leave, find it again, and come back. Every one of
+ * these is a route rather than a feature, which is exactly the kind of
+ * thing that breaks silently — a help page that drops you at the title,
+ * or a save that does not appear in the list it was saved to.
+ */
+await step('read the help mid-run, and get back to the desk', async () => {
+  await page.getByRole('button', { name: 'Help' }).click();
+  await page.getByRole('heading', { name: 'How to play' }).waitFor();
+  await page.getByRole('button', { name: /Back to the desk/ }).click();
+  await page.getByRole('heading', { name: 'The morning brief' }).waitFor({ timeout: 8000 });
+});
+
+await step('save, leave, and find the run again', async () => {
+  await page.getByRole('button', { name: 'Save & exit' }).click();
+  await page.waitForTimeout(700);
+
+  await page.getByText('Reform Coalition').first().waitFor();
+  await page.getByRole('button', { name: 'Export' }).first().waitFor();
+  await page.getByText('Import a run from a file').waitFor();
+
+  await page.getByRole('button', { name: 'Resume' }).first().click();
+  await page.getByRole('heading', { name: 'The morning brief' }).waitFor({ timeout: 8000 });
+});
+
 await browser.close();
 
 if (errors.length) {
