@@ -48,12 +48,17 @@ function formGovernment() {
     // Accept partners in ideological order until a majority is reached.
     const total = state.parties.reduce((s, p) => s + p.seats, 0);
     const need = Math.floor(total / 2) + 1;
-    let have = state.parties.find((p) => p.isPlayer).seats;
+    const me = state.parties.find((p) => p.isPlayer);
+    let have = me.seats;
     for (const c of n.candidates) {
       if (have >= need) break;
       if (n.accepted.includes(c.partyId)) continue;
+      const party = state.parties.find((p) => p.id === c.partyId);
+      /* The largest party in a government leads it, so a partner bigger
+         than us is one we would be the junior member of. */
+      if (party.seats > me.seats) continue;
       if (tryTo({ type: 'negotiation_accept', partyId: c.partyId })) {
-        have += state.parties.find((p) => p.id === c.partyId).seats;
+        have += party.seats;
       }
     }
     const before = state.phase;

@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createGame } from '../setup.ts';
+import { runElection } from '../turn.ts';
 import { TOTAL_SEATS, GDP_START, POPULATION_START, SECTOR_BASELINE_FUNDING } from '../balance.ts';
 import { COUNTRY_TEMPLATES, findCountry, playableCountries } from '../content/world/countries.ts';
 import { POLITICS_PROFILES, findPolitics, hasPolitics } from '../content/world/politics.ts';
@@ -195,6 +196,30 @@ describe('a run of a real country', () => {
     }
   });
 
+  it('opens with the election the player won', () => {
+    /*
+     * The premise, asserted. A country where the opening count left the
+     * player third — which under first past the post is most of them, on
+     * most platforms — would end the run before the first week, because
+     * the largest party in a government leads it and a third party cannot
+     * form one. Every election after this one is a real contest.
+     */
+    for (const country of playable) {
+      const state = game(country);
+      const player = state.parties.find((p) => p.isPlayer)!;
+      const largest = Math.max(...state.parties.map((p) => p.seats));
+      expect(player.seats).toBe(largest);
+      /*
+       * A single-party majority is a legitimate outcome and only one
+       * country produces one — first past the post manufactures them, and
+       * pretending otherwise would be modelling a different system. What
+       * is not legitimate is a chamber with no opposition in it.
+       */
+      expect(player.seats).toBeLessThan(TOTAL_SEATS * 0.6);
+      expect(state.parties.filter((p) => !p.isPlayer && p.seats > 0).length).toBeGreaterThan(2);
+    }
+  });
+
   it('opens with a chamber a government could be formed in', () => {
     let competitive = 0;
 
@@ -224,8 +249,13 @@ describe('a run of a real country', () => {
   });
 
   it('rewards a platform that fits the country it is standing in', () => {
-    const seatsWith = (country: CountryKey, economic: number, social: number) =>
-      createGame({
+    /*
+     * A CONTESTED election, not the opening one. The chamber a run starts
+     * in is the election the player won — that is the premise — so the
+     * platform shows its worth at the first election they have to fight.
+     */
+    const seatsWith = (country: CountryKey, economic: number, social: number) => {
+      const base = createGame({
         gameId: `fit-${country}-${economic}`,
         country,
         difficulty: 'standard',
@@ -233,7 +263,10 @@ describe('a run of a real country', () => {
         playerColor: '#8c2f27',
         playerGlyph: '★',
         playerIdeology: { economic, social, environmental: 0.1 },
-      }).parties.find((p) => p.isPlayer)!.seats;
+      });
+      const after = runElection({ ...base, approval: 45 });
+      return after.elections[after.elections.length - 1]!.seatsByParty.player ?? 0;
+    };
 
     /*
      * How much the platform decides varies by country, and that is the

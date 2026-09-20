@@ -7,7 +7,10 @@ import { chromium } from '@playwright/test';
 const BASE = process.env.BASE_URL ?? 'http://localhost:4173';
 const OUT = process.env.OUT_DIR ?? '/tmp/claude-0/-home-user-PolGov/fa849906-2ba3-5691-a605-22a4e2d3b9b6/scratchpad';
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch({
+  executablePath:
+    process.env.CHROME_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+});
 const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
 
 const errors = [];

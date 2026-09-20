@@ -220,7 +220,16 @@ describe('the two-chamber flow, end to end', () => {
   function governing() {
     let state = createStandardGame('senate-flow');
     if (state.phase === 'coalition') {
+      /*
+       * Only partners the player outranks. The largest party in a
+       * government leads it, so a coalition containing somebody bigger is
+       * one the player would be the junior partner in — and this seed puts
+       * the player second, which is exactly the case worth covering.
+       */
+      const player = state.parties.find((p) => p.isPlayer)!;
       for (const candidate of state.negotiation!.candidates) {
+        const party = state.parties.find((p) => p.id === candidate.partyId)!;
+        if (party.seats > player.seats) continue;
         state = applyIntent(state, { type: 'negotiation_accept', partyId: candidate.partyId }).state;
       }
       state = applyIntent(state, { type: 'negotiation_form_government' }).state;

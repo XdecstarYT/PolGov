@@ -50,6 +50,21 @@ jobs:
       - name: Secret audit
         run: npm run check:secrets
 
+      - name: A whole turn, and every country, in a real browser
+        # The two checks nothing else catches. `smoke` plays one complete
+        # week in the invented country; `smoke:countries` founds a party in
+        # six real ones and gets each to the morning brief. A country with a
+        # bad region id or a duplicate bench passes every type check and
+        # every unit test, and fails on the setup screen.
+        run: |
+          npx playwright install --with-deps chromium
+          npx vite preview --port 4173 &
+          npx wait-on http://localhost:4173 --timeout 60000
+          CHROME_PATH="$(node -e "console.log(require('playwright').chromium.executablePath())")" \
+            node scripts/smoke.mjs
+          CHROME_PATH="$(node -e "console.log(require('playwright').chromium.executablePath())")" \
+            node scripts/smoke-countries.mjs
+
       - name: Engine mirror is in step
         # The edge functions run a copy of the engine. If it has drifted
         # from src/game, the server and the client disagree about the

@@ -6209,6 +6209,32 @@ function handleFormGovernment(state: GameState): IntentResult {
     return reject(state, 'There is no negotiation under way.');
   }
 
+  /*
+   * The largest party in a government leads it.
+   *
+   * Not a house rule — it is how parliamentary government works nearly
+   * everywhere, and without it the engine would let a party with three
+   * seats of a hundred and eighty take the premiership of a coalition of
+   * ninety, which a measured run of France did. A player who has been
+   * overtaken has lost; the way to say so is to refuse the government
+   * rather than to hand them one nobody would let them have.
+   */
+  {
+    const player = state.parties.find((p) => p.isPlayer);
+    const bloc = state.parties.filter(
+      (p) => p.isPlayer || state.negotiation!.accepted.includes(p.id),
+    );
+    const biggest = bloc.reduce((max, p) => (p.seats > max.seats ? p : max), bloc[0]!);
+    if (player && biggest.id !== player.id) {
+      return reject(
+        state,
+        `${biggest.name} holds more seats than you do. The largest party in a ` +
+          'government leads it — either assemble one you are the largest party in, ' +
+          'or let them try.',
+      );
+    }
+  }
+
   const next = clone(state);
   const negotiation = next.negotiation!;
   const entries = currentLog(next);

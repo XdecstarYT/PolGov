@@ -76,6 +76,8 @@ export function CoalitionRoom() {
             const party = game.parties.find((p) => p.id === demand.partyId);
             if (!party) return null;
             const accepted = negotiation.accepted.includes(party.id);
+            /* A partner larger than you would head the government, not you. */
+            const outranksYou = party.seats > (player?.seats ?? 0);
             const fit = affinity(player.ideology, party.ideology);
 
             return (
@@ -134,6 +136,17 @@ export function CoalitionRoom() {
                       }
                     >
                       Remove from the agreement
+                    </Button>
+                  ) : outranksYou ? (
+                    /*
+                     * The largest party in a government leads it. Taking a
+                     * partner bigger than you is not a coalition you head;
+                     * it is one you are the junior member of, and the game
+                     * you are playing is the one where you are the head of
+                     * government.
+                     */
+                    <Button disabled title="The largest party in a government leads it">
+                      They would lead it, not you
                     </Button>
                   ) : (
                     <Button

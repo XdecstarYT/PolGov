@@ -292,7 +292,26 @@ export function createGame(options: NewGameOptions): GameState {
   const sectors = buildSectors(moneyScale);
   const districts = buildDistrictsFor(regions, electoralSystem, rng);
 
-  /* Seat the opening parliament with the real election model. */
+  /*
+   * Seat the opening parliament with the real election model.
+   *
+   * Then, if the model did not put the player first, swap their total with
+   * whoever it did.
+   *
+   * THIS IS THE PREMISE, NOT A THUMB ON THE SCALE. The game begins the
+   * morning after an election the player won; every election from here is
+   * a real contest they can and will lose. A country where the opening
+   * count left them third — which under first past the post is most of
+   * them, on most platforms — would end the run before the first week,
+   * because the largest party in a government leads it and a third party
+   * cannot form one. "Pick the United Kingdom, press start, lose" is not a
+   * game.
+   *
+   * A swap rather than a top-up, so the SHAPE of the chamber is exactly
+   * what the model produced: the same distribution of seats, the same
+   * fragmentation, the same coalition arithmetic. Only the label on the
+   * largest pile moves.
+   */
   const opening = simulateElection({
     parties,
     regions,
@@ -305,6 +324,16 @@ export function createGame(options: NewGameOptions): GameState {
   });
   for (const party of parties) {
     party.seats = opening.seatsByParty[party.id] ?? 0;
+  }
+
+  {
+    const player = parties.find((p) => p.isPlayer)!;
+    const largest = parties.reduce((max, p) => (p.seats > max.seats ? p : max), parties[0]!);
+    if (largest.id !== player.id) {
+      const won = largest.seats;
+      largest.seats = player.seats;
+      player.seats = won;
+    }
   }
 
   const now = new Date().toISOString();
