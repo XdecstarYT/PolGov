@@ -1198,6 +1198,27 @@ export const MIGRATION_BASE = 3.2;
 export const MIGRATION_JOBS_WEIGHT = 0.55;
 /** Extra net migration per point of average service quality above 60. */
 export const MIGRATION_SERVICES_WEIGHT = 0.06;
+
+/**
+ * What net migration cannot exceed, per thousand per year, either way.
+ *
+ * Not a taste: a physical limit on how fast people can actually move, and
+ * the thing that stops the most dangerous feedback loop in the engine.
+ *
+ * Without it, migration rises with jobs and services, the arrivals join
+ * the workforce, a larger workforce raises potential growth, faster growth
+ * cuts unemployment, and lower unemployment raises migration again. It
+ * compounds every week with nothing to stop it: a measured run of Canada
+ * reached net migration of 97 per thousand — a tenth of the country
+ * arriving every year — and trend growth of 12% a year, four terms in,
+ * under a government that had done nothing at all.
+ *
+ * The ceiling is roughly the highest rate any country has actually
+ * sustained, and the floor is roughly the fastest a country empties short
+ * of a war. Both are reachable; neither is an equilibrium.
+ */
+export const MIGRATION_MAX = 18;
+export const MIGRATION_MIN = -9;
 /** How fast the actual flow eases toward what conditions imply. */
 export const MIGRATION_ADJUST_RATE = perMonth(0.12);
 

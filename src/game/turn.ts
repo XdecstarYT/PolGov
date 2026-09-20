@@ -1587,6 +1587,14 @@ export function resolveTurn(state: GameState): GameState {
       educationQuality: findSector(next.sectors, 'education').health,
       serviceQuality: services,
       regionalJobs: regionalEmployment(next.industries),
+      /*
+       * What the world is doing to the flow, as a LEVEL for as long as the
+       * event runs. It used to be ADDED to the stored figure every week,
+       * which turned a refugee movement worth six per thousand into two
+       * hundred and forty over a forty-week event — and from there into a
+       * workforce, a growth rate and an economy that had all run away.
+       */
+      migrationShock: global.migration,
       turn: next.turnNumber,
     });
 
@@ -1632,12 +1640,6 @@ export function resolveTurn(state: GameState): GameState {
    * migration figure and a pandemic is a health figure, and both belong in
    * the systems that already model those rather than in a modifier.
    */
-  if (Math.abs(global.migration) > 0.01) {
-    next.demography = {
-      ...next.demography,
-      netMigration: next.demography.netMigration + global.migration,
-    };
-  }
   if (global.health < 0) {
     const health = findSector(next.sectors, 'health');
     health.health = clamp01to100(health.health + global.health / TURNS_PER_YEAR);

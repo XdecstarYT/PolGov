@@ -26,6 +26,8 @@ import {
 import { buildRegions } from '../setup.ts';
 import {
   APPORTIONMENT_INTERVAL,
+  MIGRATION_MAX,
+  MIGRATION_MIN,
   MIN_REGION_SEATS,
   NATURAL_UNEMPLOYMENT,
   POPULATION_START,
@@ -266,5 +268,74 @@ describe('forecasting', () => {
 
   it('is deterministic — there is no randomness in a population', () => {
     expect(run(60)).toEqual(run(60));
+  });
+});
+
+describe('migration cannot run away', () => {
+  /*
+   * The most dangerous feedback loop in the engine, and the one that hid
+   * the longest. Migration rises with jobs and services; arrivals join the
+   * workforce; a larger workforce raises potential growth; faster growth
+   * cuts unemployment; lower unemployment raises migration. Nothing in
+   * that chain is wrong and none of it had a limit.
+   *
+   * A measured run of Canada reached net migration of 97 per thousand — a
+   * tenth of the country arriving every year — and trend growth of 12% a
+   * year, four terms in, under a government that had done nothing at all.
+   */
+  const ideal: DemographyInputs = {
+    unemployment: 0.5,
+    healthQuality: 100,
+    educationQuality: 100,
+    serviceQuality: 100,
+    regionalJobs: {},
+    turn: 1,
+  };
+
+  it('holds the flow to what is physically possible, however good it gets', () => {
+    let d = buildDemography(regions);
+    for (let week = 1; week <= 800; week += 1) {
+      d = stepDemography(d, { ...ideal, turn: week });
+    }
+    expect(d.netMigration).toBeLessThanOrEqual(MIGRATION_MAX + 0.01);
+    /* And the population it produces stays in the realm of a country. */
+    expect(d.population / POPULATION_START).toBeLessThan(1.6);
+  });
+
+  it('holds it at the floor when everything is as bad as it gets', () => {
+    const dire: DemographyInputs = {
+      ...ideal,
+      unemployment: 34,
+      healthQuality: 0,
+      educationQuality: 0,
+      serviceQuality: 0,
+    };
+    let d = buildDemography(regions);
+    for (let week = 1; week <= 800; week += 1) {
+      d = stepDemography(d, { ...dire, turn: week });
+    }
+    expect(d.netMigration).toBeGreaterThanOrEqual(MIGRATION_MIN - 0.01);
+    expect(d.population).toBeGreaterThan(0);
+  });
+
+  it('takes a shock from the world as a level, not week after week', () => {
+    /*
+     * A refugee movement is worth a few per thousand for as long as it
+     * runs. It used to be ADDED to the stored figure every week, which
+     * turned six per thousand into two hundred and forty over a forty-week
+     * event — and the clamp above would not have caught it, because the
+     * addition happened outside this function entirely.
+     */
+    let withShock = buildDemography(regions);
+    let without = buildDemography(regions);
+    for (let week = 1; week <= 40; week += 1) {
+      withShock = stepDemography(withShock, { ...ideal, migrationShock: 6, turn: week });
+      without = stepDemography(without, { ...ideal, turn: week });
+    }
+
+    expect(withShock.netMigration).toBeGreaterThan(without.netMigration);
+    /* A level, so the gap is bounded by the shock and the clamp — never by
+       how long the event happened to run. */
+    expect(withShock.netMigration - without.netMigration).toBeLessThanOrEqual(6.01);
   });
 });

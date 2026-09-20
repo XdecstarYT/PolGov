@@ -41,6 +41,8 @@ import {
   LIFE_EXPECTANCY_START,
   MIGRATION_ADJUST_RATE,
   MIGRATION_BASE,
+  MIGRATION_MAX,
+  MIGRATION_MIN,
   MIGRATION_JOBS_WEIGHT,
   MIGRATION_SERVICES_WEIGHT,
   MIN_REGION_SEATS,
@@ -169,6 +171,16 @@ export interface DemographyInputs {
   serviceQuality: number;
   /** Jobs by region, from Engine 2D. People leave regions without work. */
   regionalJobs: Record<string, number>;
+  /**
+   * What the world is doing to the flow, per thousand per year.
+   *
+   * A refugee movement or a famine somewhere else, as a LEVEL for as long
+   * as it runs — not something added week after week. It arrives here so
+   * that it goes through the same clamp everything else does: an external
+   * shock can move the figure a long way and cannot move it past what is
+   * physically possible.
+   */
+  migrationShock?: number;
   turn: number;
 }
 
@@ -193,11 +205,24 @@ export function stepDemography(demography: Demography, inputs: DemographyInputs)
   const lifeExpectancy =
     demography.lifeExpectancy + (lifeTarget - demography.lifeExpectancy) * VITAL_RATE_ADJUST;
 
-  /* 2. Migration. People go where there is work and where the services are. */
-  const migrationTarget =
+  /*
+   * 2. Migration. People go where there is work and where the services are
+   *    — and there is a limit to how fast they can get there.
+   *
+   * The clamp is the whole of what stops this system running away. Every
+   * term in the target is a reason to come, more arrivals mean a larger
+   * workforce, a larger workforce means faster growth, faster growth means
+   * fewer people out of work, and fewer people out of work is another
+   * reason to come. See `MIGRATION_MAX`.
+   */
+  const migrationTarget = clamp(
     MIGRATION_BASE +
-    (NATURAL_UNEMPLOYMENT - inputs.unemployment) * MIGRATION_JOBS_WEIGHT +
-    (inputs.serviceQuality - 60) * MIGRATION_SERVICES_WEIGHT;
+      (NATURAL_UNEMPLOYMENT - inputs.unemployment) * MIGRATION_JOBS_WEIGHT +
+      (inputs.serviceQuality - 60) * MIGRATION_SERVICES_WEIGHT +
+      (inputs.migrationShock ?? 0),
+    MIGRATION_MIN,
+    MIGRATION_MAX,
+  );
   const netMigration =
     demography.netMigration + (migrationTarget - demography.netMigration) * MIGRATION_ADJUST_RATE;
   /* Arrivals and departures are tracked separately because they are argued

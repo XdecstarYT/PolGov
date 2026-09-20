@@ -210,8 +210,16 @@ describe('things that were not aimed here', () => {
      * the failure this system was rebalanced to fix — a permanent
      * emergency reads as no emergency at all.
      */
+    /*
+     * One pass per seed, used for both claims. It ran the same five
+     * sixteen-year simulations twice — once for the rate and once for the
+     * concurrency cap — which doubled the slowest test in the suite for
+     * nothing and made it the one that timed out under parallel load.
+     */
     const seeds = [3, 5, 7, 11, 13];
-    const counts = seeds.map((seed) => simulate(TURNS_PER_YEAR * 16, seed, 45).events.length);
+    const runs = seeds.map((seed) => simulate(TURNS_PER_YEAR * 16, seed, 45));
+
+    const counts = runs.map((run) => run.events.length);
     const mean = counts.reduce((sum, c) => sum + c, 0) / counts.length;
 
     expect(mean).toBeGreaterThan(2);
@@ -221,8 +229,7 @@ describe('things that were not aimed here', () => {
     expect(GLOBAL_EVENT_BASE_RISK).toBeLessThan(0.05);
 
     /* Three at once is the cap, so a bad year is bad and not absurd. */
-    for (const seed of seeds) {
-      const run = simulate(TURNS_PER_YEAR * 16, seed, 45);
+    for (const run of runs) {
       let mostAtOnce = 0;
       for (let week = 1; week <= TURNS_PER_YEAR * 16; week += 1) {
         const live = run.events.filter(
