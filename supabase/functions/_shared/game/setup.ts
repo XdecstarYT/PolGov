@@ -407,7 +407,7 @@ export function createGame(options: NewGameOptions): GameState {
     /* Adequate, ageing, and nobody's achievement. The gap between what the
        forces are said to be and what they could do tomorrow was left by
        somebody else, and it is the player's to find. */
-    military: buildMilitary(moneyScale),
+    military: buildMilitary(peopleScale),
 
     /* No quarrels yet. They arrive, which is the correct shape: the
        decision a government faces is never whether to have a crisis. */

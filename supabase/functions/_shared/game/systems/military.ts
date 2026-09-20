@@ -181,8 +181,20 @@ export function deploymentCost(military: Military): number {
 }
 
 /** ₡bn a year the doctrine adds to, or takes off, the defence line. */
-export function doctrineCost(military: Military): number {
-  return findDoctrine(military.doctrine).surcharge;
+export function doctrineCost(military: Military, moneyScale = 1): number {
+  return findDoctrine(military.doctrine).surcharge * moneyScale;
+}
+
+/**
+ * What a programme costs the country that is buying it, ₡bn.
+ *
+ * The template price is written at Verdana's scale. Every other price in
+ * the game is carried to the national one, and a frigate is not an
+ * exception: the same hull is a rounding error to one treasury and a
+ * decade of argument to another.
+ */
+export function programmeCost(template: { cost: number }, moneyScale = 1): number {
+  return template.cost * moneyScale;
 }
 
 /** ₡bn a year currently going into programmes under construction. */
@@ -247,6 +259,8 @@ export interface MilitaryInputs {
   rng: Rng;
   /** True while the country is fighting, which changes everything. */
   atWar: boolean;
+  /** National money against Verdana's, so a quoted price means something. */
+  moneyScale?: number;
 }
 
 export interface MilitaryTick {
@@ -368,7 +382,7 @@ export function stepMilitary(military: Military, inputs: MilitaryInputs): Milita
      * expensive, and then they land.
      */
     const maxSlip = Math.round(template.years * TURNS_PER_YEAR * PROCUREMENT_SLIP_CAP);
-    const maxCost = template.cost * PROCUREMENT_COST_CAP;
+    const maxCost = programmeCost(template, inputs.moneyScale) * PROCUREMENT_COST_CAP;
     const canSlip = programme.slippedTo - programme.dueTurn < maxSlip;
 
     if (canSlip && inputs.week % months(3) === 0 && inputs.rng.chance(template.risk * 0.4)) {
@@ -439,7 +453,12 @@ export function stepMilitary(military: Military, inputs: MilitaryInputs): Milita
  * ------------------------------------------------------------------ */
 
 /** Start something that a successor will finish. */
-export function startProgramme(military: Military, key: string, turn: number): Military {
+export function startProgramme(
+  military: Military,
+  key: string,
+  turn: number,
+  moneyScale = 1,
+): Military {
   const template = findProgramme(key);
   return {
     ...military,
@@ -454,7 +473,7 @@ export function startProgramme(military: Military, key: string, turn: number): M
         /* And what it will actually be, which already is not the same. */
         slippedTo: turn + Math.round(template.years * TURNS_PER_YEAR * (1 + PROCUREMENT_SLIP)),
         spent: 0,
-        cost: template.cost,
+        cost: programmeCost(template, moneyScale),
         cancelled: false,
         delivered: false,
       },
@@ -498,11 +517,15 @@ export function withdraw(military: Military, id: string): Military {
 export function deploymentTerms(
   kind: Deployment['kind'],
   scale: number,
+  moneyScale = 1,
 ): { commitment: number; cost: number } {
   const base = { peacekeeping: 1.0, alliance: 1.2, combat: 1.8, training: 0.4 }[kind];
   return {
     commitment: clamp(scale * 0.25, 0.02, 0.4),
-    cost: scale * base * 34,
+    /* A brigade costs what a brigade costs in the country paying for it.
+       The constant is written at Verdana's scale, so it is carried to the
+       national one like every other price in the game. */
+    cost: scale * base * 34 * moneyScale,
   };
 }
 

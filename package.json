@@ -13,9 +13,10 @@
     "test:watch": "vitest",
     "sync:engine": "node scripts/sync-engine.mjs",
     "check:secrets": "node scripts/check-bundle-secrets.mjs",
+    "check:engine": "node scripts/check-engine-mirror.mjs",
     "smoke": "node scripts/smoke.mjs",
     "smoke:countries": "node scripts/smoke-countries.mjs",
-    "verify": "npm run typecheck && npm run test && npm run build && npm run check:secrets"
+    "verify": "npm run typecheck && npm run test && npm run build && npm run check:secrets && npm run check:engine"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

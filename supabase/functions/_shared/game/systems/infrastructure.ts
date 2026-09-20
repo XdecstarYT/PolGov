@@ -100,6 +100,21 @@ export function maintenanceSpend(infrastructure: Infrastructure, moneyScale = 1)
   );
 }
 
+/**
+ * What commissioning this much of an asset costs, ₡bn.
+ *
+ * The template price is written at Verdana's scale; a country builds at
+ * its own. The quote the player is shown and the sum committed to the
+ * project both come through here, so they cannot drift apart.
+ */
+export function buildCostOf(
+  template: InfrastructureTemplate,
+  units: number,
+  moneyScale = 1,
+): number {
+  return template.buildCost * units * moneyScale;
+}
+
 /** What the projects under construction cost, ₡bn a year. */
 export function projectSpend(infrastructure: Infrastructure): number {
   return infrastructure.projects.reduce(
@@ -361,12 +376,13 @@ export function commission(
   units: number,
   turn: number,
   term: number,
+  moneyScale = 1,
 ): InfrastructureProject {
   return {
     id: `${template.key}-${turn}`,
     key: template.key,
     units,
-    remainingCost: template.buildCost * units,
+    remainingCost: buildCostOf(template, units, moneyScale),
     remainingTurns: template.buildTurns,
     startedTurn: turn,
     startedTerm: term,

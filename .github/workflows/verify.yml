@@ -1,4 +1,4 @@
-# CI — the same four checks `npm run verify` runs locally, on every push.
+# CI — the same five checks `npm run verify` runs locally, on every push.
 #
 # Deliberately not more than that. A workflow that does things a
 # contributor cannot reproduce on their own machine is a workflow that
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   verify:
-    name: typecheck, test, build, secret audit
+    name: typecheck, test, build, secret audit, engine mirror
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
