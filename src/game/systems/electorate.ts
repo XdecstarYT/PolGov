@@ -251,6 +251,7 @@ export function regionBreakdown(
     region.campaignInvestment,
     parties,
     context,
+    region.id,
   );
 }
 
@@ -263,6 +264,15 @@ export function compositionBreakdown(
   campaignInvestment: number,
   parties: readonly Party[],
   context: SupportContext,
+  /**
+   * Which region this electorate is in, when that is known.
+   *
+   * Used for nothing except the parties' own geography — see
+   * `Party.regionStrength`. Without it every party is assumed to be
+   * equally strong everywhere, which is how a national list election
+   * works and is not how anything else does.
+   */
+  regionId?: string,
 ): RegionBreakdown {
   const entries = Object.entries(composition) as [SegmentKey, number][];
 
@@ -298,7 +308,8 @@ export function compositionBreakdown(
       0.98,
       segmentTurnout(segment, campaignInvestment) + (context.segmentTurnout?.[key] ?? 0),
     );
-    const shares = segmentVoteShares(segment, parties, localContext);
+    const raw = segmentVoteShares(segment, parties, localContext);
+    const shares = concentrate(raw, parties, regionId);
     const effective = weight * turnout;
 
     for (const party of parties) {
@@ -329,6 +340,35 @@ export function compositionBreakdown(
     turnout: weightTotal > 0 ? votersTotal / weightTotal : TURNOUT_BASELINE,
     segments: detail.sort((a, b) => b.weight - a.weight),
   };
+}
+
+/**
+ * Apply each party's own geography, then renormalise.
+ *
+ * A multiplier rather than an addition, because concentration is
+ * multiplicative in life: a party with no organisation in a region does
+ * not get a smaller share of it, it gets almost none of it. Renormalising
+ * afterwards keeps the shares a distribution, which means one party being
+ * strong somewhere is the same fact as the others being weaker there.
+ */
+function concentrate(
+  shares: Record<string, number>,
+  parties: readonly Party[],
+  regionId: string | undefined,
+): Record<string, number> {
+  if (!regionId) return shares;
+
+  const out: Record<string, number> = {};
+  let total = 0;
+  for (const party of parties) {
+    const strength = party.regionStrength?.[regionId] ?? 1;
+    const value = (shares[party.id] ?? 0) * strength;
+    out[party.id] = value;
+    total += value;
+  }
+  if (total <= 0) return shares;
+  for (const party of parties) out[party.id] = (out[party.id] ?? 0) / total;
+  return out;
 }
 
 /** National vote shares, weighting each region by its seat entitlement. */

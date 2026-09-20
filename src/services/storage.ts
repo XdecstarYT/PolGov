@@ -13,7 +13,9 @@
  */
 
 import type { GameState } from '../game/index.ts';
-import { migrateState } from '../game/migrate.ts';
+/* Loaded when a save is actually opened. Listing saves does not need the
+   engine, and the title screen is a list of saves. */
+const migrator = () => import('../game/migrate.ts').then((m) => m.migrateState);
 import { isCloudConfigured, supabase } from './supabase.ts';
 import {
   billRows,
@@ -85,7 +87,9 @@ class LocalStore implements GameStore {
       /* Through the migration, because a save written before a subsystem
          existed is a state with a hole in it, and reading one directly is a
          white screen rather than a message. */
-      return raw ? migrateState(JSON.parse(raw)) : null;
+      if (!raw) return null;
+      const migrateState = await migrator();
+      return migrateState(JSON.parse(raw));
     } catch {
       return null;
     }
@@ -165,7 +169,11 @@ class CloudStore implements GameStore {
       .maybeSingle();
 
     if (error) throw new Error(error.message);
-    return (data?.snapshot as GameState | undefined) ?? null;
+    if (!data?.snapshot) return null;
+    /* Same migration as a local save: a snapshot written by an older
+       build is a state with a hole in it either way. */
+    const migrateState = await migrator();
+    return migrateState(data.snapshot);
   }
 
   /**

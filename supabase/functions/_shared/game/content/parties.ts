@@ -34,6 +34,16 @@ export interface PartyTemplate {
   redLinePool: RedLine[];
   /** One line of character, shown on party cards. */
   blurb: string;
+  /**
+   * Where the party's vote is, by region id.
+   *
+   * Absent for the invented country, whose seven parties are national.
+   * The generated chambers of real countries use it, because a party with
+   * a tenth of the vote all in one place wins seats and one with a tenth
+   * spread evenly wins none — and a model without that seats three
+   * parties in every majoritarian country however many stand.
+   */
+  regionStrength?: Record<string, number>;
 }
 
 export const PARTY_TEMPLATES: PartyTemplate[] = [

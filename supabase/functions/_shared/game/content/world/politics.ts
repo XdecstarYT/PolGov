@@ -582,7 +582,8 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
       { family: 'green', weight: 0.25 },
     ],
     regions: [
-      { id: 'ontario', name: 'Ontario', kind: 'suburban', share: 39, lean: lean(0, 0.15, 0.1) },
+      { id: 'toronto', name: 'Greater Toronto', kind: 'metropolitan', share: 19, lean: lean(-0.1, 0.3, 0.15) },
+      { id: 'ontario', name: 'The rest of Ontario', kind: 'suburban', share: 20, lean: lean(0.1, 0, 0.05) },
       { id: 'quebec', name: 'Quebec', kind: 'metropolitan', share: 22, lean: lean(-0.2, 0.25, 0.2) },
       { id: 'bc', name: 'British Columbia', kind: 'coastal', share: 14, lean: lean(-0.1, 0.3, 0.3) },
       { id: 'alberta', name: 'Alberta', kind: 'resource', share: 12, lean: lean(0.4, -0.2, -0.3) },

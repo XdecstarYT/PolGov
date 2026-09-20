@@ -4,18 +4,51 @@
  * Routes on store state rather than URL: the title and setup screens, and then
  * whichever screen the run's current phase calls for. Also owns the two
  * globals — the screen-reader announcement region and the error banner.
+ *
+ * ON THE SPLIT
+ *
+ * The title screen is what somebody arriving is looking at, and it needs a
+ * list of saves and four difficulty blurbs. The desk is thirty panels, and
+ * it is only reachable once a run exists. Loading the second to render the
+ * first is a slower first paint for no reason, so everything past the
+ * title is deferred.
+ *
+ * The fallback is deliberately quiet. A split that flashes a spinner on
+ * every screen change is worse than no split at all, and these chunks
+ * arrive in a few milliseconds from a warm cache — which, after the first
+ * turn, is every time.
  */
 
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { useGame } from '../state/store.ts';
 import { Title } from './screens/Title.tsx';
-import { HowToPlay } from './screens/HowToPlay.tsx';
-import { PartySetup } from './screens/PartySetup.tsx';
-import { Desk } from './screens/Desk.tsx';
-import { CoalitionRoom } from './screens/CoalitionRoom.tsx';
-import { ElectionNight } from './screens/ElectionNight.tsx';
-import { CareerSummary } from './screens/CareerSummary.tsx';
 import { Button } from './components/Primitives.tsx';
+
+const HowToPlay = lazy(() =>
+  import('./screens/HowToPlay.tsx').then((m) => ({ default: m.HowToPlay })),
+);
+const PartySetup = lazy(() =>
+  import('./screens/PartySetup.tsx').then((m) => ({ default: m.PartySetup })),
+);
+const Desk = lazy(() => import('./screens/Desk.tsx').then((m) => ({ default: m.Desk })));
+const CoalitionRoom = lazy(() =>
+  import('./screens/CoalitionRoom.tsx').then((m) => ({ default: m.CoalitionRoom })),
+);
+const ElectionNight = lazy(() =>
+  import('./screens/ElectionNight.tsx').then((m) => ({ default: m.ElectionNight })),
+);
+const CareerSummary = lazy(() =>
+  import('./screens/CareerSummary.tsx').then((m) => ({ default: m.CareerSummary })),
+);
+
+/** Quiet on purpose: see the note above. */
+function Loading() {
+  return (
+    <div className="flex min-h-full items-center justify-center p-8">
+      <p className="font-serif text-lg text-ink-faint">Opening the red box…</p>
+    </div>
+  );
+}
 
 export function App() {
   const { screen, game, ready, error, announcement, clearError, init } = useGame();
@@ -57,10 +90,12 @@ export function App() {
         </div>
       )}
 
-      {screen === 'title' && <Title />}
-      {screen === 'how-to-play' && <HowToPlay />}
-      {screen === 'setup' && <PartySetup />}
-      {screen === 'game' && game && <GameScreen />}
+      <Suspense fallback={<Loading />}>
+        {screen === 'title' && <Title />}
+        {screen === 'how-to-play' && <HowToPlay />}
+        {screen === 'setup' && <PartySetup />}
+        {screen === 'game' && game && <GameScreen />}
+      </Suspense>
     </>
   );
 }

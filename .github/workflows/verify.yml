@@ -1,0 +1,63 @@
+# CI — the same four checks `npm run verify` runs locally, on every push.
+#
+# Deliberately not more than that. A workflow that does things a
+# contributor cannot reproduce on their own machine is a workflow that
+# fails for reasons nobody can debug, so this runs exactly the command in
+# package.json and nothing it does not.
+#
+# The secret audit is the one worth naming separately: it greps the BUILT
+# bundle for key material, which is the only check here that would catch
+# somebody moving an API key to the client by accident.
+
+name: verify
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck, test, build, secret audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Secret audit
+        run: npm run check:secrets
+
+      - name: Engine mirror is in step
+        # The edge functions run a copy of the engine. If it has drifted
+        # from src/game, the server and the client disagree about the
+        # rules, which is the one kind of bug this project cannot tolerate.
+        run: |
+          npm run sync:engine
+          if ! git diff --quiet -- supabase/functions/_shared/game; then
+            echo "::error::supabase/functions/_shared/game is out of date. Run: npm run sync:engine"
+            git diff --stat -- supabase/functions/_shared/game
+            exit 1
+          fi

@@ -235,10 +235,76 @@ describe('a run of a real country', () => {
         playerIdeology: { economic, social, environmental: 0.1 },
       }).parties.find((p) => p.isPlayer)!.seats;
 
-    /* Canada under first past the post: the same party, two platforms,
-       and a difference of most of the chamber. */
-    expect(seatsWith('canada', 0.3, -0.05)).toBeGreaterThan(
-      seatsWith('canada', -0.1, 0.2) * 2,
+    /*
+     * How much the platform decides varies by country, and that is the
+     * model working rather than failing. Where a field is spread — France
+     * under two rounds, Ireland under a transferable vote — the same party
+     * on two platforms is nearly three times apart. Where the two largest
+     * families sit close together, as in Canada, it is a few seats, which
+     * is what a country whose main parties agree about most things looks
+     * like from the inside.
+     *
+     * So the test is the strong claim where it is true and the weak one
+     * everywhere: a majoritarian country amplifies the choice somewhere,
+     * and nowhere does the choice fail to register.
+     */
+    expect(seatsWith('france', 0.3, -0.05)).toBeGreaterThan(
+      seatsWith('france', -0.1, 0.2) * 2,
     );
+
+    const majoritarian: CountryKey[] = [
+      'canada',
+      'united_kingdom',
+      'france',
+      'india',
+      'australia',
+      'ireland',
+    ];
+    for (const country of majoritarian) {
+      const right = seatsWith(country, 0.3, -0.05);
+      const left = seatsWith(country, -0.1, 0.2);
+      expect(right).not.toBe(left);
+      expect(Math.max(right, left)).toBeGreaterThan(Math.min(right, left));
+    }
+  });
+
+  it('gives the player a base rather than uniform support everywhere', () => {
+    /*
+     * The defect this exists to prevent. Every generated party has its
+     * vote concentrated where people who think like it live; leaving the
+     * player as the one party without a geography made them evenly
+     * competitive in every seat in the country, which flattened the
+     * difference between a platform that fits and one that does not.
+     */
+    const state = game('united_kingdom');
+    const player = state.parties.find((p) => p.isPlayer)!;
+    expect(player.regionStrength).toBeDefined();
+    const values = Object.values(player.regionStrength!);
+    expect(Math.max(...values)).toBeGreaterThan(Math.min(...values) * 1.3);
+
+    /* And the invented country keeps a uniform, national field. */
+    const verdana = game('verdana');
+    for (const party of verdana.parties) {
+      expect(party.regionStrength).toBeUndefined();
+    }
+  });
+
+  it('seats a parliament rather than three parties', () => {
+    /*
+     * Measured, because it was wrong for a long time and invisibly so.
+     * Every majoritarian country used to return exactly three parties
+     * with seats and three or four on nothing, however many stood —
+     * support was a smooth function of ideology, so whichever party fitted
+     * the national mood best won every district in the country.
+     */
+    for (const country of playable) {
+      const state = game(country);
+      const held = state.parties.filter((p) => p.seats > 0).length;
+      const largest = Math.max(...state.parties.map((p) => p.seats));
+
+      expect(held).toBeGreaterThanOrEqual(4);
+      /* And nobody takes the whole chamber. */
+      expect(largest).toBeLessThan(TOTAL_SEATS * 0.62);
+    }
   });
 });

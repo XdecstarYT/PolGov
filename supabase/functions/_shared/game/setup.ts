@@ -58,7 +58,12 @@ import type { NationKey } from './content/nations.ts';
 import { findCountry, type CountryKey } from './content/world/countries.ts';
 import { buildCast } from './systems/personas.ts';
 import { findPolitics, hasPolitics } from './content/world/politics.ts';
-import { financesFor, partiesFor, regionsFor } from './content/world/generate.ts';
+import {
+  financesFor,
+  partiesFor,
+  playerGeographyFor,
+  regionsFor,
+} from './content/world/generate.ts';
 
 export interface NewGameOptions {
   gameId: string;
@@ -228,6 +233,7 @@ function buildParties(
     prioritySector: template.prioritySector,
     sectorFloor: template.sectorFloor,
     redLinePool: template.redLinePool,
+    regionStrength: template.regionStrength,
   }));
 
   const player: Party = {
@@ -250,6 +256,8 @@ function buildParties(
     prioritySector: 'economy',
     sectorFloor: 0,
     redLinePool: [],
+    /* And its vote is where a platform like this one's vote is. */
+    regionStrength: playerGeographyFor(options.country ?? 'verdana', options.playerIdeology),
   };
 
   return [player, ...others];

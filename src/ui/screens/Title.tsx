@@ -9,8 +9,10 @@ import { useState } from 'react';
 import { useGame } from '../../state/store.ts';
 import { isCloudConfigured } from '../../services/supabase.ts';
 import { Button, EmptyNote, Kicker, Panel, Tag, pct } from '../components/Primitives.tsx';
-import { DIFFICULTY } from '../../game/index.ts';
-import type { Difficulty } from '../../game/index.ts';
+/* Straight from the module that defines them rather than the barrel: the
+   title screen needs four blurbs, not the simulation. */
+import { DIFFICULTY } from '../../game/balance.ts';
+import type { Difficulty } from '../../game/types.ts';
 
 export function Title() {
   const {

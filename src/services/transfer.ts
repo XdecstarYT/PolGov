@@ -18,7 +18,16 @@
  */
 
 import type { GameState } from '../game/index.ts';
-import { migrateState } from '../game/migrate.ts';
+
+/**
+ * How a run is brought up to date.
+ *
+ * Passed in rather than imported, so this module carries no dependency on
+ * the engine and the title screen does not download forty thousand lines
+ * of rules to render a list of saves. The caller supplies the real
+ * `migrateState`; a test can supply itself.
+ */
+export type Migrate = (raw: unknown) => GameState | null;
 
 /** What a run is called on disk. Legible, sortable, and not a UUID. */
 export function fileNameFor(state: GameState): string {
@@ -73,7 +82,11 @@ export type ImportResult =
  * overwriting the first. Nobody expects a restore to destroy the thing it
  * was restoring.
  */
-export function readRun(text: string, existingIds: readonly string[]): ImportResult {
+export function readRun(
+  text: string,
+  existingIds: readonly string[],
+  migrateState: Migrate,
+): ImportResult {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);

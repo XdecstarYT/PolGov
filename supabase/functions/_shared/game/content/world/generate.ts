@@ -35,6 +35,7 @@ import {
   findPolitics,
   type PartyFamily,
   type PoliticsProfile,
+  type RegionKind,
 } from './politics.ts';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -68,6 +69,26 @@ export const MAX_GENERATED_PARTIES = BENCHES.length;
  * The families
  * ------------------------------------------------------------------ */
 
+/**
+ * Where each political family's support actually is.
+ *
+ * `kinds` are the sorts of place it is strong in and `strength` is how
+ * much stronger; `elsewhere` is what it gets everywhere else. A party with
+ * no entry here is strong everywhere equally, which is a fair description
+ * of a large catch-all party and a terrible one of anybody else.
+ *
+ * This is what makes a majoritarian chamber contain more than three
+ * parties. Without it, support is a smooth function of ideology, every
+ * district in a country elects whichever party fits the national mood
+ * best, and a party with a tenth of the vote wins nothing anywhere —
+ * which is not what a tenth of the vote does when it is all in one place.
+ */
+interface Geography {
+  kinds: RegionKind[];
+  strength: number;
+  elsewhere: number;
+}
+
 interface FamilySpec {
   /** Names to pick from, so two countries do not field the same chamber. */
   names: { name: string; shortName: string }[];
@@ -82,6 +103,8 @@ interface FamilySpec {
   blurb: string;
   /** The line this family will not cross, beyond its own sector floor. */
   redLine: (id: string) => RedLine;
+  /** Where its vote is, when it is anywhere in particular. */
+  geography?: Geography;
 }
 
 const FAMILIES: Record<PartyFamily, FamilySpec> = {
@@ -104,6 +127,7 @@ const FAMILIES: Record<PartyFamily, FamilySpec> = {
       category: 'labour',
       description: 'No bill that weakens collective bargaining, whatever it is called.',
     }),
+    geography: { kinds: ['industrial', 'post_industrial', 'metropolitan'], strength: 1.9, elsewhere: 0.62 },
   },
   conservative: {
     names: [
@@ -126,6 +150,7 @@ const FAMILIES: Record<PartyFamily, FamilySpec> = {
       magnitude: 0.6,
       description: 'No bill that moves social policy sharply toward permissiveness.',
     }),
+    geography: { kinds: ['suburban', 'agrarian', 'coastal'], strength: 1.7, elsewhere: 0.66 },
   },
   liberal: {
     names: [
@@ -148,6 +173,7 @@ const FAMILIES: Record<PartyFamily, FamilySpec> = {
       magnitude: 0.5,
       description: 'No bill that raises the burden on business past what was agreed.',
     }),
+    geography: { kinds: ['capital', 'metropolitan', 'suburban'], strength: 1.8, elsewhere: 0.55 },
   },
   green: {
     names: [
@@ -168,6 +194,7 @@ const FAMILIES: Record<PartyFamily, FamilySpec> = {
       category: 'environment',
       description: 'No bill that expands extraction, however it is framed.',
     }),
+    geography: { kinds: ['university', 'capital', 'metropolitan'], strength: 2.6, elsewhere: 0.33 },
   },
   left: {
     names: [
@@ -190,6 +217,7 @@ const FAMILIES: Record<PartyFamily, FamilySpec> = {
       magnitude: 0.35,
       description: 'No bill that cuts what people are already receiving.',
     }),
+    geography: { kinds: ['industrial', 'metropolitan', 'university'], strength: 2.5, elsewhere: 0.35 },
   },
   nationalist: {
     names: [
@@ -212,6 +240,7 @@ const FAMILIES: Record<PartyFamily, FamilySpec> = {
       magnitude: 0.4,
       description: 'No bill that loosens the rules on who may come and stay.',
     }),
+    geography: { kinds: ['post_industrial', 'coastal', 'agrarian'], strength: 2.3, elsewhere: 0.42 },
   },
   christian_democratic: {
     names: [
@@ -232,6 +261,7 @@ const FAMILIES: Record<PartyFamily, FamilySpec> = {
       category: 'civic',
       description: 'No bill that redefines the family, whatever the drafting says.',
     }),
+    geography: { kinds: ['agrarian', 'suburban'], strength: 2.4, elsewhere: 0.4 },
   },
   agrarian: {
     names: [
@@ -252,6 +282,7 @@ const FAMILIES: Record<PartyFamily, FamilySpec> = {
       category: 'environment',
       description: 'No bill that puts a new cost on farming without a matching payment.',
     }),
+    geography: { kinds: ['agrarian', 'resource'], strength: 4.2, elsewhere: 0.16 },
   },
   regionalist: {
     names: [
@@ -272,6 +303,7 @@ const FAMILIES: Record<PartyFamily, FamilySpec> = {
       category: 'civic',
       description: 'No bill that takes a power back from the regions.',
     }),
+    geography: { kinds: [], strength: 0, elsewhere: 0 },
   },
   centrist: {
     names: [
@@ -294,6 +326,7 @@ const FAMILIES: Record<PartyFamily, FamilySpec> = {
       magnitude: 0.7,
       description: 'No bill that pushes economic policy sharply toward collective provision.',
     }),
+    geography: { kinds: ['capital', 'suburban'], strength: 1.35, elsewhere: 0.85 },
   },
 };
 
@@ -324,6 +357,114 @@ function positionOf(profile: PoliticsProfile, family: PartyFamily): Ideology {
 }
 
 /**
+ * Where one party's vote is, by region.
+ *
+ * Everybody but the regionalists gets their family's geography applied to
+ * whatever kinds of place this country actually has. A regionalist party
+ * is different in kind: it is strong in one or two NAMED regions and has
+ * essentially no organisation anywhere else, which is what makes it a
+ * regionalist party rather than a small national one.
+ */
+function geographyOf(
+  family: PartyFamily,
+  regions: readonly RegionTemplate[],
+  profile: PoliticsProfile,
+  seed: number,
+): Record<string, number> | undefined {
+  const spec = FAMILIES[family].geography;
+  if (!spec) return undefined;
+
+  if (family === 'regionalist') {
+    /* Two regions, chosen deterministically, and nothing anywhere else.
+       The biggest are skipped: a party of the capital is not regionalist. */
+    const candidates = [...regions]
+      .sort((a, b) => a.seats - b.seats)
+      .filter((r) => r.seats >= 4)
+      .slice(0, Math.max(2, Math.floor(regions.length / 2)));
+    if (candidates.length === 0) return undefined;
+
+    const home: Record<string, number> = {};
+    for (const region of regions) home[region.id] = 0.04;
+    const first = candidates[seed % candidates.length]!;
+    const second = candidates[(seed + 3) % candidates.length]!;
+    home[first.id] = 7.5;
+    home[second.id] = second.id === first.id ? 7.5 : 4;
+    return home;
+  }
+
+  const kinds = new Set(spec.kinds);
+  const byKind = new Map(profile.regions.map((r) => [r.id, r.kind]));
+  const out: Record<string, number> = {};
+  for (const region of regions) {
+    const kind = byKind.get(region.id);
+    out[region.id] = kind && kinds.has(kind) ? spec.strength : spec.elsewhere;
+  }
+  return out;
+}
+
+/**
+ * Where the player's own vote is.
+ *
+ * A party's support is concentrated where people who think like it live,
+ * and the player's party is not an exception — it is simply the one whose
+ * platform is chosen rather than assigned. So the geography is read off
+ * that platform: whichever political family the player is standing
+ * closest to, its vote is in the same kinds of place.
+ *
+ * This is what keeps WHERE YOU STAND deciding an election under a
+ * majoritarian system. Leaving the player as the one party with no
+ * geography made them uniformly competitive everywhere, which flattened
+ * the difference between a platform that fits a country and one that does
+ * not — and that difference is most of what a first-past-the-post country
+ * is for.
+ */
+export function playerGeographyFor(
+  key: CountryKey,
+  ideology: Ideology,
+): Record<string, number> | undefined {
+  if (key === 'verdana') return undefined;
+
+  const profile = findPolitics(key);
+  const regions = regionsFor(key);
+
+  /* The family the platform is nearest to, by distance on the three axes
+     from that family's position in THIS country. */
+  let nearest: PartyFamily = 'centrist';
+  let best = Infinity;
+  for (const family of Object.keys(FAMILIES) as PartyFamily[]) {
+    if (family === 'regionalist') continue;
+    const position = positionOf(profile, family);
+    const distance =
+      Math.abs(position.economic - ideology.economic) +
+      Math.abs(position.social - ideology.social) +
+      Math.abs(position.environmental - ideology.environmental);
+    if (distance < best) {
+      best = distance;
+      nearest = family;
+    }
+  }
+
+  const spec = FAMILIES[nearest].geography;
+  if (!spec) return undefined;
+
+  /*
+   * Softened toward one. A player's party is a new entrant rather than a
+   * hundred-year-old machine: it has a natural base, and it is not yet
+   * absent from everywhere else.
+   */
+  const soften = (value: number) => Math.round((1 + (value - 1) * 0.6) * 100) / 100;
+  const kinds = new Set(spec.kinds);
+  const byKind = new Map(profile.regions.map((r) => [r.id, r.kind]));
+
+  const out: Record<string, number> = {};
+  for (const region of regions) {
+    const kind = byKind.get(region.id);
+    out[region.id] = soften(kind && kinds.has(kind) ? spec.strength : spec.elsewhere);
+  }
+  return out;
+}
+
+/**
  * The parties of a real country's chamber.
  *
  * One per political family the profile lists, in order, taking the bench
@@ -339,6 +480,7 @@ export function partiesFor(
 
   const profile = findPolitics(key);
   const seed = hashOf(key);
+  const regions = regionsFor(key);
 
   return profile.families.slice(0, BENCHES.length).map((entry, i) => {
     const spec = FAMILIES[entry.family];
@@ -361,6 +503,7 @@ export function partiesFor(
       sectorFloor: floor,
       cabinetDemand: spec.cabinetDemand,
       blurb: spec.blurb,
+      regionStrength: geographyOf(entry.family, regions, profile, seed + i),
       redLinePool: [
         spec.redLine(bench.id),
         {

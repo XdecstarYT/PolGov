@@ -248,6 +248,7 @@ export function simulateElection(input: ElectionInput): ElectionResult {
       region?.campaignInvestment ?? 0,
       parties,
       context,
+      district.regionId,
     );
     return {
       districtId: district.id,

@@ -210,6 +210,21 @@ export interface Party {
   sectorFloor: number;
   /** What it may table as a red line when a government is being formed. */
   redLinePool: RedLine[];
+  /**
+   * Where this party's support actually is, as a multiplier per region.
+   *
+   * Real party support is geographically concentrated: an agrarian party
+   * gets a third of the vote in the countryside and two per cent in the
+   * capital, and a regionalist one gets forty per cent in one region and
+   * nothing anywhere else. Without that, support is a smooth function of
+   * ideology and every district in a country elects the same party —
+   * which is why every majoritarian chamber in this engine used to seat
+   * exactly three parties, however many stood.
+   *
+   * Absent, or 1, means no concentration. The invented country's parties
+   * have none, so nothing about that run changes.
+   */
+  regionStrength?: Record<string, number>;
 }
 
 /* ------------------------------------------------------------------ *

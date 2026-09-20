@@ -12,6 +12,7 @@ import { createStandardGame } from '../../game/setup.ts';
 import { resolveTurn } from '../../game/turn.ts';
 import { fileNameFor, readRun, serialiseRun } from '../transfer.ts';
 import type { GameState } from '../../game/types.ts';
+import { migrateState } from '../../game/migrate.ts';
 
 const run = createStandardGame('transfer');
 
@@ -37,7 +38,7 @@ describe('reading one back', () => {
     let played: GameState = { ...run, phase: 'agenda', negotiation: null };
     for (let i = 0; i < 6; i += 1) played = resolveTurn(played);
 
-    const result = readRun(serialiseRun(played), []);
+    const result = readRun(serialiseRun(played), [], migrateState);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -52,7 +53,7 @@ describe('reading one back', () => {
 
   it('gives an imported copy its own id rather than overwriting the original', () => {
     /* Nobody expects a restore to destroy the thing it was restoring. */
-    const result = readRun(serialiseRun(run), [run.id]);
+    const result = readRun(serialiseRun(run), [run.id], migrateState);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.renamed).toBe(true);
@@ -60,23 +61,23 @@ describe('reading one back', () => {
   });
 
   it('is idempotent: the same file twice lands on the same copy', () => {
-    const once = readRun(serialiseRun(run), [run.id]);
-    const twice = readRun(serialiseRun(run), [run.id]);
+    const once = readRun(serialiseRun(run), [run.id], migrateState);
+    const twice = readRun(serialiseRun(run), [run.id], migrateState);
     expect(once.ok && twice.ok && once.state.id === twice.state.id).toBe(true);
   });
 
   it('says why, in the player’s terms, when a file is not a run', () => {
-    expect(readRun('not json at all', [])).toEqual({
+    expect(readRun('not json at all', [], migrateState)).toEqual({
       ok: false,
       reason: 'That file is not readable as JSON.',
     });
-    expect(readRun('[1, 2, 3]', []).ok).toBe(false);
-    expect(readRun('null', [])).toEqual({
+    expect(readRun('[1, 2, 3]', [], migrateState).ok).toBe(false);
+    expect(readRun('null', [], migrateState)).toEqual({
       ok: false,
       reason: 'That file does not contain a run.',
     });
 
-    const notARun = readRun(JSON.stringify({ hello: 'world' }), []);
+    const notARun = readRun(JSON.stringify({ hello: 'world' }), [], migrateState);
     expect(notARun.ok).toBe(false);
     if (!notARun.ok) expect(notARun.reason).toMatch(/not a Statecraft run/);
   });
@@ -94,7 +95,7 @@ describe('reading one back', () => {
     delete older.peopleScale;
     delete older.debtTolerance;
 
-    const result = readRun(JSON.stringify(older), []);
+    const result = readRun(JSON.stringify(older), [], migrateState);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.state.country).toBe('verdana');

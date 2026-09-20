@@ -14,18 +14,22 @@
  */
 
 import { create } from 'zustand';
-import {
-  applyIntent,
-  computeLegacy,
-  createGame,
-  type Difficulty,
-  type ElectoralSystem,
-  type GameState,
-  type Ideology,
-  type Intent,
-  type LegacyScore,
-  type CountryKey,
+import type {
+  Difficulty,
+  ElectoralSystem,
+  GameState,
+  Ideology,
+  Intent,
+  LegacyScore,
+  CountryKey,
 } from '../game/index.ts';
+/*
+ * The engine is loaded on demand rather than imported. It is most of the
+ * download and the title screen needs none of it — see `engine.ts`. Every
+ * action below that touches the rules awaits it; the first one pays a few
+ * milliseconds and the rest are free.
+ */
+import { engine, loadedEngine, warmEngine } from './engine.ts';
 import { localStore, resolveStore, type GameStore, type GameSummary } from '../services/storage.ts';
 import { downloadRun, readRun } from '../services/transfer.ts';
 import { isCloudConfigured, supabase } from '../services/supabase.ts';
@@ -166,6 +170,9 @@ export const useGame = create<AppState>((set, get) => ({
   },
 
   setScreen(screen) {
+    /* Anything past the title means a run is coming. Start fetching the
+       rules now rather than when somebody presses the button. */
+    if (screen !== 'title') warmEngine();
     set({ screen });
   },
 
@@ -186,6 +193,7 @@ export const useGame = create<AppState>((set, get) => ({
   async startGame(form) {
     set({ busy: true, error: null });
     try {
+      const { createGame } = await engine();
       const game = createGame({
         gameId: uuid(),
         country: form.country,
@@ -224,6 +232,7 @@ export const useGame = create<AppState>((set, get) => ({
 
   async openGame(id) {
     set({ busy: true, error: null });
+    warmEngine();
     try {
       const store = get().store ?? (await resolveStore());
       const game = await store.load(id);
@@ -280,7 +289,8 @@ export const useGame = create<AppState>((set, get) => ({
     try {
       const store = get().store ?? (await resolveStore());
       const saves = await store.list();
-      const result = readRun(text, saves.map((s) => s.id));
+      const { migrateState } = await engine();
+      const result = readRun(text, saves.map((s) => s.id), migrateState);
       if (!result.ok) throw new Error(result.reason);
 
       await store.save(result.state);
@@ -333,6 +343,7 @@ export const useGame = create<AppState>((set, get) => ({
     const { game, store } = get();
     if (!game) return;
 
+    const { applyIntent } = await engine();
     const result = applyIntent(game, intent);
     if (result.error) {
       set({ error: result.error });
@@ -414,7 +425,9 @@ export const useGame = create<AppState>((set, get) => ({
 
   legacy() {
     const { game } = get();
-    return game ? computeLegacy(game) : null;
+    /* Only reachable inside a run, which means the engine is here. */
+    const loaded = loadedEngine();
+    return game && loaded ? loaded.computeLegacy(game) : null;
   },
 
   async signIn(email) {
