@@ -170,8 +170,6 @@ export interface ConflictTick {
   approval: number;
   /** Points of growth knocked off by a war. */
   economicShock: number;
-  /** ₡bn a year the fighting is costing. */
-  cost: number;
   /** Things that happened, for the report. */
   events: { crisis: Crisis; label: string; cause: string }[];
 }
@@ -187,7 +185,6 @@ export function stepConflicts(crises: readonly Crisis[], inputs: ConflictInputs)
   const events: ConflictTick['events'] = [];
   let approval = 0;
   let economicShock = 0;
-  let cost = 0;
 
   const next = crises.map((crisis) => {
     if (crisis.stage === 'settled') return crisis;
@@ -252,7 +249,6 @@ export function stepConflicts(crises: readonly Crisis[], inputs: ConflictInputs)
       casualties += weekly;
       approval += weekly * CASUALTY_APPROVAL;
       economicShock += WAR_ECONOMY_SHOCK;
-      cost += 180 + weekly * 24;
 
       /* It ends when one side has had enough. */
       if (theirResolve < 20 && balance > 1) {
@@ -326,7 +322,7 @@ export function stepConflicts(crises: readonly Crisis[], inputs: ConflictInputs)
     return { ...crisis, stage, stageSince, escalation, casualties, rally, ourResolve, theirResolve };
   });
 
-  return { crises: next, approval, economicShock, cost, events };
+  return { crises: next, approval, economicShock, events };
 }
 
 /* ------------------------------------------------------------------ *

@@ -38,7 +38,7 @@ import {
   stepConflicts,
 } from '../systems/conflict.ts';
 import { createStandardGame } from '../setup.ts';
-import { absoluteWeek, applyIntent, resolveTurn } from '../turn.ts';
+import { absoluteWeek, applyIntent, resolveTurn, warCost } from '../turn.ts';
 import type { Crisis, GameState, Military, NationState, World } from '../index.ts';
 
 const nationIn = (world: World, key: string): NationState => {
@@ -234,8 +234,13 @@ describe('what decides a war', () => {
       rng: new Rng(4),
     });
     expect(tick.economicShock).toBeLessThan(0);
-    expect(tick.cost).toBeGreaterThan(0);
     expect(atWar(tick.crises)).toBe(true);
+    /* And the bill is charged in one place, at national scale. The tick
+       used to carry a second, differently-computed price that nothing
+       ever spent — which is how the one that is spent went unscaled for
+       so long. */
+    expect(warCost(tick.crises, 1)).toBeGreaterThan(0);
+    expect(warCost(tick.crises, 0.25)).toBeCloseTo(warCost(tick.crises, 1) * 0.25, 6);
   });
 });
 
