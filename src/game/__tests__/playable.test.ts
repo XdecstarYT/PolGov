@@ -10,7 +10,11 @@
 
 import { describe, expect, it } from 'vitest';
 import { createGame } from '../setup.ts';
-import { runElection } from '../turn.ts';
+import { runElection, warCost } from '../turn.ts';
+import { deploymentTerms, doctrineCost, programmeCost } from '../systems/military.ts';
+import { findProgramme } from '../content/forces.ts';
+import { buildCostOf } from '../systems/infrastructure.ts';
+import { findInfrastructure } from '../content/infrastructure.ts';
 import { TOTAL_SEATS, GDP_START, POPULATION_START, SECTOR_BASELINE_FUNDING } from '../balance.ts';
 import { COUNTRY_TEMPLATES, findCountry, playableCountries } from '../content/world/countries.ts';
 import { POLITICS_PROFILES, findPolitics, hasPolitics } from '../content/world/politics.ts';
@@ -338,6 +342,88 @@ describe('a run of a real country', () => {
       expect(held).toBeGreaterThanOrEqual(4);
       /* And nobody takes the whole chamber. */
       expect(largest).toBeLessThan(TOTAL_SEATS * 0.62);
+    }
+  });
+});
+
+/*
+ * Every price the engine charges is written once, at Verdana's scale, and
+ * carried to the country actually paying it. Where that carry was missed,
+ * nothing failed and nothing threw: a New Zealand government simply found
+ * itself charged ₡180bn a year for a war, against ₡102bn of annual
+ * revenue, and the macroeconomy tore itself apart over the following two
+ * hundred weeks. It read like a hard run until you plotted it.
+ *
+ * So the test is the invariant rather than the instance: the same
+ * commitment costs every country the same share of its output. A constant
+ * added later without a scale fails here on the day it is written.
+ */
+describe('what things cost', () => {
+  /** The bill as a share of a year's output, which must not vary by country. */
+  const shareOfOutput = (cost: number, state: ReturnType<typeof game>) =>
+    cost / state.economy.gdp;
+
+  const atWar = (state: ReturnType<typeof game>) => [
+    { ...state.crises[0], stage: 'war' as const, casualties: 120 },
+  ];
+
+  it('charges every country the same share of output for the same war', () => {
+    const reference = game('verdana');
+    const expected = shareOfOutput(warCost(atWar(reference), reference.moneyScale), reference);
+    /* A war is expensive. It is not most of a year's output. */
+    expect(expected).toBeGreaterThan(0.02);
+    expect(expected).toBeLessThan(0.12);
+
+    for (const country of playable) {
+      const state = game(country);
+      expect(shareOfOutput(warCost(atWar(state), state.moneyScale), state)).toBeCloseTo(
+        expected,
+        6,
+      );
+    }
+  });
+
+  it('quotes forces, programmes and building work at national scale', () => {
+    const reference = game('verdana');
+    const quotes = (state: ReturnType<typeof game>) => ({
+      deployment: deploymentTerms('combat', 1, state.moneyScale).cost,
+      doctrine: doctrineCost({ ...state.military, doctrine: 'expeditionary' }, state.moneyScale),
+      programme: programmeCost(findProgramme('frigates'), state.moneyScale),
+      project: buildCostOf(findInfrastructure('railways'), 5, state.moneyScale),
+    });
+    const expected = quotes(reference);
+
+    for (const country of playable) {
+      const state = game(country);
+      const got = quotes(state);
+      for (const key of Object.keys(expected) as (keyof typeof expected)[]) {
+        expect(got[key] / state.economy.gdp).toBeCloseTo(
+          expected[key] / reference.economy.gdp,
+          6,
+        );
+      }
+    }
+  });
+
+  it('sizes the forces by the population, not by the money', () => {
+    /*
+     * The two scales are different numbers and were once passed to each
+     * other: Japan got a Japanese-sized defence budget and a Verdanan
+     * army, New Zealand the reverse. Personnel is a headcount, so it
+     * follows the people.
+     */
+    const reference = game('verdana');
+    const perHead = (state: ReturnType<typeof game>) =>
+      state.military.arms.reduce((sum, a) => sum + a.personnel, 0) /
+      state.demography.population;
+    const expected = perHead(reference);
+
+    for (const country of playable) {
+      /* Loosely, because personnel are whole people and a small country
+         rounds: the claim is the same army per head, not the same to the
+         individual soldier. */
+      expect(perHead(game(country))).toBeGreaterThan(expected * 0.95);
+      expect(perHead(game(country))).toBeLessThan(expected * 1.05);
     }
   });
 });

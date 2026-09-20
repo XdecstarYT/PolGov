@@ -29,6 +29,7 @@ import {
   committedShare,
   deploymentCost,
   deploymentTerms,
+  programmeCost,
   describeForces,
   deterrence,
   findArmState,
@@ -185,8 +186,11 @@ export function DefencePanel() {
                       {late > 0.1 && <Tag tone="warn">{late.toFixed(1)}y late</Tag>}
                       <span className="tnum text-xs text-ink-soft">
                         {money(programme.cost)}
-                        {programme.cost > template.cost && (
-                          <span className="text-loss"> +{money(programme.cost - template.cost)}</span>
+                        {programme.cost > programmeCost(template, game.moneyScale) && (
+                          <span className="text-loss">
+                            {' '}
+                            +{money(programme.cost - programmeCost(template, game.moneyScale))}
+                          </span>
                         )}
                       </span>
                     </span>
@@ -222,7 +226,7 @@ export function DefencePanel() {
               </span>
               <span className="flex shrink-0 items-center gap-2">
                 <span className="tnum text-xs text-ink-faint">
-                  {money(template.cost)} · {template.years}y
+                  {money(programmeCost(template, game.moneyScale))} · {template.years}y
                 </span>
                 <Button
                   disabled={game.politicalCapital < PROGRAMME_PC_COST}
@@ -302,7 +306,8 @@ export function DefencePanel() {
           {target !== '' && (
             <span className="text-xs text-ink-faint">
               {Math.round(deploymentTerms('peacekeeping', 0.8).commitment * 100)}% of the force and{' '}
-              {money(deploymentTerms('peacekeeping', 0.8).cost)} a year, and what goes is not
+              {money(deploymentTerms('peacekeeping', 0.8, game.moneyScale).cost)} a year, and what
+              goes is not
               available for anything else.
             </span>
           )}

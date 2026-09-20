@@ -209,6 +209,7 @@ import {
   findDoctrine,
   deploy,
   deploymentCost,
+  programmeCost,
   deploymentTerms,
   doctrineCost,
   findProgramme,
@@ -536,11 +537,21 @@ function crisisCause(name: string): string {
   return causes[Math.abs(name.length * 7) % causes.length]!;
 }
 
-/** ₡bn a year the fighting is costing, across every live war. */
-function warCost(crises: readonly GameState['crises'][number][]): number {
+/**
+ * ₡bn a year the fighting is costing, across every live war.
+ *
+ * Carried to national money, like every other price. Unscaled, the flat
+ * term was written for a ₡3,680bn economy and charged in full to a
+ * ₡253bn one — a war costing seventy per cent of output every year, which
+ * is not a hard war, it is an arithmetic error.
+ */
+export function warCost(
+  crises: readonly GameState['crises'][number][],
+  moneyScale: number,
+): number {
   return crises
     .filter((c) => c.stage === 'war')
-    .reduce((sum, c) => sum + 180 + c.casualties * 1.4, 0);
+    .reduce((sum, c) => sum + (180 + c.casualties * 1.4) * moneyScale, 0);
 }
 
 /**
@@ -1278,9 +1289,9 @@ export function resolveTurn(state: GameState): GameState {
     infrastructureSpend(next.infrastructure, next.moneyScale) +
       duesTotal(next.world.organisations, next.economy.gdp) +
       deploymentCost(next.military) +
-      doctrineCost(next.military) +
+      doctrineCost(next.military, next.moneyScale) +
       programmeSpend(next.military) +
-      warCost(next.crises),
+      warCost(next.crises, next.moneyScale),
   );
   next.treasury += fiscal.treasuryDelta;
   next.debt = Math.max(0, next.debt + fiscal.debtDelta);
@@ -1994,7 +2005,10 @@ export function resolveTurn(state: GameState): GameState {
   const defenceLine = lineFor(next.budget, 'defence');
   const defenceService = next.services.find((s) => s.key === 'defence');
   const militaryTick = stepMilitary(next.military, {
-    funding: defenceLine.enacted - deploymentCost(next.military) - doctrineCost(next.military),
+    funding:
+      defenceLine.enacted -
+      deploymentCost(next.military) -
+      doctrineCost(next.military, next.moneyScale),
     required: defenceService?.demand ?? defenceLine.enacted,
     demography: next.demography,
     unemployment: next.economy.unemployment,
@@ -2004,6 +2018,7 @@ export function resolveTurn(state: GameState): GameState {
     week: absoluteWeek(next),
     rng,
     atWar: atWar(next.crises),
+    moneyScale: next.moneyScale,
   });
   next.military = militaryTick.military;
 
@@ -2015,7 +2030,7 @@ export function resolveTurn(state: GameState): GameState {
       delta: template.strength,
       cause:
         `${Math.round(((programme.slippedTo - programme.dueTurn) / TURNS_PER_YEAR) * 10) / 10} years ` +
-        `late and ₡${(programme.cost - template.cost).toFixed(0)}bn over. It was started ` +
+        `late and ₡${(programme.cost - programmeCost(template, next.moneyScale)).toFixed(0)}bn over. It was started ` +
         `${Math.round((absoluteWeek(next) - programme.startedTurn) / TURNS_PER_YEAR)} years ago, ` +
         'and whoever started it is not necessarily the government collecting it.',
       unit: 'pts',
@@ -4253,15 +4268,15 @@ function handleStartProgramme(state: GameState, key: string): IntentResult {
   const next = clone(state);
   const entries = currentLog(next);
   spendPc(next, PROGRAMME_PC_COST);
-  next.military = startProgramme(next.military, key, absoluteWeek(next));
+  next.military = startProgramme(next.military, key, absoluteWeek(next), next.moneyScale);
 
   const started = next.military.programmes[next.military.programmes.length - 1]!;
   log(entries, {
     kind: 'note',
     label: `${template.name} begun`,
-    delta: -template.cost,
+    delta: -programmeCost(template, next.moneyScale),
     cause:
-      `₡${template.cost.toFixed(0)}bn over ${template.years} years, and the internal estimate ` +
+      `₡${programmeCost(template, next.moneyScale).toFixed(0)}bn over ${template.years} years, and the internal estimate ` +
       `already says ${Math.round((started.slippedTo - started.dueTurn) / TURNS_PER_YEAR * 10) / 10} ` +
       `years longer than that. The work is in ${template.regions.join(' and ')}, which is why ` +
       'cancelling it later will not be a financial decision.',
@@ -4331,7 +4346,7 @@ function handleDeployForce(
     return reject(state, 'Not enough political capital to send anybody anywhere.');
   }
 
-  const terms = deploymentTerms(kind, scale);
+  const terms = deploymentTerms(kind, scale, state.moneyScale);
   if (committedShare(state.military) + terms.commitment > 0.75) {
     return reject(
       state,
@@ -4883,7 +4898,7 @@ function handleStartProject(
   spendPc(next, PROJECT_PC_COST);
   next.infrastructure.projects = [
     ...next.infrastructure.projects,
-    commission(template, Math.round(units), next.turnNumber, next.termNumber),
+    commission(template, Math.round(units), next.turnNumber, next.termNumber, next.moneyScale),
   ];
   return ok(next);
 }

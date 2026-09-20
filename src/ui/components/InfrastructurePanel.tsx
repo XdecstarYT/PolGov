@@ -21,6 +21,7 @@ import {
   FULL_MAINTENANCE_COST,
   MAINTENANCE_LEVEL_MAX,
   PROJECT_PC_COST,
+  buildCostOf,
   canStartProject,
   findInfrastructure,
   maintenanceSpend,
@@ -209,7 +210,7 @@ export function InfrastructurePanel() {
                     Commission {template.name.toLowerCase()}
                   </span>
                   <span className="text-xs tnum text-ink-faint">
-                    {money(template.buildCost * units)} over {opensIn} years
+                    {money(buildCostOf(template, units, game.moneyScale))} over {opensIn} years
                   </span>
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-ink-soft">{template.blurb}</p>
