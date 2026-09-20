@@ -15,6 +15,13 @@ Three engines run underneath it and none of them is a backdrop for the others:
 the politics of holding a government together, the economy and public finances
 it is trying to run, and a world outside the borders that is not about you.
 
+**Sixteen real parliamentary democracies are playable**, and one invented one.
+The country you pick decides how votes become seats, which parts of it vote
+differently from each other, what the state already owes and who is outside
+the window — Germany elects a Bundestag by mixed-member proportional
+representation and Australia elects its House by preferential ballot, and a
+game where both were counted the same way would be modelling neither.
+
 ---
 
 ## Run it
@@ -31,9 +38,25 @@ prose for every piece of narrative text.
 ```bash
 npm run build     # production build into dist/
 npm run preview   # serve the production build
-npm test          # 364 unit tests over the game math
+npm test          # 910 unit tests over the game math
 npm run verify    # typecheck + tests + build + secret audit
 ```
+
+And two checks that need the built site being served (`npm run preview` in
+another terminal), because they are the ones nothing else catches:
+
+```bash
+npm run smoke             # a complete week, in a real browser, no console errors
+npm run smoke:countries   # founds a party in six real countries and reaches the desk
+```
+
+CI runs all of it on every push, plus a check that the engine mirror the edge
+functions use has not drifted from `src/game`. See
+[DEPLOY.md](DEPLOY.md) for shipping it.
+
+**New here?** The game has a *How to play* page, reachable from the title
+screen and from the desk. It is worth three minutes: five phases, what
+political capital is for, what the budget is, and the three ways a run ends.
 
 ---
 
@@ -106,9 +129,12 @@ src/game/          The engine. Pure TypeScript — no DOM, no fetch, no Supabase
                      military, conflict, intelligence, worldSim
   content/           48 bills, 30 events, 8 parties, 8 regions, 20 voter
                      segments, 4 factions, 6 referendums, 6 media channels,
-                     20 services, 8 ministries, 12 nations, 7 organisations,
-                     4 arms, 4 doctrines, 6 procurement programmes,
-                     6 covert operations, 12 global events
+                     20 services, 8 ministries, 4 arms, 4 doctrines,
+                     6 procurement programmes, 6 covert operations,
+                     12 global events
+  content/world/     37 countries, 14 real institutions, 17 political
+                     profiles, 10 party families, 9 kinds of electorate,
+                     and the invented people who fill them
   serverGuards.ts    Snapshot invariants and the intent allowlist. Unit-tested.
 src/services/      Supabase client, storage adapters, AI narrator client.
 src/state/         Zustand store.
@@ -132,6 +158,16 @@ docs/ENGINE-3.md   World and geopolitics: the same, for everything outside.
   post, proportional, mixed-member, preferential, two-round — and they
   genuinely disagree. Districts conserve their region's electorate exactly,
   which is what makes redrawing boundaries meaningful rather than magical.
+- **Party support has a geography.** An agrarian party is four times as strong
+  in the countryside and a sixth as strong in the capital; a regionalist party
+  is concentrated in two regions and has almost nothing anywhere else. That is
+  what lets a majoritarian chamber seat five parties instead of three, and it
+  applies to the player too — read off the platform they chose, which is why
+  where you stand decides an election under first past the post.
+- **The largest party leads.** A government is headed by its biggest member, so
+  a party that has been overtaken must assemble a majority *excluding* the
+  party that beat it, or lose. The opening chamber is the election you won;
+  every one after it is a contest.
 - **Your own party.** Four factions holding shares of your MPs. A wing that
   dislikes a bill withholds its seats, so a comfortable majority can still lose
   a division to its own side. Parties have their own money, separate from the
@@ -322,3 +358,22 @@ alone: every meter carries its number and a band name, every party swatch is
 paired with a glyph, and every signed figure carries an explicit sign. State
 changes are announced to screen readers, and Election Night declares all
 regions at once under `prefers-reduced-motion`.
+
+Every screen works at phone width with no horizontal scroll.
+
+---
+
+## Your saves
+
+A run is written to storage as it is played, week by week — never only at the
+end. Locally that means this browser; signed in, it means your account.
+
+Either way a run can be written out as a **file** and read back: on another
+machine, into another browser, or years later. The file is the whole run,
+indented and readable, and one exported from an older build opens in a newer
+one because imports go through the same migration a stored save does. Export
+is on the title screen next to each save, and on the desk while you play.
+
+If the interface ever throws, the page says so rather than going white, tells
+you the run is safe — it is — and offers you the file before suggesting
+anything else.
