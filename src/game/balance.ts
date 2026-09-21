@@ -2309,3 +2309,54 @@ export const SUPPRESSION_BACKFIRE = 0.09;
  * countries, and nothing organised in any of them.
  */
 export const MOBILISATION_PIVOT = 30;
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — War
+ * ------------------------------------------------------------------ */
+
+/**
+ * The war score a side needs before it can claim an ordinary aim.
+ *
+ * Multiplied by the aim's own difficulty, so surviving is cheap and
+ * removing a government is not.
+ */
+export const WAR_SCORE_TO_WIN = 55;
+
+/** How fast the score follows the battlefield. Slowly: a week is not a war. */
+export const WAR_SCORE_ADJUST = 0.035;
+
+/** Points of exhaustion per thousand casualties. */
+export const EXHAUSTION_CASUALTY_WEIGHT = 0.9;
+
+/** And per point of a year's output spent on it. */
+export const EXHAUSTION_COST_WEIGHT = 2.2;
+
+/**
+ * And per week in which nothing has visibly been achieved.
+ *
+ * The largest of the three in the kinds of war where nothing is ever
+ * visibly achieved, which is why those are the wars that end
+ * governments rather than the bloody ones.
+ */
+export const EXHAUSTION_STALEMATE_WEIGHT = 0.55;
+
+/** How much of the opening rally shows up as approval. */
+export const RALLY_APPROVAL_SHARE = 0.8;
+
+/**
+ * The exhaustion at which a government can no longer carry a war.
+ *
+ * Below a hundred, because a country does not reach the theoretical
+ * maximum of anything before it stops.
+ */
+export const EXHAUSTION_BREAKS = 86;
+
+/**
+ * How much of the other side's exhaustion is absorbed by whatever they
+ * have that we cannot see.
+ *
+ * Given no relief at all they exhausted three times faster than we did,
+ * and every war in the game was won by outlasting an opponent who had
+ * been given no capacity to outlast anybody.
+ */
+export const THEIR_RELIEF = 0.42;

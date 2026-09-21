@@ -2130,3 +2130,98 @@ export interface Movements {
   efficacyPressure: number;
   history: MovementsPoint[];
 }
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — War
+ * ------------------------------------------------------------------ */
+
+/** One side's capacity to keep going, which is what a war is a race between. */
+export interface WarSide {
+  /**
+   * How close this side is to being unable to continue, 0–100.
+   *
+   * Political rather than material. Wars are not ended by running out of
+   * soldiers; they end when a government can no longer carry its own
+   * population, and this is that number.
+   */
+  exhaustion: number;
+  /** Cumulative, in thousands. */
+  casualties: number;
+  /** Equipment written off, as an index. */
+  materiel: number;
+  /** Willingness to go on, which falls as exhaustion rises. */
+  resolve: number;
+  /** Share of available force committed, 0–1. */
+  committed: number;
+}
+
+export interface WarPoint {
+  turn: number;
+  score: number;
+  ourExhaustion: number;
+  theirExhaustion: number;
+  intensity: number;
+}
+
+export interface War {
+  id: string;
+  kind: import('./content/war.ts').WarKind;
+  /** Who it is against. A civil war names the country itself. */
+  against: string;
+  aim: import('./content/war.ts').WarAim;
+  /** Who started it. A government that did not is judged differently. */
+  initiator: 'us' | 'them';
+  allies: string[];
+  theirAllies: string[];
+  startedTurn: number;
+  /** Standing granted on the day it started, and spent from that day. */
+  rally: number;
+  /** How it is actually going, -100 to 100. */
+  score: number;
+  /**
+   * How it is going according to the despatches.
+   *
+   * Late, partial, and written by people with an interest in them. Good
+   * intelligence narrows the gap with `score`; it never closes it.
+   */
+  reportedScore: number;
+  /** How much of a war it is, 0–100. */
+  intensity: number;
+  us: WarSide;
+  them: WarSide;
+  ended: boolean;
+  endedTurn: number | null;
+  outcome: import('./content/war.ts').WarOutcome | null;
+  /** The stated reason, written when it began rather than afterwards. */
+  casus: string;
+  events: string[];
+  history: WarPoint[];
+}
+
+/**
+ * A finished war, kept for the rest of the run.
+ *
+ * The point of modelling a war in a political game is what the country is
+ * like afterwards, so this outlives the government that fought it and is
+ * read back by the timeline fifty years later.
+ */
+export interface WarRecord {
+  id: string;
+  /** What it ended up being called. */
+  name: string;
+  kind: import('./content/war.ts').WarKind;
+  against: string;
+  aim: import('./content/war.ts').WarAim;
+  outcome: import('./content/war.ts').WarOutcome;
+  startedTurn: number;
+  endedTurn: number;
+  casualties: number;
+  peakIntensity: number;
+  casus: string;
+  /** What it did to the country, for the timeline entry. */
+  governmentsFallen: number;
+  peakDebt: number;
+  deepestRecession: number;
+  territoryChanged: number;
+  alliesInvolved: number;
+}
