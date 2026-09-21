@@ -1600,6 +1600,16 @@ export interface GameState {
    */
   culture: Culture;
 
+  /**
+   * What the country thinks of the arrangements it is governed under.
+   *
+   * Underneath approval and far more consequential: institutional trust
+   * decides how much of what is owed is actually collected, and the
+   * belief that participating works decides whether frustration becomes
+   * a march or an absence.
+   */
+  opinion: Opinion;
+
   /** What the country is built out of, and what is being built. */
   infrastructure: Infrastructure;
 
@@ -1927,4 +1937,48 @@ export interface Culture {
   /** Satisfaction with how it is doing. Moves constantly. */
   nationalPride: number;
   history: CulturePoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Public opinion
+ * ------------------------------------------------------------------ */
+
+export interface TrustState {
+  key: import('./content/trust.ts').TrustKey;
+  level: number;
+}
+
+export interface OpinionPoint {
+  turn: number;
+  institutionalTrust: number;
+  efficacy: number;
+  frustration: number;
+  confidence: number;
+  protestParticipation: number;
+}
+
+export interface Opinion {
+  trust: TrustState[];
+  /**
+   * Whether people believe acting changes anything, 0–100.
+   *
+   * The hinge: the same frustration produces a country that marches or a
+   * country that has gone quiet, depending entirely on this.
+   */
+  efficacy: number;
+  /** Angry. Marches, when it believes marching works. */
+  frustration: number;
+  /** Hopeful. Spends and invests. */
+  optimism: number;
+  /** Afraid. Votes for security and against outsiders. */
+  fear: number;
+  /** Assured. Complies, pays, and gives a government room. */
+  confidence: number;
+  engagement: number;
+  /** Share who have been out in the last year, %. */
+  protestParticipation: number;
+  petitionParticipation: number;
+  /** Share organised and sustained about something, %. */
+  activism: number;
+  history: OpinionPoint[];
 }

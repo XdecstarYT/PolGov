@@ -70,15 +70,27 @@ export function clamp01to100(value: number): number {
  * unemployment rises is also the month revenue falls and the deficit widens
  * before the government has decided anything at all.
  */
-export function computeRevenue(gdp: number, revenueModifier: number, taxes?: TaxCode): number {
+export function computeRevenue(
+  gdp: number,
+  revenueModifier: number,
+  taxes?: TaxCode,
+  /**
+   * How much of what is owed actually arrives, 0–1.
+   *
+   * Applied to the receipts and NOT to the legislative modifier, which is
+   * a fixed annual sum somebody legislated rather than a tax anybody has
+   * the option of not paying.
+   */
+  compliance = 1,
+): number {
   /* With a tax code, receipts are the sum of what each instrument actually
      raises at its rate. Without one — a handful of tests care only about
      seat arithmetic — fall back to the flat share it is calibrated to. */
   /* `revenueModifier` is an ANNUAL figure carried by legislation, so it is
      divided here like every other annual amount. */
   return taxes
-    ? turnReceipts(taxes, gdp) + perYear(revenueModifier)
-    : computeRevenueFromGdp(gdp, perYear(revenueModifier));
+    ? turnReceipts(taxes, gdp) * compliance + perYear(revenueModifier)
+    : computeRevenueFromGdp(gdp, perYear(revenueModifier)) * compliance;
 }
 
 /**
@@ -180,8 +192,17 @@ export function resolveFiscalTurn(
    * Stated annually, like everything else on a budget.
    */
   otherSpending = 0,
+  /**
+   * The share of what is owed that is actually collected, 0–1.
+   *
+   * Trust, priced. A government the country does not believe in raises
+   * materially less from identical rates, and cannot close the gap by
+   * raising them — the part that depends on people deciding to comply is
+   * exactly the part that has stopped.
+   */
+  compliance = 1,
 ): FiscalTick {
-  const revenue = computeRevenue(economy.gdp, revenueModifier, taxes);
+  const revenue = computeRevenue(economy.gdp, revenueModifier, taxes, compliance);
   /* Programme budgets are annual figures. This is the one place they are
      divided into what is actually spent this week. */
   const spending = perYear(totalFunding(sectors) + otherSpending);

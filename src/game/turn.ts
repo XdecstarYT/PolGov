@@ -181,6 +181,8 @@ import {
   leastIncluded,
   stepCulture,
 } from './systems/culture.ts';
+import { complianceFactor, stepOpinion, trustOf } from './systems/opinion.ts';
+import { findTrust } from './content/trust.ts';
 import { findCulturalInstitution } from './content/culture.ts';
 import { findAccess } from './content/access.ts';
 import { findClass } from './content/classes.ts';
@@ -1290,7 +1292,17 @@ export function resolveTurn(state: GameState): GameState {
     }
   }
 
-  /* Public finances, priced off the economy as it stands this month. */
+  /*
+   * Public finances, priced off the economy as it stands this month —
+   * and off how much of what is owed actually arrives.
+   *
+   * Tax that is owed is not tax that is collected, and the gap between
+   * them is trust rather than enforcement. A government operating at low
+   * institutional trust raises materially less from identical rates, and
+   * cannot close the gap by raising them: the part that depends on people
+   * deciding to comply is exactly the part that has stopped.
+   */
+  const compliance = complianceFactor(next.opinion);
   const fiscal = resolveFiscalTurn(
     next.sectors,
     next.economy,
@@ -1307,6 +1319,7 @@ export function resolveTurn(state: GameState): GameState {
       doctrineCost(next.military, next.moneyScale) +
       programmeSpend(next.military) +
       warCost(next.crises, next.moneyScale),
+    compliance,
   );
   next.treasury += fiscal.treasuryDelta;
   next.debt = Math.max(0, next.debt + fiscal.debtDelta);
@@ -1805,6 +1818,83 @@ export function resolveTurn(state: GameState): GameState {
       turn: absoluteWeek(next),
     });
     next.culture = cultureTick.culture;
+
+    /*
+     * And what the country thinks of the arrangements it is being
+     * governed under, which is the thing underneath approval and matters
+     * a great deal more. Stepped last, because it reads every other
+     * system's output — including what the culture engine has just said
+     * about the norms.
+     */
+    const opinionTick = stepOpinion(next.opinion, {
+      approval: next.approval,
+      growth: next.economy.growth,
+      unemployment: next.economy.unemployment,
+      lowerDisposable: next.society.bands[0]!.disposableIndex,
+      costOfLivingChange:
+        next.society.history.length > 52
+          ? ((next.society.costOfLiving -
+              next.society.history[next.society.history.length - 52]!.costOfLiving) /
+              Math.max(1, next.society.costOfLiving)) *
+            100
+          : 0,
+      qualityOfLife: next.living.qualityOfLife,
+      happiness: next.living.happiness,
+      polarisation: chamberPolarisation(next.parties),
+      norms: next.culture.politicalCulture,
+      /* Zero until Engine 5F builds it; the term is wired so the day it
+         exists nothing else has to move. */
+      corruption: 0,
+      courtsQuality: next.services.find((x) => x.key === 'courts')?.quality ?? 60,
+      policeQuality: next.services.find((x) => x.key === 'police')?.quality ?? 60,
+      adminQuality: next.services.find((x) => x.key === 'administration')?.quality ?? 60,
+      crimeRate: Math.max(
+        4,
+        34 -
+          (next.services.find((x) => x.key === 'police')?.quality ?? 60) * 0.22 +
+          next.society.povertyRate * 0.35,
+      ),
+      /* Until Engine 6A models ownership, a single public broadcaster in
+         poor health is the best available proxy for a thin press. */
+      mediaConcentration: clamp01to100(
+        100 - (next.services.find((x) => x.key === 'broadcasting')?.quality ?? 60),
+      ) / 100,
+      disinformation: 0,
+      incomeGini: next.society.incomeGini,
+      legislativeSuccess:
+        next.career.billsPassed + next.career.billsFailed > 0
+          ? next.career.billsPassed / (next.career.billsPassed + next.career.billsFailed)
+          : 0.5,
+      externalTension: next.world.tension,
+      turn: absoluteWeek(next),
+    });
+    next.opinion = opinionTick.opinion;
+
+    for (const key of opinionTick.collapsed) {
+      const template = findTrust(key);
+      log(entries, {
+        kind: 'note',
+        label: `Trust in ${template.label.toLowerCase()} has gone`,
+        delta: trustOf(next.opinion, key),
+        cause:
+          `${template.blurb} Distrust spreads between institutions and confidence does not, ` +
+          `so this is not where it stops.`,
+        unit: 'idx',
+      });
+    }
+    if (opinionTick.withdrawn) {
+      log(entries, {
+        kind: 'note',
+        label: 'The country has stopped bothering',
+        delta: next.opinion.efficacy,
+        cause:
+          `Frustration is at ${next.opinion.frustration.toFixed(0)} and the belief that ` +
+          `participating changes anything has fallen to ${next.opinion.efficacy.toFixed(0)}. ` +
+          `The marches will stop and the petitions will dry up. That is not the anger going ` +
+          `away, and it is considerably harder to come back from than the anger was.`,
+        unit: 'idx',
+      });
+    }
 
     for (const key of cultureTick.hollowed) {
       const template = findCulturalInstitution(key);

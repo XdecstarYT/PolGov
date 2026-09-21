@@ -53,6 +53,8 @@ export * from './systems/military.ts';
 export * from './systems/society.ts';
 export * from './systems/living.ts';
 export * from './systems/culture.ts';
+export * from './systems/opinion.ts';
+export * from './content/trust.ts';
 export * from './content/culture.ts';
 export * from './content/access.ts';
 export * from './content/classes.ts';

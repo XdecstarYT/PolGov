@@ -22,6 +22,7 @@ import { buildIntelligence } from './systems/intelligence.ts';
 import { buildMilitary } from './systems/military.ts';
 import { buildSociety } from './systems/society.ts';
 import { buildLiving } from './systems/living.ts';
+import { buildOpinion } from './systems/opinion.ts';
 import { buildTrade } from './systems/trade.ts';
 import { buildPairs } from './systems/worldSim.ts';
 import { buildOrganisations } from './systems/organisations.ts';
@@ -61,6 +62,7 @@ export function migrateState(raw: unknown): GameState | null {
   if (!next.society) next.society = buildSociety();
   if (!next.living) next.living = buildLiving();
   if (!next.culture) next.culture = fresh.culture;
+  if (!next.opinion) next.opinion = buildOpinion();
   if (typeof next.society.inequality !== 'number' || !(next.society.inequality > 0)) {
     next.society.inequality = 1;
   }

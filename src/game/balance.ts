@@ -2152,3 +2152,55 @@ export const INSTITUTION_DECAY_SCALE = 0.11;
  * and is not a nation fracturing.
  */
 export const BELONGING_ALARM = 22;
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Public opinion and trust
+ * ------------------------------------------------------------------ */
+
+/** Base rate at which trust follows an institution's performance. */
+export const TRUST_ADJUST_RATE = 0.012;
+
+/**
+ * How far an institution is dragged down by distrust of the others.
+ *
+ * Distrust spreads. A country that stops believing its police will
+ * conclude something about its courts.
+ */
+export const CONTAGION_DOWN = 0.3;
+
+/**
+ * And how far it is lifted by confidence in them. Much less.
+ *
+ * Restored trust in one institution says nothing about any other, which
+ * is the asymmetry that makes institutional trust so much cheaper to
+ * destroy than to build.
+ */
+export const CONTAGION_UP = 0.06;
+
+/** How fast the public mood moves. */
+export const MOOD_ADJUST_RATE = 0.035;
+
+/** How fast the belief that participation works moves. Slowly, both ways. */
+export const EFFICACY_ADJUST_RATE = 0.008;
+
+/**
+ * What a thoroughly distrusted state still collects, as a share of what
+ * is owed.
+ *
+ * Not zero: even a state nobody believes in can see a wage packet. The
+ * rest is the part that depends on people deciding to comply, which is
+ * what trust buys and enforcement does not.
+ */
+export const COMPLIANCE_FLOOR = 0.72;
+
+/**
+ * The drive below which an angry country has stopped acting on it.
+ *
+ * Frustration times the belief that acting works. Both the "was acting"
+ * and "no longer acting" tests use this one number, so the crossing is a
+ * single week and is reported exactly once.
+ */
+export const WITHDRAWAL_DRIVE = 0.05;
+
+/** And how angry it has to be for that quiet to mean anything. */
+export const WITHDRAWAL_FRUSTRATION = 52;

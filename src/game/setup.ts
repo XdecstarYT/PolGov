@@ -38,6 +38,7 @@ import { buildMilitary } from './systems/military.ts';
 import { buildSociety } from './systems/society.ts';
 import { buildLiving } from './systems/living.ts';
 import { buildCulture } from './systems/culture.ts';
+import { buildOpinion } from './systems/opinion.ts';
 import { buildIntelligence } from './systems/intelligence.ts';
 import { assignMinistries, buildBudget } from './systems/budgetProcess.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
@@ -393,6 +394,10 @@ export function createGame(options: NewGameOptions): GameState {
 
     /* And what that distribution is like to live inside. */
     living: buildLiving(),
+
+    /* What the country makes of its own institutions, before this
+       government has done anything to them. */
+    opinion: buildOpinion(),
 
     /* Everything the country has that no government bought. */
     culture: buildCulture(
