@@ -1685,6 +1685,25 @@ export interface GameState {
   orbat: Orbat;
 
   /**
+   * The people round the table, and why each of them is there.
+   *
+   * Almost none of them for what they can do. The appointment is a
+   * payment, which is why removing one is a withdrawal rather than a
+   * personnel decision.
+   */
+  cabinet: Cabinet;
+
+  /**
+   * The building, which outlasts every government in it and knows it.
+   *
+   * A government that fights it wins on the day and loses over the term.
+   * One that replaces it gets compliance immediately and loses the
+   * capability with the people who left. There is no correct setting,
+   * which is why it is on the desk.
+   */
+  civilService: CivilService;
+
+  /**
    * What the country remembers, which outlives every government in it.
    *
    * The point of modelling a war in a political game is what the country
@@ -2916,4 +2935,99 @@ export interface Timeline {
   wars: WarRecord[];
   /** The year the run began, so everything else can be dated from it. */
   firstYear: number;
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 5 — The cabinet and the machine
+ * ------------------------------------------------------------------ */
+
+/**
+ * Somebody at the table.
+ *
+ * `competence`, `loyalty` and `ambition` are drawn independently, and
+ * the third is the one that makes a cabinet different from an order of
+ * battle: the dangerous minister is not the incompetent one or the
+ * disloyal one, it is the able, ambitious one who is loyal right up
+ * until the arithmetic changes.
+ */
+export interface Minister {
+  id: string;
+  name: string;
+  ministry: import('./content/ministries.ts').MinistryKey;
+  basis: import('./content/cabinet.ts').AppointmentBasis;
+  traits: import('./content/cabinet.ts').MinisterTrait[];
+  competence: number;
+  loyalty: number;
+  ambition: number;
+  /** How the public rates them, which follows the department's results. */
+  standing: number;
+  /**
+   * How far they have gone native, 0–1.
+   *
+   * They arrive to change the department and end up arguing its case in
+   * cabinet. About eighteen months, every time, and every government
+   * finds it surprising.
+   */
+  capture: number;
+  appointedTurn: number;
+  /** The faction or partner whose payment this appointment is. */
+  owes: string | null;
+  resigned: boolean;
+}
+
+export interface CabinetPoint {
+  turn: number;
+  cohesion: number;
+  delivery: number;
+  /** How many are counting rather than serving. */
+  plotting: number;
+}
+
+export interface Cabinet {
+  ministers: Minister[];
+  /**
+   * How far the table holds together, 0–100.
+   *
+   * Not loyalty to the leader. Whether collective responsibility is
+   * actually collective, which is a different and more fragile thing.
+   */
+  cohesion: number;
+  /** Reshuffles so far. Each is cheaper than the last and works less. */
+  reshuffles: number;
+  /** Resignations, which are remembered. */
+  resignations: number;
+  history: CabinetPoint[];
+}
+
+export interface CivilServicePoint {
+  turn: number;
+  capability: number;
+  compliance: number;
+  morale: number;
+}
+
+export interface CivilService {
+  posture: import('./content/cabinet.ts').MachinePosture;
+  /**
+   * What the machine can actually do, 0–100.
+   *
+   * Built over decades and lost in a term, which is the asymmetry that
+   * makes it worth protecting and the reason nobody does.
+   */
+  capability: number;
+  /** How much of a decision actually happens, 0–1. */
+  compliance: number;
+  /** What the officials think of this government. Slow, and it matters. */
+  morale: number;
+  /**
+   * Institutional memory, 0–100.
+   *
+   * What the building knows that nobody wrote down: which things have
+   * been tried, why they failed, and who to ring. Lost with the people,
+   * and not recoverable by hiring more people.
+   */
+  memory: number;
+  /** Officials who have left rather than do it. Cumulative. */
+  departures: number;
+  history: CivilServicePoint[];
 }

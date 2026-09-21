@@ -51,6 +51,7 @@ import { IntelligencePanel } from '../components/IntelligencePanel.tsx';
 import { CastPanel } from '../components/CastPanel.tsx';
 import { TradePanel } from '../components/TradePanel.tsx';
 import { WorldPanel } from '../components/WorldPanel.tsx';
+import { CabinetPanel } from '../components/CabinetPanel.tsx';
 import { ServicesPanel } from '../components/ServicesPanel.tsx';
 import { IndustryPanel } from '../components/IndustryPanel.tsx';
 import { PopulationPanel } from '../components/PopulationPanel.tsx';
@@ -173,6 +174,7 @@ export function Briefing() {
               'What the state actually does, what the economy is doing underneath it, and who is in it. None of these figures are yours to set directly; all of them are downstream of decisions you take in the next three phases.',
             content: (
               <>
+                <CabinetPanel />
                 <ServicesPanel />
                 <EconomyPanel />
                 <IndustryPanel />

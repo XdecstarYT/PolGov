@@ -42,6 +42,7 @@ import { buildNavy } from './systems/naval.ts';
 import { buildLogistics } from './systems/logistics.ts';
 import { buildDoctrine } from './systems/doctrine.ts';
 import { buildTimeline } from './systems/timeline.ts';
+import { buildCabinet, buildCivilService } from './systems/cabinet.ts';
 import { buildWarEconomy } from './systems/warEconomy.ts';
 import { buildAirForce } from './systems/air.ts';
 import { buildLiving } from './systems/living.ts';
@@ -490,6 +491,15 @@ export function createGame(options: NewGameOptions): GameState {
       new Set<string>(),
       openingCulture.politicalCulture,
     ),
+
+    /* A table put together on the first morning, mostly not out of the
+       best people for the departments. A government that wanted that
+       would not have a party behind it, and the party is what put it
+       there. */
+    cabinet: buildCabinet(country, rng, new Set<string>()),
+
+    /* And the building, as whoever was here before left it. */
+    civilService: buildCivilService(),
 
     /* Nothing a history would record yet. Everything the country is
        now, it was when this government arrived. */

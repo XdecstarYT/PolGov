@@ -215,6 +215,21 @@ import {
   stepDoctrine,
 } from './systems/doctrine.ts';
 import {
+  appoint as appointMinister,
+  ministerFor,
+  removalCost,
+  reshuffle as fullReshuffle,
+  setMachinePosture,
+  stepCabinet,
+  stepCivilService,
+} from './systems/cabinet.ts';
+import {
+  MACHINE_POSTURES,
+  findBasis,
+  type AppointmentBasis,
+  type MachinePosture,
+} from './content/cabinet.ts';
+import {
   closeEntry,
   openEntryFor,
   record as recordEntry,
@@ -274,6 +289,7 @@ import {
 } from './content/air.ts';
 import { ROTATION_RATIO, SHIP_ORDER_PC, SQUADRON_ORDER_PC } from './balance.ts';
 import { ATTACK_SUPPLY_FLOOR } from './balance.ts';
+import { MACHINE_CAPABILITY, APPOINT_MINISTER_PC, RESHUFFLE_PC, MACHINE_POSTURE_PC } from './balance.ts';
 import { SECTOR_POSTURE_LABELS, type SectorPosture } from './content/theatre.ts';
 import {
   commanderOf,
@@ -395,6 +411,7 @@ import {
   setSectorFunding,
   supplyCost,
 } from './systems/budgetProcess.ts';
+import type { MinistryKey } from './content/ministries.ts';
 import {
   RESOLUTION_TEMPLATES,
   duesOf,
@@ -569,6 +586,9 @@ export type Intent =
   | { type: 'public_address' }
   | { type: 'coalition_concession'; partyId: string }
   | { type: 'reshuffle_cabinet'; partyId: string }
+  | { type: 'appoint_minister'; ministry: MinistryKey; basis: AppointmentBasis }
+  | { type: 'full_reshuffle' }
+  | { type: 'set_machine_posture'; posture: MachinePosture }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
   | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
@@ -3452,6 +3472,110 @@ export function resolveTurn(state: GameState): GameState {
   }
 
   /*
+   * The table, and the building behind it.
+   *
+   * Stepped weekly rather than tied to any single decision, because
+   * capture, loyalty and cohesion are all things that happen to a
+   * cabinet over time rather than things a government does to it. The
+   * delivery figure this reads is legislative success, which is the
+   * only honest proxy the engine has for "is the government good at
+   * governing" until Engine 5C/5D gives departments their own record.
+   */
+  {
+    const legislativeSuccess =
+      next.career.billsPassed + next.career.billsFailed > 0
+        ? next.career.billsPassed / (next.career.billsPassed + next.career.billsFailed)
+        : 0.5;
+    const inCrisis = liveCrises(next.crises).length > 0;
+
+    const cabinetTick = stepCabinet(next.cabinet, {
+      approval: next.approval,
+      /* No separate polling figure exists yet, so approval stands in for
+         both — a government's own standing is the best available guess
+         at whether it is going to win, and it is what a minister
+         actually watches. */
+      polling: next.approval,
+      delivery: legislativeSuccess,
+      crisis: inCrisis,
+      turn: absoluteWeek(next),
+    });
+    next.cabinet = cabinetTick.cabinet;
+
+    for (const id of cabinetTick.captured) {
+      const minister = next.cabinet.ministers.find((m) => m.id === id);
+      if (!minister) continue;
+      log(entries, {
+        kind: 'note',
+        label: `${minister.name} now argues for ${findMinistry(minister.ministry).name.toLowerCase()}`,
+        delta: 0,
+        cause:
+          'Not disloyalty. Eighteen months in, and they now know things the rest of the ' +
+          'table does not, because the officials there are extremely good at their jobs.',
+        unit: '',
+        informational: true,
+      });
+    }
+    if (cabinetTick.brokeDown) {
+      log(entries, {
+        kind: 'note',
+        label: 'Collective responsibility has broken down',
+        delta: -next.cabinet.cohesion,
+        cause:
+          'The government\'s position on anything is now whatever the last minister to be ' +
+          'asked said it was, and every unattributable quote in the weekend papers comes ' +
+          'from one of these offices.',
+        unit: 'idx',
+      });
+    }
+    for (const id of cabinetTick.plotters) {
+      const minister = next.cabinet.ministers.find((m) => m.id === id);
+      if (!minister) continue;
+      log(entries, {
+        kind: 'note',
+        label: `${minister.name} is counting`,
+        delta: -minister.loyalty,
+        cause:
+          'Able, ambitious, and no longer certain this government is going to win. That is ' +
+          'arithmetic rather than disloyalty, and it is being done carefully.',
+        unit: 'idx',
+        informational: true,
+      });
+    }
+
+    const machineTick = stepCivilService(next.civilService, {
+      funding: next.services.find((x) => x.key === 'administration')?.staffing ?? 1,
+      demands: 1 + (inCrisis ? 0.4 : 0),
+      turn: absoluteWeek(next),
+    });
+    next.civilService = machineTick.machine;
+
+    if (machineTick.hollowed) {
+      log(entries, {
+        kind: 'note',
+        label: 'The machine can no longer do what it is told',
+        delta: -(MACHINE_CAPABILITY - next.civilService.capability),
+        cause:
+          'Capability built over decades and lost in a term. Compliance is still ' +
+          `${(next.civilService.compliance * 100).toFixed(0)}%, and what is being complied ` +
+          'with is being done by people who cannot do it well any more.',
+        unit: 'idx',
+      });
+    }
+    if (machineTick.forgot) {
+      log(entries, {
+        kind: 'note',
+        label: 'The building has forgotten',
+        delta: -next.civilService.memory,
+        cause:
+          'Which things have been tried, why they failed, and who to ring. That went with ' +
+          'the people who left, it was never written down, and hiring more does not bring ' +
+          'it back.',
+        unit: 'idx',
+      });
+    }
+  }
+
+  /*
    * What the country thinks they have, and whether it can stop.
    *
    * A file is opened the day a war starts rather than the day talks do,
@@ -4373,6 +4497,12 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleConcession(state, intent.partyId);
     case 'reshuffle_cabinet':
       return handleReshuffle(state, intent.partyId);
+    case 'appoint_minister':
+      return handleAppointMinister(state, intent.ministry, intent.basis);
+    case 'full_reshuffle':
+      return handleFullReshuffle(state);
+    case 'set_machine_posture':
+      return handleMachinePosture(state, intent.posture);
     case 'emergency_budget':
       return handleEmergencyBudget(state);
     case 'set_funding':
@@ -4870,6 +5000,131 @@ function handleReshuffle(state: GameState, partyId: string): IntentResult {
     delta: MOOD_RESHUFFLE_GAIN,
     cause: `Given an additional cabinet post (now holds ${target.cabinetPosts})`,
     unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Put somebody in a department, on whatever basis is chosen.
+ *
+ * The appointment is a payment, and if there is already somebody there
+ * the appointment is also a withdrawal — the removal cost is computed
+ * from the minister being replaced, which is the honest price, not a
+ * fixed one.
+ */
+function handleAppointMinister(
+  state: GameState,
+  ministry: MinistryKey,
+  basis: AppointmentBasis,
+): IntentResult {
+  const going = ministerFor(state.cabinet, ministry);
+  const removal = going ? removalCost(going) : 0;
+  const total = APPOINT_MINISTER_PC + removal;
+  if (state.politicalCapital < total) {
+    return reject(
+      state,
+      going
+        ? `Replacing ${going.name} costs ${total.toFixed(0)} PC. The appointment was a payment to whoever they represent, and this is the withdrawal.`
+        : `Filling this department costs ${total.toFixed(0)} PC.`,
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  const rng = new Rng(next.rngState);
+  spendPc(next, total);
+
+  const result = appointMinister(
+    next.cabinet,
+    ministry,
+    basis,
+    next.country,
+    rng,
+    new Set(next.cabinet.ministers.map((m) => m.name)),
+    absoluteWeek(next),
+  );
+  next.cabinet = result.cabinet;
+  next.rngState = rng.state;
+
+  log(entries, {
+    kind: 'note',
+    label: `${result.minister.name} — ${findMinistry(ministry).title}`,
+    delta: -total,
+    cause: going
+      ? `${going.name} is out. ${findBasis(basis).blurb} Whoever ${going.owes ?? 'they'} represented has just watched a payment withdrawn.`
+      : findBasis(basis).blurb,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+/**
+ * Move everybody at once.
+ *
+ * Worth less every time. The first is a government taking charge; a
+ * third inside one term is a government saying, in public, on the front
+ * pages, that it cannot make its ministers work.
+ */
+function handleFullReshuffle(state: GameState): IntentResult {
+  if (state.politicalCapital < RESHUFFLE_PC) {
+    return reject(state, `A full reshuffle costs ${RESHUFFLE_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  const rng = new Rng(next.rngState);
+  spendPc(next, RESHUFFLE_PC);
+
+  const result = fullReshuffle(
+    next.cabinet,
+    next.country,
+    rng,
+    new Set(next.cabinet.ministers.map((m) => m.name)),
+    absoluteWeek(next),
+  );
+  next.cabinet = result.cabinet;
+  next.rngState = rng.state;
+
+  log(entries, {
+    kind: 'note',
+    label: `Cabinet reshuffle — ${result.moved} moved`,
+    delta: -RESHUFFLE_PC,
+    cause:
+      result.value >= 0.99
+        ? 'The first of this government\'s reshuffles: taking charge, and reported as one.'
+        : `Worth about ${Math.round(result.value * 100)}% of the first. This is not new authority being asserted; it is a government that has run out of other ways to be seen doing something.`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+/**
+ * Decide how the government treats the people who will still be here
+ * after it is not.
+ *
+ * There is no correct answer, which is why it costs nothing to try and
+ * takes months to show what it did.
+ */
+function handleMachinePosture(state: GameState, posture: MachinePosture): IntentResult {
+  if (state.civilService.posture === posture) {
+    return reject(state, 'That is the posture already.');
+  }
+  if (state.politicalCapital < MACHINE_POSTURE_PC) {
+    return reject(state, `Changing how the machine is treated costs ${MACHINE_POSTURE_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, MACHINE_POSTURE_PC);
+  next.civilService = setMachinePosture(next.civilService, posture);
+
+  const template = MACHINE_POSTURES.find((p) => p.key === posture)!;
+  log(entries, {
+    kind: 'note',
+    label: template.label,
+    delta: -MACHINE_POSTURE_PC,
+    cause: `${template.blurb} None of what this does shows up this week.`,
+    unit: 'PC',
   });
   return ok(next);
 }

@@ -3033,3 +3033,65 @@ export const GENERATIONAL_CASUALTIES = 60;
  * back fifty years from the end of a long run.
  */
 export const START_YEAR = 2034;
+
+/* ------------------------------------------------------------------ *
+ * Engine 5 — The cabinet and the machine
+ * ------------------------------------------------------------------ */
+
+/** Cohesion an ordinary cabinet sits at, and the baseline all else moves from. */
+export const COHESION_BASE = 68;
+
+/** How fast cohesion follows what the table is actually like. */
+export const COHESION_RATE = 0.04;
+
+/** Cohesion below which collective responsibility stops being collective. */
+export const COHESION_BREAKS = 38;
+
+/**
+ * How much each reshuffle is worth, relative to the one before.
+ *
+ * Falling. The first reshuffle is a government taking charge; the third
+ * is a government that cannot make its ministers work and is saying so
+ * in public, every time, on the front pages.
+ */
+export const RESHUFFLE_DECAY = 0.62;
+
+/** What a minister's capture does to whose case they argue. */
+export const CAPTURE_WEIGHT = 0.5;
+
+/**
+ * Capability an ordinary civil service sits at.
+ *
+ * Built over decades. The number is an inheritance and nobody in the run
+ * built it, which is exactly why it is so easy to spend.
+ */
+export const MACHINE_CAPABILITY = 66;
+
+/** How fast capability follows the posture. Slowly up, faster down. */
+export const CAPABILITY_GAIN = 0.004;
+export const CAPABILITY_LOSS = 0.02;
+
+/** And how fast morale does, which is faster than either. */
+export const MACHINE_MORALE_RATE = 0.03;
+
+/** Morale below which officials start leaving rather than doing it. */
+export const DEPARTURE_MORALE = 38;
+
+/** Officials lost per week below that, as a share of capability. */
+export const DEPARTURE_RATE = 0.0035;
+
+/**
+ * What appointing a new minister costs on top of whatever the removal
+ * of the previous one already cost.
+ *
+ * The decision itself — choosing somebody, announcing it — is cheap.
+ * What is expensive is what the removal took, and that figure is
+ * computed from the minister being replaced rather than fixed here.
+ */
+export const APPOINT_MINISTER_PC = 4;
+
+/** A full reshuffle, moving everybody at once. Worth less every time it is used. */
+export const RESHUFFLE_PC = 15;
+
+/** Changing how the government treats the people who will outlast it. */
+export const MACHINE_POSTURE_PC = 6;
