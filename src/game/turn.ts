@@ -253,6 +253,15 @@ import {
   type AnticorruptionPosture,
   type TransparencyRegime,
 } from './content/integrity.ts';
+import { regulatoryQuality } from './systems/integrity.ts';
+import {
+  declareEmergency,
+  investReadiness,
+  standDown,
+  standDownCost,
+  stepStateCapacity,
+} from './systems/stateCapacity.ts';
+import { EMERGENCY_LEVELS, type EmergencyLevel } from './content/emergency.ts';
 import {
   SET_TRANSPARENCY_PC,
   SET_ANTICORRUPTION_PC,
@@ -261,6 +270,7 @@ import {
   SIMPLIFY_LAW_EFFECT,
   REGULATORY_STOCK_START,
 } from './balance.ts';
+import { DECLARE_EMERGENCY_PC, DECLARE_MARTIAL_LAW_PC, INVEST_READINESS_PC } from './balance.ts';
 import {
   findEnforcementPosture,
   findSentencing,
@@ -644,6 +654,9 @@ export type Intent =
   | { type: 'set_anticorruption_posture'; posture: AnticorruptionPosture }
   | { type: 'launch_audit' }
   | { type: 'simplify_law' }
+  | { type: 'declare_emergency'; level: EmergencyLevel }
+  | { type: 'stand_down_emergency' }
+  | { type: 'invest_readiness' }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
   | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
@@ -3697,6 +3710,34 @@ export function resolveTurn(state: GameState): GameState {
     }
   }
 
+  /* How far the state actually reaches, and what any emergency is costing to hold. */
+  {
+    const infraAssets = next.infrastructure.assets;
+    const infrastructureHealth =
+      infraAssets.length > 0
+        ? infraAssets.reduce((sum, a) => sum + a.condition, 0) / infraAssets.length
+        : 60;
+    const capacityTick = stepStateCapacity(next.stateCapacity, {
+      civilServiceCapability: next.civilService.capability,
+      infrastructureHealth,
+      regulatoryQuality: regulatoryQuality(next.integrity),
+      turn: absoluteWeek(next),
+    });
+    next.stateCapacity = capacityTick.capacity;
+
+    if (capacityTick.normalised) {
+      log(entries, {
+        kind: 'note',
+        label: 'The emergency has quietly become the government',
+        delta: -standDownCost(next.stateCapacity),
+        cause:
+          'A year in force. What was unusual on the day it was declared is now simply how ' +
+          'the country is run, and standing it down costs more with every week that passes.',
+        unit: 'idx',
+      });
+    }
+  }
+
   /*
    * What the country thinks they have, and whether it can stop.
    *
@@ -4641,6 +4682,12 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleLaunchAudit(state);
     case 'simplify_law':
       return handleSimplifyLaw(state);
+    case 'declare_emergency':
+      return handleDeclareEmergency(state, intent.level);
+    case 'stand_down_emergency':
+      return handleStandDownEmergency(state);
+    case 'invest_readiness':
+      return handleInvestReadiness(state);
     case 'emergency_budget':
       return handleEmergencyBudget(state);
     case 'set_funding':
@@ -5450,6 +5497,80 @@ function handleSimplifyLaw(state: GameState): IntentResult {
     cause:
       'The statute book only shrinks when someone deliberately goes back through it. This ' +
       'is that, once.',
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleDeclareEmergency(state: GameState, level: EmergencyLevel): IntentResult {
+  if (level === 'normal') return reject(state, 'That is not a declaration.');
+  if (state.stateCapacity.level === level) {
+    return reject(state, 'That is already in force.');
+  }
+  const cost = level === 'martial_law' ? DECLARE_MARTIAL_LAW_PC : DECLARE_EMERGENCY_PC;
+  if (state.politicalCapital < cost) {
+    return reject(state, `Declaring this costs ${cost} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, cost);
+  const wasNormal = next.stateCapacity.level === 'normal';
+  next.stateCapacity = declareEmergency(next.stateCapacity, level);
+
+  const template = EMERGENCY_LEVELS.find((e) => e.key === level)!;
+  log(entries, {
+    kind: 'note',
+    label: template.label,
+    delta: -cost,
+    cause: wasNormal
+      ? `${template.blurb} The clock making it harder to stand down starts now.`
+      : `${template.blurb} Escalated without ever returning to ordinary rule in between.`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleStandDownEmergency(state: GameState): IntentResult {
+  if (state.stateCapacity.level === 'normal') {
+    return reject(state, 'There is nothing in force to stand down.');
+  }
+  const cost = standDownCost(state.stateCapacity);
+  if (state.politicalCapital < cost) {
+    return reject(state, `Standing this down costs ${cost.toFixed(0)} PC now — it only rises from here.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, cost);
+  const weeks = next.stateCapacity.weeksInEmergency;
+  next.stateCapacity = standDown(next.stateCapacity);
+
+  log(entries, {
+    kind: 'note',
+    label: 'Return to ordinary rule',
+    delta: -cost,
+    cause: `${weeks} weeks in force. Whatever organised itself around the powers in that time does not go away with the declaration.`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleInvestReadiness(state: GameState): IntentResult {
+  if (state.politicalCapital < INVEST_READINESS_PC) {
+    return reject(state, `Investing in disaster readiness costs ${INVEST_READINESS_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, INVEST_READINESS_PC);
+  next.stateCapacity = investReadiness(next.stateCapacity);
+
+  log(entries, {
+    kind: 'note',
+    label: 'Disaster readiness investment',
+    delta: -INVEST_READINESS_PC,
+    cause: 'Stockpile and standing arrangements, built before they are needed rather than after.',
     unit: 'PC',
   });
   return ok(next);

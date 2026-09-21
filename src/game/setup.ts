@@ -45,6 +45,7 @@ import { buildTimeline } from './systems/timeline.ts';
 import { buildCabinet, buildCivilService } from './systems/cabinet.ts';
 import { buildJustice } from './systems/justice.ts';
 import { buildIntegrity } from './systems/integrity.ts';
+import { buildStateCapacity } from './systems/stateCapacity.ts';
 import { buildWarEconomy } from './systems/warEconomy.ts';
 import { buildAirForce } from './systems/air.ts';
 import { buildLiving } from './systems/living.ts';
@@ -508,6 +509,9 @@ export function createGame(options: NewGameOptions): GameState {
 
     /* The well corruption draws from, and the statute book, at their opening levels. */
     integrity: buildIntegrity(),
+
+    /* How far the state reaches, before anything unusual is declared. */
+    stateCapacity: buildStateCapacity(),
 
     /* Nothing a history would record yet. Everything the country is
        now, it was when this government arrived. */

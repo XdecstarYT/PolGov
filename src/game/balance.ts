@@ -3189,3 +3189,30 @@ export const AUDIT_DECAY = 0.7;
 export const SIMPLIFY_LAW_PC = 7;
 /** How much one deregulation push takes off the regulatory stock. */
 export const SIMPLIFY_LAW_EFFECT = 0.3;
+
+/* ------------------------------------------------------------------ *
+ * Engine 5G/5H — State capacity and emergency government
+ * ------------------------------------------------------------------ */
+
+/** How much of an ordinary country the state can administer, out of 100. */
+export const STATE_REACH_START = 62;
+export const STATE_REACH_RATE = 0.02;
+
+/** How fast legitimacy debt accumulates while an emergency runs, per week of duration. */
+export const EMERGENCY_DEBT_DURATION_RATE = 0.03;
+
+/** The flat cost of standing an emergency down, before duration is added. */
+export const STAND_DOWN_BASE_COST = 6;
+/** What each week an emergency has run adds to the cost of ending it. */
+export const STAND_DOWN_DURATION_COST = 0.15;
+/** The most a long-held emergency can ever cost to end. */
+export const STAND_DOWN_MAX_COST = 60;
+
+export const DECLARE_EMERGENCY_PC = 10;
+export const DECLARE_MARTIAL_LAW_PC = 18;
+
+/** Disaster readiness an ordinary country carries, out of 100. */
+export const DISASTER_READINESS_START = 55;
+export const DISASTER_READINESS_RATE = 0.015;
+export const INVEST_READINESS_PC = 5;
+export const INVEST_READINESS_EFFECT = 12;

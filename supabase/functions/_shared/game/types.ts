@@ -1725,6 +1725,16 @@ export interface GameState {
   integrity: Integrity;
 
   /**
+   * How far the state actually reaches, and whether it is currently
+   * operating outside ordinary rule to reach further.
+   *
+   * Declaring is a single vote. Standing down has to be taken against
+   * whatever has organised itself around the powers in the meantime,
+   * and that gets more expensive every week the emergency continues.
+   */
+  stateCapacity: StateCapacity;
+
+  /**
    * What the country remembers, which outlives every government in it.
    *
    * The point of modelling a war in a political game is what the country
@@ -3141,4 +3151,40 @@ export interface Integrity {
   /** Audits launched this run. Each one is worth less than the last. */
   auditsLaunched: number;
   history: IntegrityPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 5G/5H — State capacity and emergency government
+ * ------------------------------------------------------------------ */
+
+export interface StateCapacityPoint {
+  turn: number;
+  reach: number;
+  standDownCost: number;
+}
+
+export interface StateCapacity {
+  /**
+   * How much of the country the state can actually administer, 0–100.
+   * Not will — a government that wants something badly still delivers
+   * it badly if reach is low, because the decision has to travel over
+   * infrastructure and through officials it does not control the
+   * quality of by wanting it enough.
+   */
+  reach: number;
+  level: import('./content/emergency.ts').EmergencyLevel;
+  /** Consecutive weeks the current level (if not normal) has run. */
+  weeksInEmergency: number;
+  /** Declarations and renewals combined, over the whole run. */
+  timesDeclared: number;
+  /**
+   * Accumulated legitimacy debt from holding emergency powers. Rises
+   * with duration, not just with the level — which is the mechanism
+   * behind "easy to declare, hard to stand down": the longer this sits
+   * above zero, the more it costs in one lump to return to normal rule.
+   */
+  legitimacyDebt: number;
+  /** Stockpiled capacity for the next disaster, 0–100. Depletes when drawn on, rebuilds slowly. */
+  disasterReadiness: number;
+  history: StateCapacityPoint[];
 }

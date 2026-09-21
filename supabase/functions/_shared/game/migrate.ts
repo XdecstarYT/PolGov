@@ -80,6 +80,7 @@ export function migrateState(raw: unknown): GameState | null {
   if (!next.civilService) next.civilService = fresh.civilService;
   if (!next.justice) next.justice = fresh.justice;
   if (!next.integrity) next.integrity = fresh.integrity;
+  if (!next.stateCapacity) next.stateCapacity = fresh.stateCapacity;
   if (!next.doctrine) next.doctrine = fresh.doctrine;
   if (!next.logistics) next.logistics = fresh.logistics;
   if (!next.warEconomy) next.warEconomy = fresh.warEconomy;
