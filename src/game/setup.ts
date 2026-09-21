@@ -36,6 +36,8 @@ import { buildWorld } from './systems/diplomacy.ts';
 import { buildTrade } from './systems/trade.ts';
 import { buildMilitary } from './systems/military.ts';
 import { buildSociety } from './systems/society.ts';
+import { ARMY_SHARE, buildManpower, underArms } from './systems/manpower.ts';
+import { buildOrbat } from './systems/orbat.ts';
 import { buildLiving } from './systems/living.ts';
 import { buildCulture } from './systems/culture.ts';
 import { buildOpinion } from './systems/opinion.ts';
@@ -301,6 +303,21 @@ export function createGame(options: NewGameOptions): GameState {
   const districts = buildDistrictsFor(regions, electoralSystem, rng);
 
   /*
+   * Built before the state literal because three later slots read them:
+   * the manpower pool is the workforce, the officer corps' reliability is
+   * the state of the norms, and the order of battle is the army that
+   * already exists. All three are inheritances, and none of them is
+   * anything this government did.
+   */
+  const openingDemography = buildDemography(regions, finances.population);
+  const openingCulture = buildCulture(
+    politics.composition,
+    SECTOR_BASELINE_FUNDING.education * 0.05 * moneyScale,
+  );
+  const openingMilitary = buildMilitary(peopleScale);
+  const openingManpower = buildManpower(openingDemography.workforce, peopleScale);
+
+  /*
    * Seat the opening parliament with the real election model.
    *
    * Then, if the model did not put the player first, swap their total with
@@ -387,7 +404,7 @@ export function createGame(options: NewGameOptions): GameState {
 
     /* People are distributed as the seats are, because the seats were drawn
        to match them. Apportionment is what keeps that true. */
-    demography: buildDemography(regions, finances.population),
+    demography: openingDemography,
 
     /* Everything at capacity, nothing quite new, and no backlog yet. The
        trap only reads as one if the player is the one who walks into it. */
@@ -412,10 +429,7 @@ export function createGame(options: NewGameOptions): GameState {
     opinion: buildOpinion(),
 
     /* Everything the country has that no government bought. */
-    culture: buildCulture(
-      politics.composition,
-      SECTOR_BASELINE_FUNDING.education * 0.05 * moneyScale,
-    ),
+    culture: openingCulture,
 
     infrastructure: buildInfrastructure(peopleScale),
 
@@ -441,7 +455,35 @@ export function createGame(options: NewGameOptions): GameState {
     /* Adequate, ageing, and nobody's achievement. The gap between what the
        forces are said to be and what they could do tomorrow was left by
        somebody else, and it is the player's to find. */
-    military: buildMilitary(peopleScale),
+    military: openingMilitary,
+
+    /* The pool, the pipeline, and the reserve. Built from the same
+       expressions the weekly step uses, so a country left alone stays
+       exactly the size it was found — anything else and every
+       measurement afterwards is measuring the drift rather than the
+       government. */
+    manpower: openingManpower,
+
+    /* And the shape of the army: how many headquarters an order passes
+       through, and who is sitting in each of them. Neither was chosen by
+       anybody in this run, and both are the player's to live with —
+       including the officer corps, whose reliability was decided by how
+       the state has been run rather than by any appointment this
+       government made. */
+    orbat: buildOrbat(
+      /*
+       * The army is the army's share of everybody under arms, rather
+       * than a second headcount for the same people. A country does not
+       * have a separate population of military age for its navy, and two
+       * engines each asserting how many soldiers there are is how the
+       * two quietly stop agreeing.
+       */
+      underArms(openingManpower) * ARMY_SHARE,
+      country,
+      rng,
+      new Set<string>(),
+      openingCulture.politicalCulture,
+    ),
 
     /* No quarrels yet. They arrive, which is the correct shape: the
        decision a government faces is never whether to have a crisis. */

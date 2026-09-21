@@ -175,6 +175,22 @@ import {
 } from './balance.ts';
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
 import { stepSociety } from './systems/society.ts';
+import {
+  applyMobilisation,
+  mobilisationChange,
+  stepManpower,
+} from './systems/manpower.ts';
+import {
+  commanderOf,
+  dismissCommander,
+  orderLag,
+  replacementDemand,
+  serving,
+  setCommitment,
+  stepOrbat,
+  unreliableShare,
+} from './systems/orbat.ts';
+import { findManpowerModel, type ManpowerModel } from './content/manpower.ts';
 import { accessOf, stepLiving } from './systems/living.ts';
 import {
   belongingGap,
@@ -432,6 +448,9 @@ export type Intent =
   | { type: 'record_remark'; personaId: string; about: string; text: string }
   | { type: 'set_language_policy'; level: number }
   | { type: 'answer_movement'; movement: string; response: MovementResponse }
+  | { type: 'set_mobilisation'; model: ManpowerModel }
+  | { type: 'dismiss_commander'; commander: string }
+  | { type: 'commit_formations'; formations: string[]; committed: boolean }
   | { type: 'withdraw_bill'; billId: string }
   | { type: 'public_address' }
   | { type: 'coalition_concession'; partyId: string }
@@ -2657,6 +2676,10 @@ export function resolveTurn(state: GameState): GameState {
     });
   }
 
+  /* What each quarrel had cost before this week was added to it. The
+     manpower engine needs the week's own figure, not the running total. */
+  const casualtiesBefore = new Map(next.crises.map((c) => [c.id, c.casualties]));
+
   const conflictTick = stepConflicts(next.crises, {
     military: next.military,
     world: next.world,
@@ -2687,6 +2710,162 @@ export function resolveTurn(state: GameState): GameState {
       cause: event.cause,
       unit: '',
     });
+  }
+
+  /*
+   * The army as a flow of people, and the army as a structure.
+   *
+   * Stepped here because both read the week the military engine has just
+   * settled — what the defence line funded, how ready the arms are — and
+   * because both are the join between a decision taken at this desk and
+   * the thing that eventually happens because of it. Manpower is the lag
+   * measured in months of training; the order of battle is the lag
+   * measured in headquarters. A government feels the second one first and
+   * the first one for much longer.
+   */
+  {
+    const fighting = next.crises.filter((c) => c.stage === 'war');
+    const warIntensity = fighting.length
+      ? Math.min(100, fighting.reduce((sum, c) => sum + c.escalation, 0))
+      : 0;
+    const casualtiesThisWeek = fighting.reduce(
+      (sum, c) => sum + Math.max(0, c.casualties - (casualtiesBefore.get(c.id) ?? c.casualties)),
+      0,
+    );
+    const army = next.military.arms.find((a) => a.key === 'army');
+    const defence = next.services.find((x) => x.key === 'defence');
+    const telecoms = next.infrastructure.assets.find((a) => a.key === 'telecoms');
+
+    const manpowerTick = stepManpower(next.manpower, {
+      workforce: next.demography.workforce,
+      unemployment: next.economy.unemployment,
+      /* A staffing ratio, not a sum. What the defence line is funding
+         against what meeting the demand would take. */
+      trainingFunding: defence?.staffing ?? 1,
+      casualties: casualtiesThisWeek,
+      atWar: fighting.length > 0,
+      warIntensity,
+      /* Nobody volunteers for a war the country does not support, and the
+         approval rating is the only honest read on that available. */
+      publicSupport: next.approval,
+      norms: next.culture.politicalCulture,
+      /*
+       * A peacetime army is fed. Supply is a wartime question, and
+       * readiness is the best proxy the engine has for whether the
+       * logistics will hold when it is asked — until Engine 7F models
+       * them, at which point this term has somewhere better to come from.
+       *
+       * It reads 100 at peace deliberately: readiness is an index that
+       * ordinarily sits near fifty, and wiring it straight in would have
+       * every country's army quietly losing morale for eight years
+       * because of a number that was never about food.
+       */
+      supply: fighting.length
+        ? clamp01to100(40 + (army?.readiness ?? 50) * 0.6)
+        : 100,
+      turn: absoluteWeek(next),
+    });
+    next.manpower = manpowerTick.manpower;
+
+    if (manpowerTick.pipelineBound) {
+      log(entries, {
+        kind: 'note',
+        label: 'The training establishment is the constraint',
+        delta: next.manpower.trainingCapacity,
+        cause:
+          `More people are coming forward than there is anywhere to train them. The pool is ` +
+          `not the force: what stands between them is fourteen weeks and a building, and the ` +
+          `building takes years. Nothing said at this desk shortens either.`,
+        unit: 'people',
+        informational: true,
+      });
+    }
+    if (manpowerTick.reserveExhausted) {
+      log(entries, {
+        kind: 'note',
+        label: 'The reserve is gone',
+        delta: next.manpower.reserves,
+        cause:
+          `Up to now the country has been calling up soldiers. From here it is training ` +
+          `civilians, and the first of them is fourteen weeks from being any use. This is the ` +
+          `week a war changes character, and it does it quietly.`,
+        unit: 'people',
+      });
+    }
+    if (manpowerTick.desertionAlarm) {
+      log(entries, {
+        kind: 'note',
+        label: 'People are leaving',
+        delta: -next.manpower.desertion,
+        cause:
+          `Morale is at ${next.manpower.morale.toFixed(0)} and the army is losing people who ` +
+          `have not been anywhere near a battle. An army does not usually stop existing by ` +
+          `losing one; it stops existing like this, and the returns arrive late.`,
+        unit: 'people',
+      });
+    }
+
+    /*
+     * How many of the replacements the army asked for it can actually
+     * have. This is the whole join between the two systems: a formation
+     * ground down in March is still at two-thirds strength in September
+     * because the bodies to rebuild it are fourteen weeks from being
+     * soldiers, and everybody's fourteen weeks started at the same time.
+     */
+    const wanted = Math.max(1, replacementDemand(next.orbat));
+    const orbatTick = stepOrbat(next.orbat, {
+      atWar: fighting.length > 0,
+      warIntensity,
+      /* Positive when the crises are going the country's way. */
+      battlefield: fighting.length
+        ? Math.max(
+            -1,
+            Math.min(
+              1,
+              fighting.reduce((sum, c) => sum + (c.ourResolve - c.theirResolve), 0) /
+                (fighting.length * 100),
+            ),
+          )
+        : 0,
+      communications: telecoms ? clamp01to100(telecoms.condition) / 100 : 0.5,
+      supply: fighting.length ? clamp01to100(40 + (army?.readiness ?? 50) * 0.6) : 100,
+      /* Net of ordinary replacement: what the procurement programmes are
+         delivering above what peacetime use wears out. */
+      equipmentDelta: militaryTick.delivered.length * 0.35,
+      replacements: Math.max(0, Math.min(1.4, manpowerTick.arrivals / wanted)),
+      normsStanding: next.culture.politicalCulture,
+      turn: absoluteWeek(next),
+    });
+    next.orbat = orbatTick.orbat;
+
+    if (orbatTick.unreliable) {
+      log(entries, {
+        kind: 'note',
+        label: 'The army is no longer certain',
+        delta: unreliableShare(next.orbat) * 100,
+        cause:
+          `${(unreliableShare(next.orbat) * 100).toFixed(0)}% of the force is now under ` +
+          `officers who would not necessarily carry out an order they disagreed with. That is ` +
+          `not a coup and there is nothing to arrest. It is the thing a government finds out ` +
+          `about late, and it followed the norms rather than anything the army did.`,
+        unit: 'pct',
+      });
+    }
+    for (const id of orbatTick.failing) {
+      const commander = next.orbat.commanders.find((c) => c.id === id);
+      if (!commander) continue;
+      log(entries, {
+        kind: 'note',
+        label: `${commander.name} is being blamed`,
+        delta: commander.standing,
+        cause:
+          `Standing has collapsed. Whether any of it was theirs to control is a separate ` +
+          `question from whether they will be removed, and the second question is the one ` +
+          `that gets answered.`,
+        unit: 'idx',
+        informational: true,
+      });
+    }
   }
 
   const economyBefore = next.economy;
@@ -3244,6 +3423,12 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleLanguagePolicy(state, intent.level);
     case 'answer_movement':
       return handleAnswerMovement(state, intent.movement, intent.response);
+    case 'set_mobilisation':
+      return handleMobilisation(state, intent.model);
+    case 'dismiss_commander':
+      return handleDismissCommander(state, intent.commander);
+    case 'commit_formations':
+      return handleCommitFormations(state, intent.formations, intent.committed);
     case 'withdraw_bill':
       return handleWithdrawBill(state, intent.billId);
     case 'public_address':
@@ -4682,6 +4867,158 @@ function handleFileTradeComplaint(state: GameState, key: NationKey): IntentResul
  * expeditionary one is a statement about the country rather than about the
  * forces. The player is choosing what kind of state this is.
  */
+/* ------------------------------------------------------------------ *
+ * Engine 7 — who fights, and who commands them
+ * ------------------------------------------------------------------ */
+
+/**
+ * Change how the country fills an army.
+ *
+ * The ratchet lives here. Going up is an afternoon's decision and costs
+ * standing immediately; coming down is not a decision at all for years,
+ * because the people are still in uniform, the factories are still built
+ * for it, and the constituency that formed around the arrangement is
+ * still there. A government that conscripts to win a war hands its
+ * successor a conscripting country, and that is the part nobody argues
+ * about on the day.
+ */
+function handleMobilisation(state: GameState, model: ManpowerModel): IntentResult {
+  const template = findManpowerModel(model);
+  const change = mobilisationChange(state.manpower, model, absoluteWeek(state));
+  if (!change.allowed) return reject(state, change.reason);
+  if (state.politicalCapital < change.politicalCapital) {
+    return reject(
+      state,
+      `Putting ${template.label.toLowerCase()} through costs ${change.politicalCapital} PC. This is a law about who can be made to fight, not a departmental decision.`,
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, change.politicalCapital);
+  next.manpower = applyMobilisation(next.manpower, model, absoluteWeek(next));
+
+  if (change.approvalCost !== 0) {
+    next.approval = clampApproval(next.approval - change.approvalCost);
+  }
+  if (change.normsCost > 0) {
+    /* Compelling people to fight is a constitutional act as much as a
+       military one, and a state that does it against the grain of its
+       own population spends something it does not get back. */
+    next.culture = {
+      ...next.culture,
+      politicalCulture: clamp01to100(next.culture.politicalCulture - change.normsCost),
+    };
+  }
+
+  const locked = findManpowerModel(model).demobilisationWeeks;
+  log(entries, {
+    kind: 'note',
+    label: template.label,
+    delta: -change.approvalCost,
+    cause:
+      `${template.blurb} It cannot be wound back down for ${Math.round(locked / 52)} years — ` +
+      `not because of a rule, but because by then the people will be in uniform, the ` +
+      `factories will be built for it, and there will be a constituency that formed around ` +
+      `the arrangement and would like it kept.`,
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Sack a general.
+ *
+ * The obvious thing to do, free on the day, and watched very closely by
+ * every officer who did not lose a battle this week. What it costs
+ * depends entirely on whether the army had also given up on them, and
+ * the government does not get to decide which of those it is doing.
+ */
+function handleDismissCommander(state: GameState, id: string): IntentResult {
+  const commander = commanderOf(state.orbat, id);
+  if (!commander) return reject(state, 'There is nobody by that name in post.');
+  if (serving(state.orbat).length < 2) {
+    return reject(
+      state,
+      'There is one commander and one army. Removing them leaves formations that answer to nobody, which is not a lesser problem than the one being solved.',
+    );
+  }
+  if (state.politicalCapital < PC_COSTS.dismissCommander) {
+    return reject(
+      state,
+      `Removing a serving commander costs ${PC_COSTS.dismissCommander} PC. It is never presented as a political act and it is always read as one.`,
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  const rng = new Rng(next.rngState);
+  spendPc(next, PC_COSTS.dismissCommander);
+
+  const result = dismissCommander(
+    next.orbat,
+    id,
+    next.country,
+    rng,
+    new Set(next.orbat.commanders.map((c) => c.name)),
+    absoluteWeek(next),
+  );
+  next.orbat = result.orbat;
+  next.rngState = rng.state;
+
+  log(entries, {
+    kind: 'note',
+    label: `${commander.name} has been relieved`,
+    delta: -result.loyaltyCost,
+    cause:
+      result.loyaltyCost > 2
+        ? `The army thought they were doing well. ${result.replacement?.name ?? 'A successor'} takes over, ` +
+          `drawn from the same list everybody else was drawn from — the government has not chosen a ` +
+          `better commander, it has chosen again. Every officer who has been handed a difficult ` +
+          `sector has now watched what happens to people who are handed difficult sectors.`
+        : `The army had reached the same conclusion some time ago. ${result.replacement?.name ?? 'A successor'} ` +
+          `takes over and nobody has to be told why.`,
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Put formations into the fight, or take them out of it.
+ *
+ * Free of political capital and not free of anything else: a committed
+ * formation learns, wears out its equipment several times faster than any
+ * peacetime budget replaces it, and can only be rebuilt as fast as the
+ * training pipeline produces people. The decision is cheap and the
+ * consequence arrives fourteen weeks later.
+ */
+function handleCommitFormations(
+  state: GameState,
+  ids: string[],
+  committed: boolean,
+): IntentResult {
+  const known = ids.filter((id) => state.orbat.formations.some((f) => f.id === id));
+  if (known.length === 0) return reject(state, 'No such formation.');
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.orbat = setCommitment(next.orbat, known, committed);
+
+  log(entries, {
+    kind: 'note',
+    label: committed ? `${known.length} formations committed` : `${known.length} formations withdrawn`,
+    delta: known.length,
+    cause: committed
+      ? `The order has been given. It reaches the people who carry it out in ` +
+        `${orderLag(next.orbat, 0.5).toFixed(1)} weeks, on a battlefield that will have moved by then.`
+      : `Coming out of the line is not the same as being rebuilt. The equipment is gone and the ` +
+        `replacements are fourteen weeks from being soldiers.`,
+    unit: 'units',
+    informational: !committed,
+  });
+  return ok(next);
+}
+
 function handleSetDoctrine(state: GameState, doctrine: DoctrineKey): IntentResult {
   const template = findDoctrine(doctrine);
   if (state.military.doctrine === doctrine) {

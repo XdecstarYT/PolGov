@@ -121,7 +121,13 @@ const pick = <T,>(rng: Rng, list: readonly T[]): T =>
  * Drawn without replacement inside one run, so no chamber contains two
  * people with the same surname by accident.
  */
-function makeName(rng: Rng, country: CountryKey, used: Set<string>): string {
+/**
+ * A name from the country's own bank, with both halves held distinct.
+ *
+ * Exported because the officer corps draws from the same banks as the
+ * benches and the press: a country has one set of names.
+ */
+export function makeName(rng: Rng, country: CountryKey, used: Set<string>): string {
   const bank = nameBankFor(findCountry(country).region);
 
   /*

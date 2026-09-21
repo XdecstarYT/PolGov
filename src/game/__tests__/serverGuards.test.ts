@@ -129,7 +129,7 @@ describe('intent validation', () => {
      * you are reading it: check the new intent validates its own inputs and
      * rejects the phases it does not belong in, then update the number.
      */
-    expect(ALLOWED_INTENT_TYPES.size).toBe(81);
+    expect(ALLOWED_INTENT_TYPES.size).toBe(84);
   });
 });
 

@@ -69,6 +69,10 @@ export function migrateState(raw: unknown): GameState | null {
   if (!next.problems) next.problems = buildProblems();
   if (!next.generations) next.generations = buildGenerations();
   if (!next.movements) next.movements = buildMovements();
+  /* A save written before the army had a shape had the army the fresh
+     country has, drawn against the same seed. */
+  if (!next.manpower) next.manpower = fresh.manpower;
+  if (!next.orbat) next.orbat = fresh.orbat;
   if (typeof next.society.inequality !== 'number' || !(next.society.inequality > 0)) {
     next.society.inequality = 1;
   }

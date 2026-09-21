@@ -1665,6 +1665,25 @@ export interface GameState {
    */
   military: Military;
 
+  /**
+   * The distance between the population and an army.
+   *
+   * A country can have two million people of military age and no army:
+   * between them sits a training pipeline measured in months that cannot
+   * be bought, and a government that discovers this in week one of a war
+   * has discovered it too late.
+   */
+  manpower: Manpower;
+
+  /**
+   * The army as a structure, and the people who run it.
+   *
+   * Two things live here that live nowhere else: how long an order takes
+   * to reach the people who carry it out, and whether the officers who
+   * would carry it out can be relied on to.
+   */
+  orbat: Orbat;
+
   /** Quarrels with other states, and how far up the ladder each one is. */
   crises: Crisis[];
 
@@ -2224,4 +2243,137 @@ export interface WarRecord {
   deepestRecession: number;
   territoryChanged: number;
   alliesInvolved: number;
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — Manpower
+ * ------------------------------------------------------------------ */
+
+export interface ManpowerPoint {
+  turn: number;
+  underArms: number;
+  strength: number;
+  morale: number;
+  quality: number;
+}
+
+export interface Manpower {
+  model: import('./content/manpower.ts').ManpowerModel;
+  /** Everybody who could in principle be called. Not a force. */
+  pool: number;
+  /** In training. Not yet soldiers, and worth about a third of one. */
+  recruits: number;
+  trained: number;
+  /** Made only by fighting, and worth half again as much as a trained one. */
+  veterans: number;
+  reserves: number;
+  /**
+   * How many the country can train at once.
+   *
+   * The binding constraint in almost every war, and the one no amount of
+   * urgency shortens.
+   */
+  trainingCapacity: number;
+  morale: number;
+  /** What they are worth as soldiers, 0–100. Falls as the numbers rise. */
+  quality: number;
+  /** Leaving, this week. The quiet way an army stops existing. */
+  desertion: number;
+  /** How much of the country is looking for a way out of being called. */
+  resistance: number;
+  /** When the current arrangement began. The ratchet is measured from it. */
+  mobilisedSince: number;
+  peopleScale: number;
+  history: ManpowerPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — Order of battle
+ * ------------------------------------------------------------------ */
+
+/**
+ * An officer.
+ *
+ * `competence` and `loyalty` are drawn independently and stay
+ * independent, because that is the whole point of the object. A
+ * government that wants both has to be lucky; one that insists on
+ * loyalty gets an army that does what it is told badly, and one that
+ * insists on competence gets an army whose obedience is conditional.
+ */
+export interface Commander {
+  id: string;
+  name: string;
+  echelon: import('./content/orbat.ts').EchelonKey;
+  traits: import('./content/orbat.ts').CommanderTrait[];
+  competence: number;
+  loyalty: number;
+  /** Made by commanding things, not by being promoted. */
+  experience: number;
+  /** How they are regarded, which follows results they did not cause. */
+  standing: number;
+  battlesFought: number;
+  appointedTurn: number;
+  dismissed: boolean;
+}
+
+/** A body of troops with a kind, a condition, and somebody in charge. */
+export interface Formation {
+  id: string;
+  kind: import('./content/orbat.ts').FormationKind;
+  echelon: import('./content/orbat.ts').EchelonKey;
+  /** The commander it answers to. */
+  parentId: string;
+  /** How much of it is still there, 0–100. */
+  strength: number;
+  /** What it has learnt. Made by fighting; training barely moves it. */
+  experience: number;
+  equipment: number;
+  /** Fed or not. Below about 30 a formation stops being one. */
+  supply: number;
+  personnel: number;
+  /** In the fight, as opposed to in barracks. */
+  committed: boolean;
+  /** Where it is, once there is a map. Undefined in peacetime. */
+  location?: string;
+}
+
+/**
+ * An order that has been given and has not yet arrived.
+ *
+ * The engine's only honest answer to the question of why a government
+ * cannot simply do the obvious thing: it can, and the obvious thing will
+ * be done three weeks from now against a situation that no longer holds.
+ */
+export interface PendingOrder {
+  id: string;
+  kind: 'commit' | 'withdraw' | 'reinforce' | 'hold' | 'advance' | 'redeploy';
+  formationId: string;
+  /** Where it is being sent, when there is somewhere to send it. */
+  target?: string;
+  issuedTurn: number;
+  weeksRemaining: number;
+}
+
+export interface OrbatPoint {
+  turn: number;
+  strength: number;
+  committed: number;
+  lag: number;
+}
+
+export interface Orbat {
+  /** The highest echelon the country actually fields. */
+  topLevel: import('./content/orbat.ts').EchelonKey;
+  commanders: Commander[];
+  formations: Formation[];
+  orders: PendingOrder[];
+  /**
+   * How many echelons sit between the desk and the rifle company.
+   *
+   * The single number behind order lag. Shortening it is worth as much
+   * as an equipment programme and is resisted by everybody whose job is
+   * one of the echelons.
+   */
+  chainDepth: number;
+  history: OrbatPoint[];
 }

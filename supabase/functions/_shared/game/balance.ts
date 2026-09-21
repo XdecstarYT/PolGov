@@ -120,6 +120,15 @@ export const PC_COSTS = {
   callEarlyElection: 40,
   campaignStop: 7,
   adBuy: 5,
+  /**
+   * Removing a serving commander.
+   *
+   * Never presented as a political act and always read as one, which is
+   * why it costs capital rather than nothing. The larger cost is not
+   * here: it is with the officers who did not lose a battle this week
+   * and have now watched what happens to the one who did.
+   */
+  dismissCommander: 14,
 } as const;
 
 /** Each whip step bought adds this much to pass chance. */
@@ -2360,3 +2369,159 @@ export const EXHAUSTION_BREAKS = 86;
  * been given no capacity to outlast anybody.
  */
 export const THEIR_RELIEF = 0.42;
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — Manpower
+ * ------------------------------------------------------------------ */
+
+/** How fast morale follows the conditions it is under. */
+export const MORALE_ADJUST_RATE = 0.03;
+
+/** Share of a force that leaves each week under ordinary conditions. */
+export const DESERTION_BASE = 0.0004;
+
+/**
+ * How much conscripting a country that does not want it costs the norms.
+ *
+ * Compelling people to fight is a constitutional act as much as a
+ * military one, and a state that does it against the grain of its own
+ * population spends something it does not get back.
+ */
+export const MOBILISATION_RATCHET = 1;
+
+/** Share of the working-age population that can in principle be called. */
+export const ELIGIBLE_SHARE = 0.42;
+
+/**
+ * How far an arrangement can be stretched by a war before it has to be
+ * replaced by a different arrangement.
+ *
+ * A country at war raises more people under the same rules — deferments
+ * stop being granted, the age band widens, the medical standard falls.
+ * Beyond this it has to legislate, which is the point at which the war
+ * arrives on the domestic desk.
+ */
+export const WAR_REACH = 2.4;
+
+/**
+ * Weekly chance a trained soldier becomes a veteran in PEACETIME.
+ *
+ * Deliberately almost nothing: a twenty-three-year career. Veterans are
+ * made by fighting, and a peacetime army that believes otherwise is
+ * counting length of service as though it were experience.
+ */
+export const VETERAN_PEACE_RATE = 0.00084;
+
+/**
+ * How much more than its replacement rate a country can train at once.
+ *
+ * A peacetime training establishment has slack, not capacity. It was
+ * built to replace the people leaving and a bit more, and the "and a
+ * bit more" is the entire margin a country has when it needs an army in
+ * a hurry. Set it much above this and the pipeline stops being the
+ * binding constraint, which is the one thing this whole file exists to
+ * say that it is.
+ */
+export const TRAINING_HEADROOM = 1.6;
+
+/**
+ * How fast a training establishment grows, and how fast it shrinks.
+ *
+ * Asymmetric on purpose. Standing a depot up means instructors, ranges
+ * and married quarters and takes years; closing one takes a signature.
+ * A government that cut the establishment in a good year and needs it in
+ * a bad one is going to be told how long it takes.
+ */
+export const CAPACITY_GROWTH = 0.006;
+export const CAPACITY_DECAY = 0.02;
+
+/**
+ * Weekly desertion rate at which people leaving becomes a visible problem.
+ *
+ * Set inside the range the formula above it can actually produce, which
+ * is not the trivial requirement it sounds like: the first version of
+ * this alarm sat above the theoretical maximum of its own input and
+ * could never have fired in any run of any country.
+ */
+export const DESERTION_ALARM = 0.0018;
+
+/** Share of the gap the reserve fills per week once it is called. */
+export const RESERVE_CALL_RATE = 0.06;
+
+/** What a recalled reservist is worth against somebody still serving. */
+export const RESERVE_RUST = 0.88;
+
+/** Morale of an ordinary peacetime army, and the baseline all else moves from. */
+export const MORALE_BASE = 68;
+
+/** Quality points per point of veteran share above the arrangement's own rest share. */
+export const QUALITY_VETERAN_BONUS = 22;
+
+/** And per point of recruit share above it. Training shows. */
+export const QUALITY_RECRUIT_PENALTY = 40;
+
+/** How far quality falls per unit of force raised beyond the peacetime establishment. */
+export const QUALITY_STRAIN_PENALTY = 0.22;
+
+/**
+ * The most a force can lose in a single week and still be a force.
+ *
+ * A defensive cap rather than a model of anything. The war engine
+ * computes casualties from the fighting without knowing how many people
+ * are in the army, so a small country in a large war can be handed a
+ * figure that annihilates it in a month. Past this point an army does
+ * not take losses, it disintegrates — and disintegration is the war
+ * engine's business, not this file's.
+ */
+export const CASUALTY_CEILING = 0.035;
+
+/**
+ * How fast a force above its establishment is let go, per week.
+ *
+ * Not the ratchet: the ratchet is about the ARRANGEMENT, which is a law
+ * and stays on the books. This is the headcount, which falls back on its
+ * own the moment nobody is signing the extensions.
+ */
+export const DEMOBILISATION_RATE = 0.04;
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — Order of battle
+ * ------------------------------------------------------------------ */
+
+/**
+ * How much of the structural lag actually reaches the player's clock.
+ *
+ * The raw sum of per-echelon delays is in weeks of staff work, which at
+ * a weekly turn would make a deep chain unplayable rather than merely
+ * frustrating. This scales it into something a government can work
+ * around: an ordinary army lands near a week and a half, a very deep one
+ * near three, and no arrangement ever reaches zero because somebody
+ * still has to read the order and somebody still has to agree with it.
+ */
+export const COMMAND_LAG_SCALE = 0.95;
+
+/**
+ * The loyalty at which an officer stops being certain to carry out an
+ * order they disagree with, and the range over which that comes on.
+ *
+ * A threshold with a slope rather than a cliff, because the thing a
+ * government wants to know is not "how many disloyal generals do I
+ * have" — it is "how much of the army is doubtful", and that number
+ * moves by degrees as the norms go.
+ */
+export const RELIABILITY_PIVOT = 55;
+export const RELIABILITY_SPAN = 32;
+
+/** Share of the force under doubtful command that counts as a problem. */
+export const UNRELIABLE_ALARM = 0.25;
+
+/**
+ * Roughly how many formations a player should be given to work with.
+ *
+ * Fixes the ECHELON the country manoeuvres at rather than the number of
+ * units: a small state moves battalions and a superpower moves corps,
+ * and both get a list of about this length. Which is also the honest
+ * answer — the echelon a government actually gives orders at is set by
+ * how much army there is, not by how much detail anybody wants.
+ */
+export const FORMATION_TARGET_COUNT = 34;
