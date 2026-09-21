@@ -31,6 +31,7 @@ import {
   findNation,
   obligationOf,
   standingWith,
+  SWEETEN_OFFER_PC,
   treatiesWith,
   treatyThreshold,
   willSign,
@@ -272,6 +273,21 @@ export function WorldPanel() {
                         </Button>
                       );
                     })}
+                  </div>
+
+                  {nation.negotiationGoodwill > 0.5 && (
+                    <p className="mt-1 text-[0.7rem] text-gain">
+                      Goodwill {nation.negotiationGoodwill.toFixed(0)} — fading fast, worth using now.
+                    </p>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="quiet"
+                      disabled={game.politicalCapital < SWEETEN_OFFER_PC}
+                      onClick={() => void dispatch({ type: 'sweeten_offer', nation: nation.key })}
+                    >
+                      Sweeten the offer · {SWEETEN_OFFER_PC} PC
+                    </Button>
                   </div>
 
                   <div className="mt-2">

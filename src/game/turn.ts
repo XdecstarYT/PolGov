@@ -287,6 +287,8 @@ import {
 } from './systems/scandal.ts';
 import { buildAmbassador } from './systems/diplomats.ts';
 import { addGrievance } from './systems/grievances.ts';
+import { sweetenOffer, sweetenValue } from './systems/negotiation.ts';
+import { SWEETEN_OFFER_PC } from './balance.ts';
 import { EMBASSY_TIERS, type EmbassyTier } from './content/diplomats.ts';
 import { SET_EMBASSY_TIER_PC, RECALL_AMBASSADOR_PC } from './balance.ts';
 import { SCANDAL_RESPONSES, type ScandalResponse } from './content/scandal.ts';
@@ -708,6 +710,7 @@ export type Intent =
   | { type: 'respond_scandal'; scandalId: string; response: ScandalResponse }
   | { type: 'set_embassy_tier'; nation: NationKey; tier: EmbassyTier }
   | { type: 'recall_ambassador'; nation: NationKey }
+  | { type: 'sweeten_offer'; nation: NationKey }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
   | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
@@ -4832,6 +4835,8 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleSetEmbassyTier(state, intent.nation, intent.tier);
     case 'recall_ambassador':
       return handleRecallAmbassador(state, intent.nation);
+    case 'sweeten_offer':
+      return handleSweetenOffer(state, intent.nation);
     case 'emergency_budget':
       return handleEmergencyBudget(state);
     case 'set_funding':
@@ -5958,6 +5963,37 @@ function handleRecallAmbassador(state: GameState, key: NationKey): IntentResult 
     label: `${name} recalled`,
     delta: -RECALL_AMBASSADOR_PC,
     cause: 'The posting stays settled — what leaves is the second dividend a named appointee was worth.',
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleSweetenOffer(state: GameState, key: NationKey): IntentResult {
+  const nation = state.world.nations.find((n) => n.key === key);
+  if (!nation) return reject(state, 'No such country.');
+  if (state.politicalCapital < SWEETEN_OFFER_PC) {
+    return reject(state, `Sweetening the offer costs ${SWEETEN_OFFER_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SWEETEN_OFFER_PC);
+  const worth = sweetenValue(nation.sweetenedThisRun);
+  const result = sweetenOffer(nation.negotiationGoodwill, nation.sweetenedThisRun);
+  next.world = {
+    ...next.world,
+    nations: next.world.nations.map((n) =>
+      n.key === key
+        ? { ...n, negotiationGoodwill: result.goodwill, sweetenedThisRun: result.sweetenedThisRun }
+        : n,
+    ),
+  };
+
+  log(entries, {
+    kind: 'note',
+    label: `Offer sweetened for ${findNation(key).name}`,
+    delta: -SWEETEN_OFFER_PC,
+    cause: `Worth ${worth.toFixed(1)} points of goodwill this time, and less again next time. It fades fast — use it soon.`,
     unit: 'PC',
   });
   return ok(next);

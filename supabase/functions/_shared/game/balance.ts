@@ -3321,3 +3321,19 @@ export const GRIEVANCE_DECAY_RATE = 0.002;
 
 /** How much of the grievance score turns into extra resistance to signing a new treaty. */
 export const GRIEVANCE_SIGNING_WEIGHT = 0.35;
+
+/* ------------------------------------------------------------------ *
+ * Engine 8E/8F — Alliances and the negotiation engine
+ * ------------------------------------------------------------------ */
+
+export const SWEETEN_OFFER_PC = 4;
+/** What the first sweetening this run is worth, in goodwill points. */
+export const SWEETEN_OFFER_BASE_EFFECT = 14;
+/** How much less each further sweetening is worth. */
+export const SWEETEN_OFFER_DECAY = 0.55;
+
+/** How fast goodwill fades, per week — much faster than relations or grievance move. */
+export const GOODWILL_DECAY_RATE = 0.15;
+
+/** How much current goodwill reduces a treaty's effective signing threshold, per point. */
+export const GOODWILL_SIGNING_WEIGHT = 0.4;

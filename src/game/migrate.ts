@@ -148,6 +148,8 @@ export function migrateState(raw: unknown): GameState | null {
         ambassador: nation.ambassador ?? null,
         embassyTier: nation.embassyTier ?? 'standard',
         grievance: nation.grievance ?? 0,
+        negotiationGoodwill: nation.negotiationGoodwill ?? 0,
+        sweetenedThisRun: nation.sweetenedThisRun ?? 0,
       };
     }),
   };

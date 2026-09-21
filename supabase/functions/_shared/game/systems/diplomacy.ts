@@ -59,6 +59,7 @@ import {
 } from '../content/nations.ts';
 import { ambassadorDividend, tierStabiliserMultiplier } from './diplomats.ts';
 import { decayGrievance, grievanceSigningPenalty } from './grievances.ts';
+import { decayGoodwill, goodwillSigningRelief } from './negotiation.ts';
 import {
   worldFrom,
   type ForeignCountry,
@@ -108,6 +109,8 @@ export function buildWorld(player: CountryKey = DEFAULT_PLAYER_COUNTRY): World {
     ambassador: null,
     embassyTier: 'standard',
     grievance: 0,
+    negotiationGoodwill: 0,
+    sweetenedThisRun: 0,
     recognised: true,
     lastSummitTurn: null,
     sanctioned: false,
@@ -272,7 +275,14 @@ export function willSign(nation: NationState, kind: TreatyKind, reputation: numb
      for more than the relations number alone would suggest — the
      grievance outlives the recovery. */
   const grievancePenalty = grievanceSigningPenalty(nation.grievance);
-  return nation.relations >= treatyThreshold(kind) + reputationPenalty + grievancePenalty;
+  /* A recently sweetened offer buys real, temporary room — worth using
+     the week it is offered, since it will not still be there in a
+     month. */
+  const goodwillRelief = goodwillSigningRelief(nation.negotiationGoodwill);
+  return (
+    nation.relations >=
+    treatyThreshold(kind) + reputationPenalty + grievancePenalty - goodwillRelief
+  );
 }
 
 /** What a treaty actually obliges, in one line. */
@@ -375,6 +385,7 @@ export function stepWorld(world: World, inputs: DiplomacyInputs): WorldTick {
       ...nation,
       relations: clampRelations(relations),
       grievance: decayGrievance(nation.grievance),
+      negotiationGoodwill: decayGoodwill(nation.negotiationGoodwill),
       ambassadorMonths:
         nation.ambassadorMonths === null ? null : nation.ambassadorMonths + 1,
     };

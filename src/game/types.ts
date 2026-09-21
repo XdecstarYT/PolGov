@@ -1117,6 +1117,13 @@ export interface NationState {
    * decades — it is not the same claim as being trusted.
    */
   grievance: number;
+  /**
+   * A concession's afterglow, 0–100. Decays fast — an offer sweetened
+   * and not used soon after is spent for nothing.
+   */
+  negotiationGoodwill: number;
+  /** Sweetenings offered this run. Each one is worth less than the last. */
+  sweetenedThisRun: number;
   /** How much of their trade is with us, 0–1. Leverage runs both ways. */
   tradeDependence: number;
   /** How much of OUR trade is with them. The other half of the leverage. */
