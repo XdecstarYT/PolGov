@@ -43,6 +43,7 @@ import { buildLogistics } from './systems/logistics.ts';
 import { buildDoctrine } from './systems/doctrine.ts';
 import { buildTimeline } from './systems/timeline.ts';
 import { buildCabinet, buildCivilService } from './systems/cabinet.ts';
+import { buildJustice } from './systems/justice.ts';
 import { buildWarEconomy } from './systems/warEconomy.ts';
 import { buildAirForce } from './systems/air.ts';
 import { buildLiving } from './systems/living.ts';
@@ -500,6 +501,9 @@ export function createGame(options: NewGameOptions): GameState {
 
     /* And the building, as whoever was here before left it. */
     civilService: buildCivilService(),
+
+    /* The bench and the force, at whatever an ordinary country's are like. */
+    justice: buildJustice(),
 
     /* Nothing a history would record yet. Everything the country is
        now, it was when this government arrived. */

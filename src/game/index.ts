@@ -66,6 +66,8 @@ export * from './systems/theatre.ts';
 export * from './content/theatre.ts';
 export * from './systems/cabinet.ts';
 export * from './content/cabinet.ts';
+export * from './systems/justice.ts';
+export * from './content/justice.ts';
 export * from './systems/timeline.ts';
 export * from './systems/peace.ts';
 export * from './content/peace.ts';

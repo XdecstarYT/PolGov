@@ -230,6 +230,23 @@ import {
   type MachinePosture,
 } from './content/cabinet.ts';
 import {
+  courtsQuality,
+  driveAntiCorruption,
+  policingQuality,
+  setEnforcementPosture,
+  setJudicialStance,
+  setSentencing,
+  stepJustice,
+} from './systems/justice.ts';
+import {
+  findEnforcementPosture,
+  findSentencing,
+  findStance,
+  type EnforcementPosture,
+  type JudicialStance,
+  type SentencingPolicy,
+} from './content/justice.ts';
+import {
   closeEntry,
   openEntryFor,
   record as recordEntry,
@@ -290,6 +307,13 @@ import {
 import { ROTATION_RATIO, SHIP_ORDER_PC, SQUADRON_ORDER_PC } from './balance.ts';
 import { ATTACK_SUPPLY_FLOOR } from './balance.ts';
 import { MACHINE_CAPABILITY, APPOINT_MINISTER_PC, RESHUFFLE_PC, MACHINE_POSTURE_PC } from './balance.ts';
+import {
+  SET_SENTENCING_PC,
+  SET_JUDICIAL_STANCE_PC,
+  SET_ENFORCEMENT_POSTURE_PC,
+  ANTI_CORRUPTION_DRIVE_PC,
+  ANTI_CORRUPTION_DRIVE_EFFECT,
+} from './balance.ts';
 import { SECTOR_POSTURE_LABELS, type SectorPosture } from './content/theatre.ts';
 import {
   commanderOf,
@@ -589,6 +613,10 @@ export type Intent =
   | { type: 'appoint_minister'; ministry: MinistryKey; basis: AppointmentBasis }
   | { type: 'full_reshuffle' }
   | { type: 'set_machine_posture'; posture: MachinePosture }
+  | { type: 'set_sentencing'; policy: SentencingPolicy }
+  | { type: 'set_judicial_stance'; stance: JudicialStance }
+  | { type: 'set_enforcement_posture'; posture: EnforcementPosture }
+  | { type: 'drive_anti_corruption' }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
   | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
@@ -2004,7 +2032,16 @@ export function resolveTurn(state: GameState): GameState {
       homeownership: homeownership(next.society.bands),
       access: Object.fromEntries(next.living.access.map((a) => [a.key, a.level])),
       gradient: Object.fromEntries(next.living.access.map((a) => [a.key, a.gradient])),
-      serviceQuality: Object.fromEntries(next.services.map((x) => [x.key, x.quality])),
+      serviceQuality: {
+        ...Object.fromEntries(next.services.map((x) => [x.key, x.quality])),
+        /*
+         * Crime's police/courts terms read what the justice system
+         * actually produces — clearance-driven deterrence, not raw
+         * funding — rather than the generic service quality figure.
+         */
+        police: policingQuality(next.justice),
+        courts: courtsQuality(next.justice),
+      },
       ruralGap: next.living.ruralGap,
       regionalInequality: next.living.regionalInequality,
       efficacy: next.opinion.efficacy,
@@ -3575,6 +3612,39 @@ export function resolveTurn(state: GameState): GameState {
     }
   }
 
+  /* The bench, and the force that feeds it cases. */
+  {
+    const justiceTick = stepJustice(next.justice, {
+      courtFunding: next.services.find((x) => x.key === 'courts')?.staffing ?? 1,
+      policeFunding: next.services.find((x) => x.key === 'police')?.staffing ?? 1,
+      turn: absoluteWeek(next),
+    });
+    next.justice = justiceTick.justice;
+
+    if (justiceTick.benchCaptured) {
+      log(entries, {
+        kind: 'note',
+        label: 'The bench answers to the government now',
+        delta: -next.justice.courts.independence,
+        cause:
+          'Independence spent rather than held. It buys favourable rulings this term and ' +
+          'the fall will take far longer to climb back from than it took to reach.',
+        unit: 'idx',
+      });
+    }
+    if (justiceTick.scandal) {
+      log(entries, {
+        kind: 'note',
+        label: 'A corruption scandal breaks in the police',
+        delta: -next.justice.policing.corruption,
+        cause:
+          'What had been quiet for years is quiet no longer. Cooperation, already the ' +
+          'harder half of the clearance rate to hold, is what a story like this costs first.',
+        unit: 'idx',
+      });
+    }
+  }
+
   /*
    * What the country thinks they have, and whether it can stop.
    *
@@ -4503,6 +4573,14 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleFullReshuffle(state);
     case 'set_machine_posture':
       return handleMachinePosture(state, intent.posture);
+    case 'set_sentencing':
+      return handleSetSentencing(state, intent.policy);
+    case 'set_judicial_stance':
+      return handleSetJudicialStance(state, intent.stance);
+    case 'set_enforcement_posture':
+      return handleSetEnforcementPosture(state, intent.posture);
+    case 'drive_anti_corruption':
+      return handleAntiCorruptionDrive(state);
     case 'emergency_budget':
       return handleEmergencyBudget(state);
     case 'set_funding':
@@ -5124,6 +5202,100 @@ function handleMachinePosture(state: GameState, posture: MachinePosture): Intent
     label: template.label,
     delta: -MACHINE_POSTURE_PC,
     cause: `${template.blurb} None of what this does shows up this week.`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleSetSentencing(state: GameState, policy: SentencingPolicy): IntentResult {
+  if (state.justice.courts.sentencing === policy) {
+    return reject(state, 'That is the sentencing policy already.');
+  }
+  if (state.politicalCapital < SET_SENTENCING_PC) {
+    return reject(state, `Changing sentencing policy costs ${SET_SENTENCING_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SET_SENTENCING_PC);
+  next.justice = setSentencing(next.justice, policy);
+
+  const template = findSentencing(policy);
+  log(entries, {
+    kind: 'note',
+    label: `Sentencing: ${template.label}`,
+    delta: -SET_SENTENCING_PC,
+    cause: `${template.blurb} Custody population and reoffending move first; the crime figures move on the clearance rate, not on this.`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleSetJudicialStance(state: GameState, stance: JudicialStance): IntentResult {
+  if (state.justice.courts.stance === stance) {
+    return reject(state, 'That is the stance already.');
+  }
+  if (state.politicalCapital < SET_JUDICIAL_STANCE_PC) {
+    return reject(state, `Changing how the courts are treated costs ${SET_JUDICIAL_STANCE_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SET_JUDICIAL_STANCE_PC);
+  next.justice = setJudicialStance(next.justice, stance);
+
+  const template = findStance(stance);
+  log(entries, {
+    kind: 'note',
+    label: `Judicial stance: ${template.label}`,
+    delta: -SET_JUDICIAL_STANCE_PC,
+    cause: `${template.blurb} Independence moves toward this over months, not this week.`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleSetEnforcementPosture(state: GameState, posture: EnforcementPosture): IntentResult {
+  if (state.justice.policing.posture === posture) {
+    return reject(state, 'That is the posture already.');
+  }
+  if (state.politicalCapital < SET_ENFORCEMENT_POSTURE_PC) {
+    return reject(state, `Changing enforcement posture costs ${SET_ENFORCEMENT_POSTURE_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SET_ENFORCEMENT_POSTURE_PC);
+  next.justice = setEnforcementPosture(next.justice, posture);
+
+  const template = findEnforcementPosture(posture);
+  log(entries, {
+    kind: 'note',
+    label: `Enforcement posture: ${template.label}`,
+    delta: -SET_ENFORCEMENT_POSTURE_PC,
+    cause: `${template.blurb}`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleAntiCorruptionDrive(state: GameState): IntentResult {
+  if (state.politicalCapital < ANTI_CORRUPTION_DRIVE_PC) {
+    return reject(state, `An anti-corruption drive costs ${ANTI_CORRUPTION_DRIVE_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, ANTI_CORRUPTION_DRIVE_PC);
+  next.justice = driveAntiCorruption(next.justice, ANTI_CORRUPTION_DRIVE_EFFECT);
+
+  log(entries, {
+    kind: 'note',
+    label: 'Anti-corruption drive',
+    delta: -ANTI_CORRUPTION_DRIVE_PC,
+    cause:
+      'A visible push against it, worth less each time it is used on a force that keeps ' +
+      'breeding it back under the same posture and the same funding.',
     unit: 'PC',
   });
   return ok(next);

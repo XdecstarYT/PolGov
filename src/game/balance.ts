@@ -3095,3 +3095,70 @@ export const RESHUFFLE_PC = 15;
 
 /** Changing how the government treats the people who will outlast it. */
 export const MACHINE_POSTURE_PC = 6;
+
+/* ------------------------------------------------------------------ *
+ * Engine 5C/5D — Courts and policing
+ * ------------------------------------------------------------------ */
+
+/** Independence an ordinary, unmolested bench sits at. */
+export const JUDICIAL_INDEPENDENCE_START = 66;
+
+/** How fast independence follows the stance the government has taken. */
+export const INDEPENDENCE_RATE = 0.012;
+
+/** Backlog an ordinarily-funded court system carries, as a multiple of "current". */
+export const BACKLOG_ORDINARY = 1;
+
+/** How fast backlog follows funding and clearance. */
+export const BACKLOG_RATE = 0.05;
+
+/** Conviction accuracy an ordinary system delivers, 0–1. */
+export const ACCURACY_START = 0.88;
+
+/** How much each point of clearance speed above ordinary costs in accuracy. */
+export const CLEARANCE_ACCURACY_TRADE = 0.35;
+
+/** Prison population an ordinary system carries, per capita index (1 = ordinary). */
+export const PRISON_POPULATION_START = 1;
+export const PRISON_POPULATION_RATE = 0.02;
+
+/** Policing capability an ordinary, ordinarily-funded force sits at. */
+export const POLICING_CAPABILITY_START = 64;
+export const POLICING_CAPABILITY_RATE = 0.03;
+
+/** Cooperation an ordinary community starts at, 0–100. */
+export const COOPERATION_START = 58;
+export const COOPERATION_RATE = 0.05;
+
+/** Corruption an ordinary force starts at. Embedded; moves slowly either way. */
+export const CORRUPTION_START = 12;
+export const CORRUPTION_RATE = 0.006;
+
+/**
+ * How much a corruption scandal moves trust when it breaks.
+ *
+ * Corruption itself drifts quietly; this is what happens the week it
+ * stops being quiet.
+ */
+export const CORRUPTION_SCANDAL_THRESHOLD = 45;
+
+/** How clearance is actually produced: capability and cooperation together. */
+export const CLEARANCE_CAPABILITY_WEIGHT = 0.55;
+export const CLEARANCE_COOPERATION_WEIGHT = 0.45;
+
+/**
+ * How much clearance deters crime relative to sentence severity.
+ *
+ * The anchor of the whole system: this ratio is deliberately far larger
+ * than any severityDeterrence figure in the sentencing templates, so
+ * that a player who raises clearance sees more effect than one who
+ * raises sentences, exactly reversed from the popular intuition.
+ */
+export const CLEARANCE_DETERRENCE_WEIGHT = 1.4;
+
+export const SET_SENTENCING_PC = 3;
+export const SET_JUDICIAL_STANCE_PC = 4;
+export const SET_ENFORCEMENT_POSTURE_PC = 3;
+export const ANTI_CORRUPTION_DRIVE_PC = 8;
+/** How much one drive knocks corruption down. Diminishing if repeated too often. */
+export const ANTI_CORRUPTION_DRIVE_EFFECT = 10;

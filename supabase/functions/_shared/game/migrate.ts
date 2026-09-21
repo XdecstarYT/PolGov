@@ -78,6 +78,7 @@ export function migrateState(raw: unknown): GameState | null {
   if (!next.timeline) next.timeline = fresh.timeline;
   if (!next.cabinet) next.cabinet = fresh.cabinet;
   if (!next.civilService) next.civilService = fresh.civilService;
+  if (!next.justice) next.justice = fresh.justice;
   if (!next.doctrine) next.doctrine = fresh.doctrine;
   if (!next.logistics) next.logistics = fresh.logistics;
   if (!next.warEconomy) next.warEconomy = fresh.warEconomy;

@@ -1704,6 +1704,17 @@ export interface GameState {
   civilService: CivilService;
 
   /**
+   * The bench, and the force that feeds it cases.
+   *
+   * Anchored on the one finding that survives every replication:
+   * certainty of being caught deters far more than severity of
+   * punishment does, which is why the popular lever — sentencing — is
+   * the weaker one, and the unglamorous lever — clearance — is the
+   * lever that actually moves the crime figures.
+   */
+  justice: Justice;
+
+  /**
    * What the country remembers, which outlives every government in it.
    *
    * The point of modelling a war in a political game is what the country
@@ -3030,4 +3041,61 @@ export interface CivilService {
   /** Officials who have left rather than do it. Cumulative. */
   departures: number;
   history: CivilServicePoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 5C/5D — Courts and policing
+ * ------------------------------------------------------------------ */
+
+export interface JusticePoint {
+  turn: number;
+  independence: number;
+  clearanceRate: number;
+  crimeDeterrence: number;
+}
+
+export interface Courts {
+  sentencing: import('./content/justice.ts').SentencingPolicy;
+  stance: import('./content/justice.ts').JudicialStance;
+  /**
+   * How free the bench is of the government's wishes, 0–100.
+   *
+   * Spent, not held: leaning on the courts buys a favourable ruling now
+   * and a slow, choppy erosion for years, on a floor much harder to
+   * climb back from than the fall down to it.
+   */
+  independence: number;
+  /** Cases waiting, as a multiple of what a well-run system carries. */
+  backlog: number;
+  /** Share of cases actually reaching a verdict each week. */
+  clearanceRate: number;
+  /** How often the verdict is the right one — trades against clearance speed. */
+  accuracy: number;
+  /** People in custody, driven by sentencing policy and clearance together. */
+  prisonPopulation: number;
+}
+
+export interface Policing {
+  posture: import('./content/justice.ts').EnforcementPosture;
+  /** What the force can actually do, funding and staffing together, 0–100. */
+  capability: number;
+  /**
+   * How willing people are to report a crime and cooperate with its
+   * investigation. The real lever behind the clearance rate, and the
+   * one enforcement theatre destroys fastest.
+   */
+  cooperation: number;
+  /**
+   * Embedded, slow to move in either direction. High corruption is a
+   * standing supply of the scandal that finally moves it.
+   */
+  corruption: number;
+  /** Investigations actually closed, feeding the courts' clearance rate. */
+  investigativeClearance: number;
+}
+
+export interface Justice {
+  courts: Courts;
+  policing: Policing;
+  history: JusticePoint[];
 }
