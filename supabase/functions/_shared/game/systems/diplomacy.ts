@@ -60,6 +60,7 @@ import {
 import { ambassadorDividend, tierStabiliserMultiplier } from './diplomats.ts';
 import { decayGrievance, grievanceSigningPenalty } from './grievances.ts';
 import { decayGoodwill, goodwillSigningRelief } from './negotiation.ts';
+import { decaySoftPower, softPowerBoost } from './softPower.ts';
 import {
   worldFrom,
   type ForeignCountry,
@@ -153,6 +154,7 @@ export function buildWorld(player: CountryKey = DEFAULT_PLAYER_COUNTRY): World {
     globalEvents: [],
     reputation: 60,
     influence: 42,
+    softPower: 18,
     tension: 30,
     history: [],
   };
@@ -352,7 +354,12 @@ export function stepWorld(world: World, inputs: DiplomacyInputs): WorldTick {
 
   const nations = world.nations.map((nation) => {
     const template = findNation(nation.key);
-    const natural = naturalRelations(template, inputs.playerIdeology, nation);
+    /* Soft power moves every relationship's equilibrium point a little
+       instead of any one of them a lot — the one instrument here that
+       is not bilateral. */
+    const natural = clampRelations(
+      naturalRelations(template, inputs.playerIdeology, nation) + softPowerBoost(world.softPower),
+    );
 
     /* An embassy does not improve relations. It slows their decay, which is
        the quiet and unglamorous argument for keeping one open. A higher
@@ -451,6 +458,7 @@ export function stepWorld(world: World, inputs: DiplomacyInputs): WorldTick {
     globalEvents: world.globalEvents,
     reputation,
     influence,
+    softPower: decaySoftPower(world.softPower),
     tension,
     history: [...world.history, point].slice(-WORLD_HISTORY_LIMIT),
   };

@@ -1647,6 +1647,21 @@ export const SANCTION_TRADE_MULTIPLIER = 0.2;
  */
 export const SANCTION_EROSION_RATE = 0.006;
 export const SANCTION_EROSION_FLOOR = 0.55;
+
+/* ------------------------------------------------------------------ *
+ * Engine 8K/8L — Crisis diplomacy and soft power
+ * ------------------------------------------------------------------ */
+
+/** How much a point of soft power raises every relationship's target figure. */
+export const SOFT_POWER_BOOST_WEIGHT = 0.12;
+export const SOFT_POWER_DECAY_RATE = 0.01;
+export const SOFT_POWER_INVEST_PC = 5;
+export const SOFT_POWER_INVEST_EFFECT = 8;
+
+/** How much a high commission (the top embassy tier) cuts a crisis's weekly escalation chance. */
+export const HIGH_COMMISSION_ESCALATION_RELIEF = 0.35;
+/** And how much faster it lets a crisis de-escalate once talking has started. */
+export const HIGH_COMMISSION_DEESCALATION_BOOST = 1.4;
 /** How much a point of tariff suppresses the flow it falls on. */
 export const TARIFF_ELASTICITY = 0.9;
 /** Supply chains are physical objects with contracts attached. */

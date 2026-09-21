@@ -137,6 +137,13 @@ describe('the ladder', () => {
     /* Coming down from a war goes to a crisis, not to nothing. */
     expect(deEscalate(war, 2).stage).toBe('crisis');
   });
+
+  it('a high commission steps escalation down further than an ordinary de-escalation does', () => {
+    const crisis = escalate(escalate(openCrisis('russia', 'x', 1, dangerous()), 2), 3);
+    const ordinary = deEscalate(crisis, 6, false);
+    const withChannel = deEscalate(crisis, 6, true);
+    expect(withChannel.escalation).toBeLessThan(ordinary.escalation);
+  });
 });
 
 describe('the rally, and what happens to it', () => {

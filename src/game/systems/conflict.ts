@@ -36,6 +36,8 @@ import {
   months,
   CASUALTY_SHARE_APPROVAL,
   WEEKLY_CASUALTY_RATE,
+  HIGH_COMMISSION_ESCALATION_RELIEF,
+  HIGH_COMMISSION_DEESCALATION_BOOST,
 } from '../balance.ts';
 import { findNation, type NationKey } from '../content/nations.ts';
 import type { Rng } from '../rng.ts';
@@ -311,10 +313,23 @@ export function stepConflicts(crises: readonly Crisis[], inputs: ConflictInputs)
        * the week rolls their way. Deterrence is what makes this not happen
        * — and deterrence was bought years ago or it was not.
        */
+      /*
+       * A high commission is a channel to talk through when things go
+       * wrong, not a reason they went right — it cuts the chance a bad
+       * week turns into a worse one, which is what a standing mission is
+       * actually for. Never a certainty, and never on its own; it is a
+       * brake on the ladder, not a floor under it.
+       */
+      const heldNation = inputs.world.nations.find((n) => n.key === crisis.nation);
+      const escalationChance =
+        (0.055 + escalation / 900) *
+        (heldNation?.embassy && heldNation.embassyTier === 'high_commission'
+          ? 1 - HIGH_COMMISSION_ESCALATION_RELIEF
+          : 1);
       const theyPush =
         !deterred(crisis, inputs.military, inputs.world) &&
         theirResolve > 45 &&
-        inputs.rng.chance(0.055 + escalation / 900);
+        inputs.rng.chance(escalationChance);
 
       if (theyPush) {
         escalation = clamp(escalation + ESCALATION_STEP, 0, 100);
@@ -391,13 +406,21 @@ export function escalate(crisis: Crisis, turn: number): Crisis {
  * public, and it is very often the right thing to do — which is the whole
  * shape of the decision and the reason so few governments take it.
  */
-export function deEscalate(crisis: Crisis, turn: number): Crisis {
+export function deEscalate(
+  crisis: Crisis,
+  turn: number,
+  hasHighCommission: boolean = false,
+): Crisis {
   const down = LADDER[Math.max(0, rungOf(crisis.stage) - 1)]!;
+  /* A standing high commission is a channel that was already open when
+     the talking started, which is why it speeds this specifically —
+     the step down, not the decision to take it. */
+  const step = ESCALATION_STEP * 1.4 * (hasHighCommission ? HIGH_COMMISSION_DEESCALATION_BOOST : 1);
   return {
     ...crisis,
     stage: crisis.stage === 'war' ? 'crisis' : down,
     stageSince: turn,
-    escalation: clamp(crisis.escalation - ESCALATION_STEP * 1.4, 0, 100),
+    escalation: clamp(crisis.escalation - step, 0, 100),
     rally: 0,
     ourResolve: clamp(crisis.ourResolve - 14, 0, 100),
     theirResolve: clamp(crisis.theirResolve - 5, 0, 100),

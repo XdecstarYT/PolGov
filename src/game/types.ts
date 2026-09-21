@@ -1471,6 +1471,12 @@ export interface World {
   reputation: number;
   /** Diplomatic weight, 0–100. What the country can get done in a room. */
   influence: number;
+  /**
+   * Culture, broadcasting and scholarships, 0–100 — the one lever in
+   * this engine that is not bilateral. It moves every relationship in
+   * the world a little instead of any one of them a lot.
+   */
+  softPower: number;
   /** How dangerous the world currently is, 0–100. */
   tension: number;
   history: WorldPoint[];

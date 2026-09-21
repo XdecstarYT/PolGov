@@ -288,7 +288,9 @@ import {
 import { buildAmbassador } from './systems/diplomats.ts';
 import { addGrievance } from './systems/grievances.ts';
 import { sweetenOffer, sweetenValue } from './systems/negotiation.ts';
+import { investSoftPower } from './systems/softPower.ts';
 import { SWEETEN_OFFER_PC } from './balance.ts';
+import { SOFT_POWER_INVEST_PC } from './balance.ts';
 import { EMBASSY_TIERS, type EmbassyTier } from './content/diplomats.ts';
 import { SET_EMBASSY_TIER_PC, RECALL_AMBASSADOR_PC } from './balance.ts';
 import { SCANDAL_RESPONSES, type ScandalResponse } from './content/scandal.ts';
@@ -711,6 +713,7 @@ export type Intent =
   | { type: 'set_embassy_tier'; nation: NationKey; tier: EmbassyTier }
   | { type: 'recall_ambassador'; nation: NationKey }
   | { type: 'sweeten_offer'; nation: NationKey }
+  | { type: 'invest_soft_power' }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
   | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
@@ -4843,6 +4846,8 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleRecallAmbassador(state, intent.nation);
     case 'sweeten_offer':
       return handleSweetenOffer(state, intent.nation);
+    case 'invest_soft_power':
+      return handleInvestSoftPower(state);
     case 'emergency_budget':
       return handleEmergencyBudget(state);
     case 'set_funding':
@@ -6000,6 +6005,26 @@ function handleSweetenOffer(state: GameState, key: NationKey): IntentResult {
     label: `Offer sweetened for ${findNation(key).name}`,
     delta: -SWEETEN_OFFER_PC,
     cause: `Worth ${worth.toFixed(1)} points of goodwill this time, and less again next time. It fades fast — use it soon.`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleInvestSoftPower(state: GameState): IntentResult {
+  if (state.politicalCapital < SOFT_POWER_INVEST_PC) {
+    return reject(state, `A soft-power programme costs ${SOFT_POWER_INVEST_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SOFT_POWER_INVEST_PC);
+  next.world = { ...next.world, softPower: investSoftPower(next.world.softPower) };
+
+  log(entries, {
+    kind: 'note',
+    label: 'Soft-power programme',
+    delta: -SOFT_POWER_INVEST_PC,
+    cause: 'Moves every relationship a little rather than any one of them a lot. Nobody can point to the week it worked.',
     unit: 'PC',
   });
   return ok(next);
@@ -8145,7 +8170,12 @@ function handleDeEscalateCrisis(state: GameState, id: string): IntentResult {
   const next = clone(state);
   const entries = currentLog(next);
   spendPc(next, DEESCALATE_PC_COST);
-  const after = deEscalateCrisis(crisis, next.turnNumber);
+  const heldNation = next.world.nations.find((n) => n.key === crisis.nation);
+  const after = deEscalateCrisis(
+    crisis,
+    next.turnNumber,
+    Boolean(heldNation?.embassy && heldNation.embassyTier === 'high_commission'),
+  );
   next.crises = next.crises.map((c) => (c.id === id ? after : c));
   next.approval = clampApproval(next.approval + DEESCALATION_APPROVAL);
 

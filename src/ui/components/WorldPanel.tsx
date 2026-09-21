@@ -31,6 +31,7 @@ import {
   exposures,
   findNation,
   obligationOf,
+  SOFT_POWER_INVEST_PC,
   standingWith,
   SWEETEN_OFFER_PC,
   treatiesWith,
@@ -96,6 +97,22 @@ export function WorldPanel() {
           detail="in force, each a commitment"
           size="large"
         />
+        <Stat
+          label="Soft power"
+          value={world.softPower.toFixed(0)}
+          detail="moves every relationship a little, not one of them a lot"
+          size="large"
+        />
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Button
+          variant="quiet"
+          disabled={game.politicalCapital < SOFT_POWER_INVEST_PC}
+          onClick={() => void dispatch({ type: 'invest_soft_power' })}
+        >
+          Fund a soft-power programme · {SOFT_POWER_INVEST_PC} PC
+        </Button>
       </div>
 
       {exposed.length > 0 && (

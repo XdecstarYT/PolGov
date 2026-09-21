@@ -136,6 +136,7 @@ export function migrateState(raw: unknown): GameState | null {
   if (!Array.isArray(next.world.globalEvents)) {
     next.world = { ...next.world, globalEvents: [] };
   }
+  if (next.world.softPower == null) next.world = { ...next.world, softPower: fresh.world.softPower };
   /* Live power and posture arrived after the nations themselves did. */
   next.world = {
     ...next.world,
