@@ -29,7 +29,6 @@ import {
 } from '../systems/opinion.ts';
 import { TRUST_KEYS } from '../content/trust.ts';
 import { COMPLIANCE_FLOOR } from '../balance.ts';
-import type { Opinion } from '../types.ts';
 
 const inputs = (over: Partial<OpinionInputs> = {}): OpinionInputs => ({
   approval: 48,

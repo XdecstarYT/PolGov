@@ -181,7 +181,20 @@ import {
   leastIncluded,
   stepCulture,
 } from './systems/culture.ts';
-import { complianceFactor, stepOpinion, trustOf } from './systems/opinion.ts';
+import {
+  complianceFactor,
+  institutionalTrust,
+  stepOpinion,
+  trustOf,
+} from './systems/opinion.ts';
+import { describeProblems, problemOf, stepProblems } from './systems/problems.ts';
+import {
+  describeGenerations,
+  generationGap,
+  stepGenerations,
+} from './systems/generations.ts';
+import { findProblem } from './content/problems.ts';
+import { homeownership } from './systems/society.ts';
 import { findTrust } from './content/trust.ts';
 import { findCulturalInstitution } from './content/culture.ts';
 import { findAccess } from './content/access.ts';
@@ -1768,18 +1781,8 @@ export function resolveTurn(state: GameState): GameState {
       ),
       unemployment: next.economy.unemployment,
       environmentHealth: findSector(next.sectors, 'environment').health,
-      /*
-       * A stand-in until Engine 5 builds the police properly: recorded
-       * crime rises where the service is thin and where households are
-       * under pressure, which is the direction the evidence points even
-       * where the size of the effect is argued about.
-       */
-      crimeRate: Math.max(
-        4,
-        34 -
-          (next.services.find((x) => x.key === 'police')?.quality ?? 60) * 0.22 +
-          next.society.povertyRate * 0.35,
-      ),
+      /* Measured, off the social register. */
+      crimeRate: problemOf(next.problems, 'crime') * 0.45,
       urbanisation: next.demography.urbanisation,
       regional: next.demography.regional.map((r) => ({
         regionId: r.regionId,
@@ -1820,6 +1823,105 @@ export function resolveTurn(state: GameState): GameState {
     next.culture = cultureTick.culture;
 
     /*
+     * What all of that is doing to people.
+     *
+     * Sixteen problems, each derived from conditions the player set and
+     * from each other, and each slower to reverse than it was to cause.
+     * Stepped before opinion, because the crime rate it produces is what
+     * trust in the police is judged on.
+     */
+    const problemsTick = stepProblems(next.problems, {
+      unemployment: next.economy.unemployment,
+      youthShare: next.demography.youthShare,
+      povertyRate: next.society.povertyRate,
+      lowerDisposable: next.society.bands[0]!.disposableIndex,
+      incomeGini: next.society.incomeGini,
+      housingCostBurden: next.society.housingCostBurden,
+      homeownership: homeownership(next.society.bands),
+      access: Object.fromEntries(next.living.access.map((a) => [a.key, a.level])),
+      gradient: Object.fromEntries(next.living.access.map((a) => [a.key, a.gradient])),
+      serviceQuality: Object.fromEntries(next.services.map((x) => [x.key, x.quality])),
+      ruralGap: next.living.ruralGap,
+      regionalInequality: next.living.regionalInequality,
+      efficacy: next.opinion.efficacy,
+      institutionalTrust: institutionalTrust(next.opinion),
+      happiness: next.living.happiness,
+      retiredShare: next.demography.retiredShare,
+      turn: absoluteWeek(next),
+    });
+    next.problems = problemsTick.problems;
+
+    /*
+     * And the electorate replacing itself underneath all of it.
+     *
+     * Nobody changes their mind here. The oldest cohort leaves and the
+     * youngest arrives, at about one and a quarter per cent a year, and
+     * the country's centre of gravity moves with them — so a government
+     * perfectly positioned in its first term can be mispositioned in its
+     * third having changed nothing. The cohort being formed right now is
+     * being formed by conditions this government is responsible for.
+     */
+    const generationsTick = stepGenerations(next.generations, {
+      housingCostBurden: next.society.housingCostBurden,
+      homeownership: homeownership(next.society.bands),
+      lowerDisposable: next.society.bands[0]!.disposableIndex,
+      incomeGini: next.society.incomeGini,
+      institutionalTrust: institutionalTrust(next.opinion),
+      efficacy: next.opinion.efficacy,
+      environmentHealth: findSector(next.sectors, 'environment').health,
+      youthUnemployment: problemOf(next.problems, 'youth_unemployment'),
+      turn: absoluteWeek(next),
+    });
+    next.generations = generationsTick.generations;
+
+    if (generationsTick.cohortArrived) {
+      log(entries, {
+        kind: 'note',
+        label: 'A generation takes its place',
+        delta: generationGap(next.generations),
+        cause:
+          `A cohort formed by the country as it has been under this government and its ` +
+          `predecessors is now voting. Nobody in it will change their mind about what it ` +
+          `learned, and it will still be voting in sixty years.`,
+        unit: 'pts',
+      });
+    }
+    if (generationsTick.driftedAway) {
+      log(entries, {
+        kind: 'note',
+        label: 'The ground has moved',
+        delta: 0,
+        cause: describeGenerations(next.generations),
+        unit: '',
+      });
+    }
+
+    for (const key of problemsTick.worsened) {
+      const template = findProblem(key);
+      log(entries, {
+        kind: 'sector',
+        label: `${template.label} — now serious`,
+        delta: problemOf(next.problems, key),
+        cause:
+          `${problemOf(next.problems, key).toFixed(1)} ${template.unit} against an ordinary ` +
+          `${template.opening}. ${template.blurb} It will come back ` +
+          `${template.stickiness.toFixed(1)} times more slowly than it arrived.`,
+        unit: template.unit,
+      });
+    }
+    if (problemsTick.boiling) {
+      log(entries, {
+        kind: 'note',
+        label: 'Unrest',
+        delta: problemOf(next.problems, 'unrest'),
+        cause:
+          `Several things are going wrong at once and they are compounding. ` +
+          `${describeProblems(next.problems)}`,
+        unit: 'idx',
+      });
+    }
+
+    /*
      * And what the country thinks of the arrangements it is being
      * governed under, which is the thing underneath approval and matters
      * a great deal more. Stepped last, because it reads every other
@@ -1848,12 +1950,7 @@ export function resolveTurn(state: GameState): GameState {
       courtsQuality: next.services.find((x) => x.key === 'courts')?.quality ?? 60,
       policeQuality: next.services.find((x) => x.key === 'police')?.quality ?? 60,
       adminQuality: next.services.find((x) => x.key === 'administration')?.quality ?? 60,
-      crimeRate: Math.max(
-        4,
-        34 -
-          (next.services.find((x) => x.key === 'police')?.quality ?? 60) * 0.22 +
-          next.society.povertyRate * 0.35,
-      ),
+      crimeRate: problemOf(next.problems, 'crime') * 0.45,
       /* Until Engine 6A models ownership, a single public broadcaster in
          poor health is the best available proxy for a thin press. */
       mediaConcentration: clamp01to100(

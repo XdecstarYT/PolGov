@@ -1610,6 +1610,23 @@ export interface GameState {
    */
   opinion: Opinion;
 
+  /**
+   * The sixteen things going wrong, and how fast.
+   *
+   * Every one derived from conditions the player set, every one
+   * compounding with the others, and every one slower to reverse than it
+   * was to cause.
+   */
+  problems: Problems;
+
+  /**
+   * The electorate replacing itself underneath the government.
+   *
+   * Nobody changes their mind: the oldest cohort leaves and the youngest
+   * arrives, and the country's centre of gravity moves with them.
+   */
+  generations: Generations;
+
   /** What the country is built out of, and what is being built. */
   infrastructure: Infrastructure;
 
@@ -1981,4 +1998,80 @@ export interface Opinion {
   /** Share organised and sustained about something, %. */
   activism: number;
   history: OpinionPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Social problems
+ * ------------------------------------------------------------------ */
+
+export interface ProblemState {
+  key: import('./content/problems.ts').ProblemKey;
+  /** In the problem's own unit — per 10,000, per cent, years, or an index. */
+  level: number;
+}
+
+export interface ProblemsPoint {
+  turn: number;
+  unrest: number;
+  exclusion: number;
+  crime: number;
+  stability: number;
+}
+
+export interface Problems {
+  problems: ProblemState[];
+  /**
+   * The country's capacity to absorb all of it without anything breaking.
+   *
+   * Not the inverse of unrest: a country can be angry and stable, and a
+   * quiet one with hollow institutions can be neither.
+   */
+  stability: number;
+  history: ProblemsPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Generations
+ * ------------------------------------------------------------------ */
+
+export interface Cohort {
+  id: string;
+  label: string;
+  /** Share of the electorate, 0–1. Moves; the lean does not. */
+  share: number;
+  /**
+   * Position relative to the country's own centre, fixed at formation.
+   *
+   * People do not become their parents. They become older versions of
+   * themselves, which is why the centre moves by replacement rather than
+   * by persuasion.
+   */
+  lean: Ideology;
+  /** How reliably this cohort votes, as a multiplier on baseline turnout. */
+  turnout: number;
+  formedAtTurn: number;
+}
+
+export interface GenerationsPoint {
+  turn: number;
+  centre: Ideology;
+  gap: number;
+}
+
+export interface Generations {
+  cohorts: Cohort[];
+  /** The electorate's centre of gravity, weighted by share and turnout. */
+  centre: Ideology;
+  /**
+   * Where it was on week one.
+   *
+   * Kept on the state so drift is measured over a whole career rather
+   * than over whatever the capped history buffer still holds.
+   */
+  opening: Ideology;
+  /** When the cohort currently being formed started being formed. */
+  formingSince: number;
+  /** And what the country is making of it so far. */
+  forming: Ideology;
+  history: GenerationsPoint[];
 }

@@ -39,6 +39,8 @@ import { buildSociety } from './systems/society.ts';
 import { buildLiving } from './systems/living.ts';
 import { buildCulture } from './systems/culture.ts';
 import { buildOpinion } from './systems/opinion.ts';
+import { buildProblems } from './systems/problems.ts';
+import { buildGenerations } from './systems/generations.ts';
 import { buildIntelligence } from './systems/intelligence.ts';
 import { assignMinistries, buildBudget } from './systems/budgetProcess.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
@@ -394,6 +396,12 @@ export function createGame(options: NewGameOptions): GameState {
 
     /* And what that distribution is like to live inside. */
     living: buildLiving(),
+
+    /* Four cohorts, each formed by a country somebody else governed. */
+    generations: buildGenerations(),
+
+    /* What is already going wrong, before this government arrived. */
+    problems: buildProblems(),
 
     /* What the country makes of its own institutions, before this
        government has done anything to them. */

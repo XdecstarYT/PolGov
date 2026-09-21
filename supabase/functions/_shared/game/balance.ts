@@ -2204,3 +2204,61 @@ export const WITHDRAWAL_DRIVE = 0.05;
 
 /** And how angry it has to be for that quiet to mean anything. */
 export const WITHDRAWAL_FRUSTRATION = 52;
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Social problems
+ * ------------------------------------------------------------------ */
+
+/**
+ * Scales how fast the social problems respond at all.
+ *
+ * One multiplier over the whole set, so the pace of this engine can be
+ * tuned without disturbing the relative speeds the templates express.
+ */
+export const PROBLEM_COMPOUNDING = 1;
+
+/**
+ * How much of the pressure a fully trusted set of institutions absorbs.
+ *
+ * A country that still believes its arrangements are fair and its state
+ * competent takes a great deal more before any of it reaches the street.
+ * This is the single largest reason two countries with identical problems
+ * have entirely different politics.
+ */
+export const UNREST_TRUST_RELIEF = 0.55;
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Generations
+ * ------------------------------------------------------------------ */
+
+/**
+ * How much of the electorate is replaced each year.
+ *
+ * About one and a quarter per cent — which sounds like nothing, is eight
+ * per cent over a term, and across a long career is the largest single
+ * force acting on where the votes are. It is also the only one no
+ * campaign can address.
+ */
+export const COHORT_REPLACEMENT_PER_YEAR = 0.0125;
+
+/**
+ * How long a cohort spends being formed before its position is fixed.
+ *
+ * Long enough that one bad year does not define a generation and a bad
+ * decade does.
+ */
+export const COHORT_FORMATION_YEARS = 16;
+
+/** How bad a problem has to be to count toward the breadth of trouble. */
+export const UNREST_BREADTH_THRESHOLD = 0.3;
+
+/**
+ * What breadth adds to unrest, over and above depth.
+ *
+ * A weighted mean of severities is linear, so four grievances produce
+ * exactly what four grievances sum to — which is not what happens.
+ * Simultaneous unrelated grievances find one another, and a country with
+ * four things going wrong is in a different kind of trouble from one with
+ * a single larger complaint.
+ */
+export const UNREST_BREADTH_WEIGHT = 0.9;
