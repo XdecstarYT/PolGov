@@ -1685,6 +1685,18 @@ export interface GameState {
   orbat: Orbat;
 
   /**
+   * The fleet: built in decades, lost in an afternoon, and about a third
+   * of it ever at sea.
+   */
+  navy: Navy;
+
+  /**
+   * The air force: a consumable that looks like an asset, and the place
+   * the most politically attractive option in the game lives.
+   */
+  airForce: AirForce;
+
+  /**
    * The ground, where there is any.
    *
    * One per war being fought on land. Empty almost always, which is the
@@ -2475,4 +2487,117 @@ export interface Theatre {
   /** Weeks since the front last moved anywhere. */
   stagnantWeeks: number;
   history: TheatrePoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — The fleet and the air force
+ * ------------------------------------------------------------------ */
+
+/** A ship, or a small number of identical ones. */
+export interface Ship {
+  id: string;
+  name: string;
+  shipClass: import('./content/naval.ts').ShipClass;
+  /** 0–100. Damage, not age. */
+  condition: number;
+  /** Where it is being asked to be. Presence is the whole currency. */
+  station: import('./content/naval.ts').SeaZone | null;
+  /** Weeks at sea without going home. Nothing lasts indefinitely. */
+  weeksDeployed: number;
+  /** Crew experience, 0–100. */
+  crew: number;
+  commissionedTurn: number;
+  /** Gone. Kept in the list because a navy remembers its losses. */
+  lost: boolean;
+  lostTurn: number | null;
+}
+
+/** Something ordered that a successor will commission. */
+export interface ShipOrder {
+  id: string;
+  shipClass: import('./content/naval.ts').ShipClass;
+  orderedTurn: number;
+  dueTurn: number;
+  /** Already paid. Cancelling does not recover it. */
+  spent: number;
+}
+
+export interface NavyPoint {
+  turn: number;
+  hulls: number;
+  presence: number;
+  /** Share of the trade routes actually being kept open. */
+  lanes: number;
+}
+
+export interface Navy {
+  ships: Ship[];
+  building: ShipOrder[];
+  /** Where the government has said it will be present. */
+  stations: Partial<Record<import('./content/naval.ts').SeaZone, number>>;
+  /** Losses, cumulative, because they are not replaced. */
+  hullsLost: number;
+  /** And what those losses did to the government, cumulatively. */
+  prestigeLost: number;
+  history: NavyPoint[];
+}
+
+/** A squadron. Aircraft are counted by squadron because governments do. */
+export interface Squadron {
+  id: string;
+  name: string;
+  kind: import('./content/air.ts').AircraftKind;
+  /** Airframes, as a share of establishment, 0–100. */
+  strength: number;
+  /** Serviceable share of those, 0–100. The number nobody briefs. */
+  serviceable: number;
+  /** Aircrew quality, 0–100. Two years to make and not replaceable. */
+  aircrew: number;
+  sortiesFlown: number;
+  commissionedTurn: number;
+}
+
+export interface AirForcePoint {
+  turn: number;
+  squadrons: number;
+  serviceable: number;
+  aircrew: number;
+  superiority: number;
+}
+
+export interface AirForce {
+  squadrons: Squadron[];
+  building: {
+    id: string;
+    kind: import('./content/air.ts').AircraftKind;
+    orderedTurn: number;
+    dueTurn: number;
+    spent: number;
+  }[];
+  /**
+   * Who owns the sky, -100 to 100.
+   *
+   * A precondition rather than a victory. It lets the country do things;
+   * it does not do them, and nothing it achieves appears in any figure
+   * the public sees.
+   */
+  superiority: number;
+  /** Where the effort is going. Shares, and they sum to one. */
+  effort: Partial<Record<import('./content/air.ts').AirCampaign, number>>;
+  /** Aircrew in training. Two years each, and the line cut first. */
+  trainees: number;
+  /** Cumulative airframes lost, and aircrew, counted separately. */
+  airframesLost: number;
+  aircrewLost: number;
+  /**
+   * What the bombing has done to their willingness to go on.
+   *
+   * Negative. It hardens them, and the harder it is pressed the more it
+   * hardens them, which is the finding every government is told and none
+   * has yet acted on.
+   */
+  bombingResolve: number;
+  /** And what it has destroyed, which is real and is not the same thing. */
+  bombingDamage: number;
+  history: AirForcePoint[];
 }

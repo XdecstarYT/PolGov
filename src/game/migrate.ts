@@ -74,6 +74,8 @@ export function migrateState(raw: unknown): GameState | null {
   if (!next.manpower) next.manpower = fresh.manpower;
   if (!next.orbat) next.orbat = fresh.orbat;
   if (!next.theatres) next.theatres = [];
+  if (!next.navy) next.navy = fresh.navy;
+  if (!next.airForce) next.airForce = fresh.airForce;
   if (typeof next.society.inequality !== 'number' || !(next.society.inequality > 0)) {
     next.society.inequality = 1;
   }

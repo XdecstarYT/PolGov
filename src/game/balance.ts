@@ -131,6 +131,19 @@ export const PC_COSTS = {
   dismissCommander: 14,
 } as const;
 
+/**
+ * What laying down a ship costs politically.
+ *
+ * The argument is never about the ship. It is about the yard it is built
+ * in and the seats around it, which is why the decision is expensive
+ * here and why cancelling one later is so much harder than it looks on
+ * the spreadsheet.
+ */
+export const SHIP_ORDER_PC = 16;
+
+/** And a squadron, which nobody's constituency is built around. */
+export const SQUADRON_ORDER_PC = 9;
+
 /** Each whip step bought adds this much to pass chance. */
 export const WHIP_STEP_BONUS = 0.05;
 /** Hard ceiling on whip steps per bill, so PC can't trivially buy any bill. */
@@ -2610,3 +2623,155 @@ export const DEVASTATION_RATE = 0.38;
 
 /** Weeks of no movement before a front is called what it is. */
 export const STAGNANT_THRESHOLD = 16;
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — The fleet
+ * ------------------------------------------------------------------ */
+
+/**
+ * Weeks at sea before a ship has to come home whatever anybody wants.
+ *
+ * Crews, stores and machinery, in that order of urgency. A government
+ * that keeps a deployment running past this is not getting more presence
+ * out of the fleet; it is getting less of it later, and the bill arrives
+ * as a refit backlog under somebody else.
+ */
+export const DEPLOYMENT_LIMIT = 26;
+
+/**
+ * How fast a ship wears out on station, per week.
+ *
+ * Set against the refit rate so that a full deployment is followed by
+ * roughly twice as long alongside. That ratio is the rule of three: one
+ * ship on station, one working up, one in refit, and a government that
+ * wants to be continuously present somewhere needing three times the
+ * hulls it thinks it does.
+ */
+export const SEA_WEAR = 1.6;
+
+/** And how fast it recovers alongside. Slower than it wears. */
+export const REFIT_RATE = 1.08;
+
+/**
+ * How fast a ship deteriorates alongside regardless.
+ *
+ * Salt, age and a maintenance schedule that assumes somebody is paying
+ * for it. This is what makes a hollow fleet possible: a government that
+ * economises on maintenance does not get a smaller navy, it gets the
+ * SAME fleet list and fewer ships that can sail — and the fleet list is
+ * the figure it is briefed.
+ */
+export const HARBOUR_DECAY = 0.28;
+
+/**
+ * Condition below which a ship is not a warship.
+ *
+ * It still appears in the fleet list, which is exactly the problem: the
+ * number a government is briefed is hulls, and hulls do not distinguish
+ * between a ship that can sail and one that is alongside waiting for a
+ * part that is not being made any more.
+ */
+export const SEAWORTHY = 40;
+
+/**
+ * Weekly chance a ship in contested water is lost, at parity.
+ *
+ * Deliberately small and deliberately not zero. The point is not that
+ * ships sink often; it is that when one does there is no replacing it
+ * inside the war, and everybody involved knew that when the order to
+ * sail was given.
+ */
+export const SHIP_LOSS_RISK = 0.0035;
+
+/** How much of a zone's demand one point of presence covers. */
+export const PRESENCE_SCALE = 1;
+
+/**
+ * Condition at which a ship is sent home to refit rather than kept out.
+ *
+ * With the deployment limit, this is what produces the rule of three:
+ * one ship on station, one working up, one in refit. A government that
+ * wants to be continuously present somewhere needs three times the hulls
+ * it thinks it does, discovers this the first time it promises to be
+ * somewhere, and never says so out loud afterwards.
+ */
+export const ROTATE_HOME_AT = 58;
+
+/** And the condition a ship has to reach before it is sent out again. */
+export const ROTATE_OUT_AT = 82;
+
+/**
+ * Hulls required per hull continuously on station.
+ *
+ * Falls out of the wear and refit rates above rather than being applied
+ * anywhere; stated here so that anything wanting the figure uses the
+ * same one, and so that changing the rates without changing this is
+ * caught by a test.
+ */
+export const ROTATION_RATIO = 3;
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — The air force
+ * ------------------------------------------------------------------ */
+
+/**
+ * Serviceability an air force settles at when it is flying hard.
+ *
+ * Not losses. Wear, cannibalisation and a part that is three months out,
+ * which together take a third of any air force off the line within six
+ * months of a war starting, and which no figure briefed to a government
+ * has ever included.
+ */
+export const SERVICEABILITY_AT_WAR = 62;
+
+/** And what it holds at in peacetime, which is where it starts. */
+export const SERVICEABILITY_AT_PEACE = 84;
+
+/**
+ * Aircrew standard a training establishment produces.
+ *
+ * New crews are not as good as the ones they replace, which is why an
+ * air force does not slowly become elite in peacetime and why one three
+ * months into a war has more sorties behind it and worse people flying
+ * them.
+ *
+ * Set to the standard an untouched country is already at, so that an
+ * untouched country stays there. Anything else and every air force in
+ * the world drifts for twenty years toward a number nobody chose.
+ */
+export const AIRCREW_TRAINING_STANDARD = 64;
+
+/**
+ * How fast the hardening from strategic bombing fades once it stops.
+ *
+ * Slowly. A population that has been bombed does not go back to what it
+ * was when the bombing stops, which is the other half of why the option
+ * is worse than it looks: the cost outlives the campaign and the
+ * campaign was the part anybody budgeted for.
+ */
+export const HARDENING_DECAY = 0.004;
+
+/** How fast serviceability moves toward whichever of those applies. */
+export const SERVICEABILITY_RATE = 0.05;
+
+/** Sorties per point of effort per squadron per week. */
+export const SORTIE_SCALE = 1;
+
+/** How fast air superiority is contested, per week. */
+export const SUPERIORITY_PACE = 2.6;
+
+/**
+ * How much strategic bombing HARDENS the people it is aimed at.
+ *
+ * Positive, because it is a cost. The single most robust finding about
+ * strategic bombing is that it does not separate a population from its
+ * government, and the harder it is pressed the less it does so. An
+ * engine in which bombing works is modelling the brochure.
+ */
+export const BOMBING_HARDENS = 0.055;
+
+/** And how much it actually destroys, which is real and is not the same. */
+export const BOMBING_DAMAGE = 0.11;
+
+/** Aircrew a squadron needs per week to stay at establishment. */
+export const AIRCREW_REPLACEMENT = 0.012;

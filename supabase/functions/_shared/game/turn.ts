@@ -187,6 +187,28 @@ import {
   setReconnaissance,
   stepTheatre,
 } from './systems/theatre.ts';
+import { afloat, orderShip, seaworthy, station, stepNavy } from './systems/naval.ts';
+import {
+  aircrewQuality,
+  orderSquadron,
+  readyShare,
+  setEffort,
+  stepAir,
+} from './systems/air.ts';
+import {
+  SEA_ZONE_LABELS,
+  findSeaZone,
+  findShip,
+  type SeaZone,
+  type ShipClass,
+} from './content/naval.ts';
+import {
+  findAircraft,
+  findCampaign,
+  type AirCampaign,
+  type AircraftKind,
+} from './content/air.ts';
+import { ROTATION_RATIO, SHIP_ORDER_PC, SQUADRON_ORDER_PC } from './balance.ts';
 import { ATTACK_SUPPLY_FLOOR } from './balance.ts';
 import { SECTOR_POSTURE_LABELS, type SectorPosture } from './content/theatre.ts';
 import {
@@ -464,6 +486,10 @@ export type Intent =
   | { type: 'set_sector_posture'; theatre: string; sector: string; posture: SectorPosture }
   | { type: 'garrison_sector'; theatre: string; sector: string; formations: string[] }
   | { type: 'set_reconnaissance'; theatre: string; effort: number }
+  | { type: 'station_fleet'; zone: SeaZone; hulls: number }
+  | { type: 'order_ship'; shipClass: ShipClass }
+  | { type: 'set_air_effort'; effort: Partial<Record<AirCampaign, number>> }
+  | { type: 'order_squadron'; aircraft: AircraftKind }
   | { type: 'withdraw_bill'; billId: string }
   | { type: 'public_address' }
   | { type: 'coalition_concession'; partyId: string }
@@ -2998,6 +3024,135 @@ export function resolveTurn(state: GameState): GameState {
     });
   }
 
+  /*
+   * The fleet and the air force.
+   *
+   * Stepped after the ground, because both feed it and neither is
+   * decided by it. What they have in common is that the figure a
+   * government is briefed — hulls, squadrons — is not the figure that
+   * matters, and the gap between them opens quietly over years of
+   * ordinary budgets rather than suddenly in a war.
+   */
+  {
+    const fightingNow = next.crises.filter((c) => c.stage === 'war');
+    const atWar = fightingNow.length > 0;
+    const intensity = atWar
+      ? Math.min(100, fightingNow.reduce((sum, c) => sum + c.escalation, 0))
+      : 0;
+    const opposition = atWar
+      ? Math.max(
+          0.3,
+          Math.min(2.5, fightingNow.reduce((s, c) => s + c.theirResolve, 0) / (fightingNow.length * 55)),
+        )
+      : 1;
+    const defence = next.services.find((x) => x.key === 'defence');
+    const funding = defence?.staffing ?? 1;
+
+    const navyTick = stepNavy(next.navy, {
+      funding,
+      atWar,
+      intensity,
+      opposition,
+      turn: absoluteWeek(next),
+      rng,
+      moneyScale: next.moneyScale,
+    });
+    next.navy = navyTick.navy;
+
+    for (const ship of navyTick.lost) {
+      const template = findShip(ship.shipClass);
+      log(entries, {
+        kind: 'event',
+        label: `${ship.name} has been lost`,
+        delta: -template.prestige,
+        cause:
+          `${template.buildYears} years to build and there is no replacing it inside this war. ` +
+          `An order placed today would commission under a government two elections from here, ` +
+          `which everybody involved knew when the order to sail was given.`,
+        unit: 'pts',
+      });
+      next.approval = clampApproval(next.approval - template.prestige * 0.12);
+    }
+    for (const ship of navyTick.commissioned) {
+      log(entries, {
+        kind: 'note',
+        label: `${ship.name} commissioned`,
+        delta: findShip(ship.shipClass).presence,
+        cause:
+          'Ordered by a government that is not this one, and the best thing in the fleet by a ' +
+          'distance until something else is.',
+        unit: 'idx',
+        informational: true,
+      });
+    }
+    if (navyTick.hollow) {
+      log(entries, {
+        kind: 'note',
+        label: 'The fleet list has stopped meaning what it says',
+        delta: seaworthy(next.navy).length - afloat(next.navy).length,
+        cause:
+          `${afloat(next.navy).length} ships on the list and ${seaworthy(next.navy).length} that ` +
+          `could sail. That is not damage — it is a refit backlog and a part that is not made ` +
+          `any more, and the number this desk is briefed is the first one.`,
+        unit: 'hulls',
+      });
+    }
+
+    const airTick = stepAir(next.airForce, {
+      funding,
+      atWar,
+      intensity,
+      opposition,
+      trainingFunding: funding,
+      turn: absoluteWeek(next),
+    });
+    next.airForce = airTick.air;
+
+    if (airTick.hollow) {
+      log(entries, {
+        kind: 'note',
+        label: 'A third of the air force is off the line',
+        delta: -(1 - readyShare(next.airForce)) * 100,
+        cause:
+          'Not losses. Wear, cannibalisation and a part that is three months out, which take ' +
+          'a third of any air force off the line within six months of a war and appear in no ' +
+          'figure anybody has been briefed.',
+        unit: 'pct',
+      });
+    }
+    if (airTick.aircrewBound) {
+      log(entries, {
+        kind: 'note',
+        label: 'The aircrew are the constraint now, not the aircraft',
+        delta: aircrewQuality(next.airForce),
+        cause:
+          'Two years to make one, and the experienced ones cannot be replaced at all inside ' +
+          'this war. The country can lose its air force twice over and rebuild it; it cannot ' +
+          'get these people back.',
+        unit: 'idx',
+      });
+    }
+    if (airTick.bombingHardening > 0.02) {
+      /*
+       * The finding every government is told beforehand and none has yet
+       * acted on. It is logged as a cost rather than a diminishing
+       * return, because a diminishing return would still be a return.
+       */
+      log(entries, {
+        kind: 'note',
+        label: 'The bombing is hardening them',
+        delta: -airTick.bombingHardening,
+        cause:
+          `It has destroyed a great deal — that part is real and measurable, which is most of ` +
+          `why it is on the desk. It has not separated anybody from their government, and the ` +
+          `harder it is pressed the less it does.`,
+        unit: 'pts',
+        informational: true,
+      });
+      for (const crisis of fightingNow) crisis.theirResolve = clamp01to100(crisis.theirResolve + airTick.bombingHardening);
+    }
+  }
+
   const economyBefore = next.economy;
   next.economy = stepEconomy(next.economy, {
     fiscalImpulse: fiscalImpulse(fiscal),
@@ -3565,6 +3720,14 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleGarrison(state, intent.theatre, intent.sector, intent.formations);
     case 'set_reconnaissance':
       return handleReconnaissance(state, intent.theatre, intent.effort);
+    case 'station_fleet':
+      return handleStationFleet(state, intent.zone, intent.hulls);
+    case 'order_ship':
+      return handleOrderShip(state, intent.shipClass);
+    case 'set_air_effort':
+      return handleAirEffort(state, intent.effort);
+    case 'order_squadron':
+      return handleOrderSquadron(state, intent.aircraft);
     case 'withdraw_bill':
       return handleWithdrawBill(state, intent.billId);
     case 'public_address':
@@ -5032,6 +5195,154 @@ function handleFileTradeComplaint(state: GameState, key: NationKey): IntentResul
  * it; it is the same decision made without the supply figure, and the
  * despatches will report progress for several weeks either way.
  */
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — the fleet and the air force
+ * ------------------------------------------------------------------ */
+
+/**
+ * Promise to be somewhere.
+ *
+ * Which is what stationing the fleet is: not a voyage but a standing
+ * commitment, kept by rotation. About a third of the hulls committed are
+ * ever on station, because the others are working up or in refit, so
+ * every water a government says it cares about costs three times what
+ * the fleet list suggests — and every one is a subtraction from all the
+ * others. The whole of naval strategy is which waters to be absent from,
+ * and no government has ever announced one.
+ */
+function handleStationFleet(state: GameState, zone: SeaZone, hulls: number): IntentResult {
+  const available = seaworthy(state.navy).length;
+  if (hulls > available) {
+    return reject(
+      state,
+      `There are ${available} ships that could sail. The fleet list says ${afloat(state.navy).length}, and the difference is a refit backlog rather than a rounding.`,
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.navy = station(next.navy, zone, Math.max(0, hulls));
+
+  const template = findSeaZone(zone);
+  const sustained = Math.round(hulls / ROTATION_RATIO);
+  log(entries, {
+    kind: 'note',
+    label: `${SEA_ZONE_LABELS[zone]}: ${hulls} committed`,
+    delta: sustained,
+    cause:
+      `${template.blurb} About ${sustained} of them will be there at any one time — one on ` +
+      `station, one working up, one in refit. That is not a failing of this fleet; it is what ` +
+      `a continuous presence is, and it is why every water the country says it cares about ` +
+      `costs three times what the list suggests.`,
+    unit: 'hulls',
+  });
+  return ok(next);
+}
+
+/**
+ * Order a ship.
+ *
+ * The money goes now and the ship arrives under a government two
+ * elections from here. Which is why the fleet a country has is always
+ * the one some previous administration argued about, and why cancelling
+ * one is the easiest saving in any budget and the one that shows up
+ * latest.
+ */
+function handleOrderShip(state: GameState, shipClass: ShipClass): IntentResult {
+  const template = findShip(shipClass);
+  const cost = template.cost * state.moneyScale;
+  if (state.politicalCapital < SHIP_ORDER_PC) {
+    return reject(
+      state,
+      `Laying down a ship costs ${SHIP_ORDER_PC} PC. The argument is never about the ship; it is about the yard it is built in and the seats around it.`,
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SHIP_ORDER_PC);
+  const result = orderShip(next.navy, shipClass, absoluteWeek(next), next.moneyScale);
+  next.navy = result.navy;
+  next.debt += cost;
+
+  log(entries, {
+    kind: 'note',
+    label: `${template.label} laid down`,
+    delta: -cost,
+    cause:
+      `\u20a1${cost.toFixed(0)}bn, and it commissions in ${template.buildYears} years — under a ` +
+      `government that will not be this one, and which will take the credit. ${template.blurb}`,
+    unit: '\u20a1bn',
+  });
+  return ok(next);
+}
+
+/**
+ * Decide what the air force is for.
+ *
+ * Effort is finite and every campaign is a subtraction from the others.
+ * A government that orders all of them is ordering none of them, which
+ * is the most common way air power is wasted and the least visible,
+ * because every campaign will report activity either way.
+ */
+function handleAirEffort(
+  state: GameState,
+  effort: Partial<Record<AirCampaign, number>>,
+): IntentResult {
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.airForce = setEffort(next.airForce, effort);
+
+  const ordered = Object.entries(effort).filter(([, v]) => (v ?? 0) > 0);
+  if (ordered.length > 2) {
+    log(entries, {
+      kind: 'note',
+      label: 'The air force has been given four jobs',
+      delta: ordered.length,
+      cause:
+        'Each of them will report activity and none of them will be decisive. Effort is ' +
+        'finite; ordering everything is the most common way air power is wasted and the ' +
+        'hardest to see afterwards, because the sortie figures look excellent.',
+      unit: 'campaigns',
+    });
+  } else if (ordered.some(([k]) => k === 'strategic')) {
+    const campaign = findCampaign('strategic');
+    log(entries, {
+      kind: 'note',
+      label: 'A strategic bombing campaign',
+      delta: 0,
+      cause: campaign.honest,
+      unit: '',
+    });
+  }
+  return ok(next);
+}
+
+/** Order aircraft. Quicker than a ship, and still not quick. */
+function handleOrderSquadron(state: GameState, aircraft: AircraftKind): IntentResult {
+  const template = findAircraft(aircraft);
+  const cost = template.cost * state.moneyScale;
+  if (state.politicalCapital < SQUADRON_ORDER_PC) {
+    return reject(state, `Ordering a squadron costs ${SQUADRON_ORDER_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SQUADRON_ORDER_PC);
+  next.airForce = orderSquadron(next.airForce, aircraft, absoluteWeek(next), next.moneyScale).air;
+  next.debt += cost;
+
+  log(entries, {
+    kind: 'note',
+    label: `${template.label} ordered`,
+    delta: -cost,
+    cause: `\u20a1${cost.toFixed(0)}bn, delivered in ${template.buildYears} years. ${template.blurb}`,
+    unit: '\u20a1bn',
+  });
+  return ok(next);
+}
+
 function handleSectorPosture(
   state: GameState,
   theatreId: string,

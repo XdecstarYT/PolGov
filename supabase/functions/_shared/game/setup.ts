@@ -38,6 +38,8 @@ import { buildMilitary } from './systems/military.ts';
 import { buildSociety } from './systems/society.ts';
 import { ARMY_SHARE, buildManpower, underArms } from './systems/manpower.ts';
 import { buildOrbat } from './systems/orbat.ts';
+import { buildNavy } from './systems/naval.ts';
+import { buildAirForce } from './systems/air.ts';
 import { buildLiving } from './systems/living.ts';
 import { buildCulture } from './systems/culture.ts';
 import { buildOpinion } from './systems/opinion.ts';
@@ -484,6 +486,14 @@ export function createGame(options: NewGameOptions): GameState {
       new Set<string>(),
       openingCulture.politicalCulture,
     ),
+
+    /* Ships somebody else ordered, most of them alongside, and the
+       fleet list is not the fleet. */
+    navy: buildNavy(moneyScale),
+
+    /* Squadrons somebody else bought, at the serviceability an air force
+       actually sits at rather than the one it is briefed at. */
+    airForce: buildAirForce(moneyScale),
 
     /* No ground being fought over. A map appears when something has
        gone badly wrong, and not before. */
