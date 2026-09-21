@@ -1752,6 +1752,13 @@ export interface GameState {
   communications: Communications;
 
   /**
+   * What is currently being asked about, and what the government has
+   * said. A denial that has not blown up yet is not evidence it never
+   * will — the cover-up costs more than the crime, but only if found.
+   */
+  scandals: Scandal[];
+
+  /**
    * What the country remembers, which outlives every government in it.
    *
    * The point of modelling a war in a political game is what the country
@@ -3269,3 +3276,28 @@ export interface Communications {
   leaksThisRun: number;
   history: CommsPoint[];
 }
+
+/* ------------------------------------------------------------------ *
+ * Engine 6F/6G/6H — Scandals, information warfare and dynamic events
+ * ------------------------------------------------------------------ */
+
+export type ScandalStage = 'breaking' | 'contained' | 'confirmed' | 'closed';
+
+export interface Scandal {
+  id: string;
+  cause: import('./content/scandal.ts').ScandalCause;
+  /** How bad it is, 0–100. Set on spawn from what triggered it. */
+  severity: number;
+  stage: ScandalStage;
+  response: import('./content/scandal.ts').ScandalResponse | null;
+  startedTurn: number;
+  /** Weeks since the response, or since it broke if there has been none. */
+  weeksSinceResponse: number;
+  /**
+   * Weekly chance the story gets worse rather than fading, 0–1.
+   * Set by the response chosen; a denial that has not yet blown up is
+   * not evidence it never will.
+   */
+  escalationRisk: number;
+}
+

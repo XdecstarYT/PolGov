@@ -521,6 +521,9 @@ export function createGame(options: NewGameOptions): GameState {
     /* Nothing sitting unannounced yet, and a line the cabinet mostly holds. */
     communications: buildCommunications(),
 
+    /* Nothing breaking yet. */
+    scandals: [],
+
     /* Nothing a history would record yet. Everything the country is
        now, it was when this government arrived. */
     timeline: buildTimeline(START_YEAR),

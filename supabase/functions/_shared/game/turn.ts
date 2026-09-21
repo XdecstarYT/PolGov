@@ -280,6 +280,18 @@ import {
 } from './systems/communications.ts';
 import { COMMS_STRATEGIES, type CommsStrategy } from './content/communications.ts';
 import {
+  respondToScandal,
+  severityFromLeak,
+  spawnScandal,
+  stepScandals,
+} from './systems/scandal.ts';
+import { SCANDAL_RESPONSES, type ScandalResponse } from './content/scandal.ts';
+import {
+  CONFIRMED_APPROVAL_COST,
+  CORRUPTION_SCANDAL_SEVERITY,
+  CORRUPTION_SCANDAL_THRESHOLD,
+} from './balance.ts';
+import {
   SET_TRANSPARENCY_PC,
   SET_ANTICORRUPTION_PC,
   LAUNCH_AUDIT_PC,
@@ -689,6 +701,7 @@ export type Intent =
   | { type: 'launch_media_literacy' }
   | { type: 'set_comms_strategy'; strategy: CommsStrategy }
   | { type: 'release_information' }
+  | { type: 'respond_scandal'; scandalId: string; response: ScandalResponse }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
   | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
@@ -3802,6 +3815,44 @@ export function resolveTurn(state: GameState): GameState {
           `on a week nobody in this government chose. ${next.communications.leaksThisRun} this run.`,
         unit: 'idx',
       });
+      next.scandals = [
+        ...next.scandals,
+        spawnScandal('leak', severityFromLeak(commsTick.leakApprovalCost), absoluteWeek(next), rng),
+      ];
+      next.rngState = rng.state;
+    }
+  }
+
+  /* What is currently being asked about, and what the government has said. */
+  {
+    if (
+      next.integrity.corruptionIndex > CORRUPTION_SCANDAL_THRESHOLD &&
+      !next.scandals.some((s) => s.cause === 'corruption')
+    ) {
+      const rng = new Rng(next.rngState);
+      next.scandals = [
+        ...next.scandals,
+        spawnScandal('corruption', CORRUPTION_SCANDAL_SEVERITY, absoluteWeek(next), rng),
+      ];
+      next.rngState = rng.state;
+    }
+
+    const rng = new Rng(next.rngState);
+    const scandalTick = stepScandals(next.scandals, rng);
+    next.rngState = rng.state;
+    next.scandals = scandalTick.scandals;
+
+    if (scandalTick.approvalCost > 0) {
+      applyEffects(next, { approval: -scandalTick.approvalCost }, 'Scandal', entries);
+    }
+    for (const id of scandalTick.confirmed) {
+      log(entries, {
+        kind: 'note',
+        label: 'A denial is found out',
+        delta: -CONFIRMED_APPROVAL_COST,
+        cause: `What was denied has been found. The story now is the denial, not the original fact. (${id})`,
+        unit: 'idx',
+      });
     }
   }
 
@@ -4769,6 +4820,8 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleSetCommsStrategy(state, intent.strategy);
     case 'release_information':
       return handleReleaseInformation(state);
+    case 'respond_scandal':
+      return handleRespondScandal(state, intent.scandalId, intent.response);
     case 'emergency_budget':
       return handleEmergencyBudget(state);
     case 'set_funding':
@@ -5812,6 +5865,35 @@ function handleReleaseInformation(state: GameState): IntentResult {
     delta: -RELEASE_INFORMATION_PC,
     cause: 'Announced on a week this government chose, which is worth less to a reporter than a week it did not.',
     unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleRespondScandal(
+  state: GameState,
+  scandalId: string,
+  response: ScandalResponse,
+): IntentResult {
+  const scandal = state.scandals.find((s) => s.id === scandalId);
+  if (!scandal) return reject(state, 'There is no such scandal open.');
+  if (scandal.response !== null) return reject(state, 'The government has already responded to this.');
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  const result = respondToScandal(next.scandals, scandalId, response);
+  next.scandals = result.scandals;
+
+  if (result.immediateCost > 0) {
+    applyEffects(next, { approval: -result.immediateCost }, 'Scandal response', entries);
+  }
+
+  const template = SCANDAL_RESPONSES.find((r) => r.key === response)!;
+  log(entries, {
+    kind: 'note',
+    label: template.label,
+    delta: -result.immediateCost,
+    cause: `${template.blurb}`,
+    unit: 'idx',
   });
   return ok(next);
 }

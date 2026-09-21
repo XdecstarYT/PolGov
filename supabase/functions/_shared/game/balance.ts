@@ -3272,3 +3272,29 @@ export const SET_COMMS_STRATEGY_PC = 4;
 
 /** How much discipline changes the effect of a public address, at the low and high ends. */
 export const DISCIPLINE_ADDRESS_FLOOR = 0.6;
+
+/* ------------------------------------------------------------------ *
+ * Engine 6F/6G/6H — Scandals, information warfare and dynamic events
+ * ------------------------------------------------------------------ */
+
+/** Weekly chance an unaddressed ("breaking", no response yet) scandal gets worse. */
+export const UNADDRESSED_ESCALATION_RISK = 0.12;
+/** Weekly approval drip from a scandal nobody has responded to. */
+export const UNADDRESSED_WEEKLY_COST = 0.6;
+
+/** Weeks after a response before a still-live scandal fades to closed. */
+export const SCANDAL_FADE_WEEKS = 8;
+
+/**
+ * What it costs, in approval, the week a denial is found out. Scales
+ * with severity, and kept well above `admit`'s immediate cost so a
+ * confirmed denial is always worse than admitting the same fact would
+ * have been — the asymmetry the whole response system depends on.
+ */
+export const CONFIRMED_APPROVAL_COST = 6;
+export const CONFIRMED_DISCIPLINE_HIT = 18;
+
+/** Severity a leaked scandal opens at, per point of the leak's own approval cost. */
+export const SCANDAL_SEVERITY_FROM_LEAK = 6;
+/** Severity a corruption-triggered scandal opens at. */
+export const CORRUPTION_SCANDAL_SEVERITY = 35;
