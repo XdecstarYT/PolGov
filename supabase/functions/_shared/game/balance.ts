@@ -3162,3 +3162,30 @@ export const SET_ENFORCEMENT_POSTURE_PC = 3;
 export const ANTI_CORRUPTION_DRIVE_PC = 8;
 /** How much one drive knocks corruption down. Diminishing if repeated too often. */
 export const ANTI_CORRUPTION_DRIVE_EFFECT = 10;
+
+/* ------------------------------------------------------------------ *
+ * Engine 5E/5F — The body of law, corruption and integrity
+ * ------------------------------------------------------------------ */
+
+/** Corruption an ordinary, unwatched government sits at. */
+export const CORRUPTION_INDEX_START = 22;
+export const CORRUPTION_INDEX_RATE = 0.01;
+
+/** Regulatory stock an ordinary country carries, as a multiple of "manageable". */
+export const REGULATORY_STOCK_START = 1;
+/** How much stock one more enacted bill adds, per bill above what the term has already produced. */
+export const REGULATORY_STOCK_PER_BILL = 0.006;
+export const REGULATORY_STOCK_RATE = 0.02;
+
+export const RULE_OF_LAW_START = 58;
+export const RULE_OF_LAW_RATE = 0.03;
+
+export const SET_TRANSPARENCY_PC = 5;
+export const SET_ANTICORRUPTION_PC = 6;
+export const LAUNCH_AUDIT_PC = 6;
+/** What one audit is worth against corruption. Diminishing with each launched this run. */
+export const AUDIT_EFFECT = 6;
+export const AUDIT_DECAY = 0.7;
+export const SIMPLIFY_LAW_PC = 7;
+/** How much one deregulation push takes off the regulatory stock. */
+export const SIMPLIFY_LAW_EFFECT = 0.3;

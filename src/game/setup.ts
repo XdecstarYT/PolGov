@@ -44,6 +44,7 @@ import { buildDoctrine } from './systems/doctrine.ts';
 import { buildTimeline } from './systems/timeline.ts';
 import { buildCabinet, buildCivilService } from './systems/cabinet.ts';
 import { buildJustice } from './systems/justice.ts';
+import { buildIntegrity } from './systems/integrity.ts';
 import { buildWarEconomy } from './systems/warEconomy.ts';
 import { buildAirForce } from './systems/air.ts';
 import { buildLiving } from './systems/living.ts';
@@ -504,6 +505,9 @@ export function createGame(options: NewGameOptions): GameState {
 
     /* The bench and the force, at whatever an ordinary country's are like. */
     justice: buildJustice(),
+
+    /* The well corruption draws from, and the statute book, at their opening levels. */
+    integrity: buildIntegrity(),
 
     /* Nothing a history would record yet. Everything the country is
        now, it was when this government arrived. */

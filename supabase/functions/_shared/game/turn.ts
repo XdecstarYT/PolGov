@@ -220,6 +220,7 @@ import {
   removalCost,
   reshuffle as fullReshuffle,
   setMachinePosture,
+  sittingMinisters,
   stepCabinet,
   stepCivilService,
 } from './systems/cabinet.ts';
@@ -238,6 +239,28 @@ import {
   setSentencing,
   stepJustice,
 } from './systems/justice.ts';
+import {
+  auditValue,
+  launchAudit,
+  setAnticorruption,
+  setTransparency,
+  simplifyLaw,
+  stepIntegrity,
+} from './systems/integrity.ts';
+import {
+  ANTICORRUPTION_POSTURES,
+  TRANSPARENCY_REGIMES,
+  type AnticorruptionPosture,
+  type TransparencyRegime,
+} from './content/integrity.ts';
+import {
+  SET_TRANSPARENCY_PC,
+  SET_ANTICORRUPTION_PC,
+  LAUNCH_AUDIT_PC,
+  SIMPLIFY_LAW_PC,
+  SIMPLIFY_LAW_EFFECT,
+  REGULATORY_STOCK_START,
+} from './balance.ts';
 import {
   findEnforcementPosture,
   findSentencing,
@@ -617,6 +640,10 @@ export type Intent =
   | { type: 'set_judicial_stance'; stance: JudicialStance }
   | { type: 'set_enforcement_posture'; posture: EnforcementPosture }
   | { type: 'drive_anti_corruption' }
+  | { type: 'set_transparency'; regime: TransparencyRegime }
+  | { type: 'set_anticorruption_posture'; posture: AnticorruptionPosture }
+  | { type: 'launch_audit' }
+  | { type: 'simplify_law' }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
   | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
@@ -2005,7 +2032,7 @@ export function resolveTurn(state: GameState): GameState {
       /* How far apart the benches actually are, measured rather than
          asserted: the spread of the chamber's own positions. */
       polarisation: chamberPolarisation(next.parties),
-      corruption: 0,
+      corruption: next.integrity.corruptionIndex,
       growth: next.economy.growth,
       unemployment: next.economy.unemployment,
       standing: next.world.reputation,
@@ -2216,11 +2243,9 @@ export function resolveTurn(state: GameState): GameState {
       happiness: next.living.happiness,
       polarisation: chamberPolarisation(next.parties),
       norms: next.culture.politicalCulture,
-      /* Zero until Engine 5F builds it; the term is wired so the day it
-         exists nothing else has to move. */
-      corruption: 0,
-      courtsQuality: next.services.find((x) => x.key === 'courts')?.quality ?? 60,
-      policeQuality: next.services.find((x) => x.key === 'police')?.quality ?? 60,
+      corruption: next.integrity.corruptionIndex,
+      courtsQuality: courtsQuality(next.justice),
+      policeQuality: policingQuality(next.justice),
       adminQuality: next.services.find((x) => x.key === 'administration')?.quality ?? 60,
       crimeRate: problemOf(next.problems, 'crime') * 0.45,
       /* Until Engine 6A models ownership, a single public broadcaster in
@@ -3645,6 +3670,33 @@ export function resolveTurn(state: GameState): GameState {
     }
   }
 
+  /* The body of law, and the well corruption draws from beyond policing. */
+  {
+    const sitting = sittingMinisters(next.cabinet);
+    const patronageShare =
+      sitting.length > 0 ? sitting.filter((m) => m.owes != null).length / sitting.length : 0;
+    const integrityTick = stepIntegrity(next.integrity, {
+      patronageShare,
+      judicialIndependence: next.justice.courts.independence,
+      policingCorruption: next.justice.policing.corruption,
+      billsPassed: next.career.billsPassed,
+      turn: absoluteWeek(next),
+    });
+    next.integrity = integrityTick.integrity;
+
+    if (integrityTick.endemic) {
+      log(entries, {
+        kind: 'note',
+        label: 'Corruption has become the ordinary cost of doing business here',
+        delta: -next.integrity.corruptionIndex,
+        cause:
+          'Not one scandal. A settled expectation, in every ministry a contract passes ' +
+          'through, of what getting to the front of the queue costs.',
+        unit: 'idx',
+      });
+    }
+  }
+
   /*
    * What the country thinks they have, and whether it can stop.
    *
@@ -4581,6 +4633,14 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleSetEnforcementPosture(state, intent.posture);
     case 'drive_anti_corruption':
       return handleAntiCorruptionDrive(state);
+    case 'set_transparency':
+      return handleSetTransparency(state, intent.regime);
+    case 'set_anticorruption_posture':
+      return handleSetAnticorruption(state, intent.posture);
+    case 'launch_audit':
+      return handleLaunchAudit(state);
+    case 'simplify_law':
+      return handleSimplifyLaw(state);
     case 'emergency_budget':
       return handleEmergencyBudget(state);
     case 'set_funding':
@@ -5296,6 +5356,100 @@ function handleAntiCorruptionDrive(state: GameState): IntentResult {
     cause:
       'A visible push against it, worth less each time it is used on a force that keeps ' +
       'breeding it back under the same posture and the same funding.',
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleSetTransparency(state: GameState, regime: TransparencyRegime): IntentResult {
+  if (state.integrity.transparency === regime) {
+    return reject(state, 'That is the disclosure regime already.');
+  }
+  if (state.politicalCapital < SET_TRANSPARENCY_PC) {
+    return reject(state, `Changing the disclosure regime costs ${SET_TRANSPARENCY_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SET_TRANSPARENCY_PC);
+  next.integrity = setTransparency(next.integrity, regime);
+
+  const template = TRANSPARENCY_REGIMES.find((t) => t.key === regime)!;
+  log(entries, {
+    kind: 'note',
+    label: `Disclosure: ${template.label}`,
+    delta: -SET_TRANSPARENCY_PC,
+    cause: `${template.blurb}`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleSetAnticorruption(state: GameState, posture: AnticorruptionPosture): IntentResult {
+  if (state.integrity.anticorruption === posture) {
+    return reject(state, 'That is the anti-corruption posture already.');
+  }
+  if (state.politicalCapital < SET_ANTICORRUPTION_PC) {
+    return reject(state, `Changing the anti-corruption posture costs ${SET_ANTICORRUPTION_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SET_ANTICORRUPTION_PC);
+  next.integrity = setAnticorruption(next.integrity, posture);
+
+  const template = ANTICORRUPTION_POSTURES.find((t) => t.key === posture)!;
+  log(entries, {
+    kind: 'note',
+    label: `Anti-corruption machinery: ${template.label}`,
+    delta: -SET_ANTICORRUPTION_PC,
+    cause: `${template.blurb}`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleLaunchAudit(state: GameState): IntentResult {
+  if (state.politicalCapital < LAUNCH_AUDIT_PC) {
+    return reject(state, `Launching an audit costs ${LAUNCH_AUDIT_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, LAUNCH_AUDIT_PC);
+  const worth = auditValue(next.integrity);
+  next.integrity = launchAudit(next.integrity);
+
+  log(entries, {
+    kind: 'note',
+    label: 'An audit is launched',
+    delta: -LAUNCH_AUDIT_PC,
+    cause: `Worth ${worth.toFixed(1)} points against the corruption index this time — less than the last one, and less again next time.`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleSimplifyLaw(state: GameState): IntentResult {
+  if (state.politicalCapital < SIMPLIFY_LAW_PC) {
+    return reject(state, `Simplifying the statute book costs ${SIMPLIFY_LAW_PC} PC.`);
+  }
+  if (state.integrity.regulatoryStock <= REGULATORY_STOCK_START) {
+    return reject(state, 'There is nothing left to simplify.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SIMPLIFY_LAW_PC);
+  next.integrity = simplifyLaw(next.integrity, SIMPLIFY_LAW_EFFECT);
+
+  log(entries, {
+    kind: 'note',
+    label: 'A deregulation push',
+    delta: -SIMPLIFY_LAW_PC,
+    cause:
+      'The statute book only shrinks when someone deliberately goes back through it. This ' +
+      'is that, once.',
     unit: 'PC',
   });
   return ok(next);

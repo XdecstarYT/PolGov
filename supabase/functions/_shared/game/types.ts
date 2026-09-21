@@ -1715,6 +1715,16 @@ export interface GameState {
   justice: Justice;
 
   /**
+   * Everything the police-corruption index does not cover: patronage,
+   * steered procurement, and the statute book that only ever grows.
+   *
+   * Wired at zero until this existed; the day it did, nothing that read
+   * it had to change, because it was written to read this from the
+   * start.
+   */
+  integrity: Integrity;
+
+  /**
    * What the country remembers, which outlives every government in it.
    *
    * The point of modelling a war in a political game is what the country
@@ -3098,4 +3108,37 @@ export interface Justice {
   courts: Courts;
   policing: Policing;
   history: JusticePoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 5E/5F — The body of law, corruption and integrity
+ * ------------------------------------------------------------------ */
+
+export interface IntegrityPoint {
+  turn: number;
+  corruptionIndex: number;
+  ruleOfLaw: number;
+  regulatoryStock: number;
+}
+
+export interface Integrity {
+  transparency: import('./content/integrity.ts').TransparencyRegime;
+  anticorruption: import('./content/integrity.ts').AnticorruptionPosture;
+  /**
+   * Government-wide corruption, 0–100. Policing has its own — this is
+   * everything else the same well feeds: patronage, procurement steered
+   * to a donor, a permit that moves faster for the right envelope.
+   */
+  corruptionIndex: number;
+  /** A composite: judicial independence, this index inverted, and regulatory quality. */
+  ruleOfLaw: number;
+  /**
+   * Statute and regulation, as a multiple of what a well-run country
+   * carries. Only ever added to by a bill passing; only ever reduced by
+   * deliberately going back through it.
+   */
+  regulatoryStock: number;
+  /** Audits launched this run. Each one is worth less than the last. */
+  auditsLaunched: number;
+  history: IntegrityPoint[];
 }
