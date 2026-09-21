@@ -490,6 +490,9 @@ export function createGame(options: NewGameOptions): GameState {
       openingCulture.politicalCulture,
     ),
 
+    /* Nothing to negotiate. A file opens the day a war does. */
+    negotiations: [],
+
     /* Whatever the army already believes, believed completely, decided
        by nobody in this run — which is what makes changing it cost what
        it costs. */

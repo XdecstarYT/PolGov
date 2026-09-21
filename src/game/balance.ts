@@ -2895,3 +2895,57 @@ export const FORCE_DOCTRINE_PC = 28;
 
 /** And starting a programme that a successor will collect. */
 export const RESEARCH_PC = 7;
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — Intelligence, negotiation and peace
+ * ------------------------------------------------------------------ */
+
+/**
+ * How fast the terms on offer decay for the side that is losing.
+ *
+ * Per week, per point of disadvantage. A government that could have had
+ * a settlement in month six takes a worse one in month thirty, having
+ * spent twenty-four more months of casualties establishing that the
+ * first one was the good offer.
+ */
+export const TERMS_DECAY = 0.0032;
+
+/** Weeks an offer stays on the table before it is withdrawn. */
+export const OFFER_LIFE = 12;
+
+/**
+ * How far below an honest estimate a government has to be before the
+ * gap is noticed.
+ *
+ * It is noticed by being wrong about something specific, which is
+ * always after the decision that rested on it.
+ */
+export const ESTIMATE_TOLERANCE = 0.22;
+
+/** How fast an estimate converges on the truth once contact is real. */
+export const ESTIMATE_LEARNING = 0.035;
+
+/**
+ * Willingness to settle, below which a side will not sign anything.
+ *
+ * Both sides have one, both are distorted by what has been spent, and a
+ * war continues until both are above it at the same time — which is why
+ * most wars last considerably longer than either side wanted.
+ *
+ * Set where a war ENDS LATE rather than where it cannot end. Against the
+ * sunk-cost weight it is reached somewhere around three-quarters
+ * exhausted, which is the honest answer; set any higher and no war in
+ * the engine could be settled at all, which was the case for a while.
+ */
+export const SETTLE_THRESHOLD = 42;
+
+/**
+ * What taking back a declared war aim costs.
+ *
+ * The only way out of the trap, and it is expensive because most of it
+ * is a government standing up and saying that the thing it told the
+ * country it would never accept is a thing it will now accept. Nobody
+ * has done it cheaply and several have not survived it.
+ */
+export const REVISE_AIM_PC = 22;
+export const REVISE_AIM_APPROVAL = 9;

@@ -214,6 +214,26 @@ import {
   startResearch,
   stepDoctrine,
 } from './systems/doctrine.ts';
+import {
+  accept,
+  blockedByAim,
+  breakOffTalks,
+  buildWarTalks,
+  domesticCost,
+  offerValue,
+  openTalks,
+  refuse,
+  revisAim,
+  stepPeace,
+} from './systems/peace.ts';
+import { OFFER_LIFE, REVISE_AIM_APPROVAL, REVISE_AIM_PC } from './balance.ts';
+import {
+  findBias,
+  findMediator,
+  findTerm,
+  type Mediator,
+  type PeaceTerm,
+} from './content/peace.ts';
 import { DOCTRINE_FORCE_APPROVAL, FORCE_DOCTRINE_PC, RESEARCH_PC } from './balance.ts';
 import {
   findResearch as findResearchField,
@@ -529,6 +549,11 @@ export type Intent =
   | { type: 'force_doctrine' }
   | { type: 'start_research'; field: ResearchField }
   | { type: 'cancel_research'; id: string }
+  | { type: 'open_talks'; war: string; mediator: Mediator }
+  | { type: 'break_off_talks'; war: string }
+  | { type: 'accept_terms'; war: string; offer: string }
+  | { type: 'refuse_terms'; war: string; offer: string }
+  | { type: 'revise_war_aim'; war: string }
   | { type: 'withdraw_bill'; billId: string }
   | { type: 'public_address' }
   | { type: 'coalition_concession'; partyId: string }
@@ -3411,6 +3436,131 @@ export function resolveTurn(state: GameState): GameState {
     if (bill > 0) next.debt += bill;
   }
 
+  /*
+   * What the country thinks they have, and whether it can stop.
+   *
+   * A file is opened the day a war starts rather than the day talks do,
+   * because the trap is set on the first day. What a government says in
+   * week one about what it will never accept — said on the strength of a
+   * rally, before anybody knows whether it is achievable — is the
+   * sentence that will not let it sign in week a hundred.
+   */
+  {
+    const fightingNow = next.crises.filter((c) => c.stage === 'war');
+
+    for (const crisis of fightingNow) {
+      if (next.negotiations.some((n) => n.warId === crisis.id)) continue;
+      const nation = findNation(crisis.nation);
+      /*
+       * How firmly it was said is set by the rally. The bigger the
+       * rally, the firmer the language, and the firmer the language the
+       * tighter the trap — which is the whole mechanism: the thing that
+       * makes a war popular on day one is the thing that makes it
+       * impossible to end on day seven hundred.
+       */
+      const firmness = clamp01to100(35 + crisis.rally * 2.2);
+      next.negotiations = [
+        ...next.negotiations,
+        buildWarTalks(
+          crisis.id,
+          `nothing less than a settlement with ${nation.name} on our terms`,
+          firmness,
+          combatPower(next.military) * 1.1,
+          crisis.theirResolve,
+          /* Which way the papers lean is drawn once, at the start, and
+             nobody in the chain is lying afterwards. */
+          rng.chance(0.4) ? 'threat_inflation' : rng.chance(0.4) ? 'wishful' : 'mirror',
+        ),
+      ];
+    }
+    next.negotiations = next.negotiations.filter((n) =>
+      fightingNow.some((c) => c.id === n.warId),
+    );
+
+    next.negotiations = next.negotiations.map((negotiation) => {
+      const crisis = fightingNow.find((c) => c.id === negotiation.warId)!;
+      const theatre = next.theatres.find((t) => t.warId === negotiation.warId);
+      const tick = stepPeace(negotiation, {
+        theirStrength: combatPower(next.military) * 1.1,
+        theirResolve: crisis.theirResolve,
+        reconnaissance: theatre?.reconnaissance ?? 0.2,
+        inContact: (theatre?.sectors ?? []).some((s) => s.garrison.length > 0),
+        battlefield: Math.max(-1, Math.min(1, (crisis.ourResolve - crisis.theirResolve) / 100)),
+        ourExhaustion: clamp01to100(100 - crisis.ourResolve),
+        theirExhaustion: clamp01to100(100 - crisis.theirResolve),
+        ourSpent: clamp01to100(crisis.casualties * 1.4 + (absoluteWeek(next) - crisis.startedTurn) * 0.22),
+        theirSpent: clamp01to100(crisis.casualties * 1.1 + (absoluteWeek(next) - crisis.startedTurn) * 0.18),
+        turn: absoluteWeek(next),
+        rng,
+      });
+
+      if (tick.offered) {
+        log(entries, {
+          kind: 'event',
+          label: tick.offered.blockedByAim
+            ? 'Terms this government cannot sign'
+            : 'Terms have been offered',
+          delta: offerValue(tick.offered),
+          cause: tick.offered.blockedByAim
+            ? `They are offering a settlement. It is on the table, it is better than the one ` +
+              `that will be there in six months, and this government cannot sign it because ` +
+              `of what it said in week one about what it would never accept. That sentence ` +
+              `was worth a rally at the time.`
+            : `We would give up ${tick.offered.weConcede.map((t: PeaceTerm) => findTerm(t).label.toLowerCase()).join(' and ')}; ` +
+              `they would give up ${tick.offered.theyConcede.map((t: PeaceTerm) => findTerm(t).label.toLowerCase()).join(' and ')}. ` +
+              `It stays on the table for ${OFFER_LIFE} weeks and the next one will be worse.`,
+          unit: 'pts',
+        });
+      }
+      for (const gone of tick.lapsed) {
+        log(entries, {
+          kind: 'note',
+          label: 'Terms withdrawn',
+          delta: -offerValue(gone),
+          cause:
+            'They have taken it off the table. For whoever is losing, the terms available are ' +
+            'worst at the end — which means the months spent refusing were months spent ' +
+            'establishing that the first offer was the good one.',
+          unit: 'pts',
+          informational: true,
+        });
+      }
+      if (tick.discredited) {
+        const bias = findBias(tick.negotiation.estimate.bias);
+        log(entries, {
+          kind: 'note',
+          label: 'The estimate of their strength was wrong',
+          delta: tick.negotiation.estimate.estimated - tick.negotiation.estimate.actual,
+          cause:
+            `${bias.blurb} Nobody was lying — it serves ${bias.serves} — and every decision ` +
+            `that rested on it has already been taken.`,
+          unit: 'idx',
+        });
+      }
+      if (tick.settlement) {
+        log(entries, {
+          kind: 'event',
+          label: 'A settlement',
+          delta: offerValue(tick.settlement),
+          cause:
+            `Signed after ${Math.round((absoluteWeek(next) - crisis.startedTurn) / TURNS_PER_YEAR * 10) / 10} ` +
+            `years. Whether it is better than the terms refused earlier is a question this ` +
+            `government will be asked for the rest of its time and will answer differently ` +
+            `each time.`,
+          unit: 'pts',
+        });
+        crisis.stage = 'settled';
+        crisis.settlement =
+          offerValue(tick.settlement) > 8
+            ? 'favourable'
+            : offerValue(tick.settlement) < -8
+              ? 'unfavourable'
+              : 'even';
+      }
+      return tick.negotiation;
+    });
+  }
+
   const economyBefore = next.economy;
   next.economy = stepEconomy(next.economy, {
     fiscalImpulse: fiscalImpulse(fiscal),
@@ -3998,6 +4148,16 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleStartResearch(state, intent.field);
     case 'cancel_research':
       return handleCancelResearch(state, intent.id);
+    case 'open_talks':
+      return handleOpenTalks(state, intent.war, intent.mediator);
+    case 'break_off_talks':
+      return handleBreakOffTalks(state, intent.war);
+    case 'accept_terms':
+      return handleAcceptTerms(state, intent.war, intent.offer);
+    case 'refuse_terms':
+      return handleRefuseTerms(state, intent.war, intent.offer);
+    case 'revise_war_aim':
+      return handleReviseWarAim(state, intent.war);
     case 'withdraw_bill':
       return handleWithdrawBill(state, intent.billId);
     case 'public_address':
@@ -5509,6 +5669,178 @@ function handleFileTradeComplaint(state: GameState, key: NationKey): IntentResul
  * it is betting against the only data anybody has, in public, against
  * everybody with a record. It is right about one time in three.
  */
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — the table
+ * ------------------------------------------------------------------ */
+
+const talksFor = (state: GameState, war: string) =>
+  state.negotiations.find((n) => n.warId === war);
+
+/**
+ * Agree to talk, which is itself a concession and is reported as one.
+ *
+ * What a mediator provides is not fairness. It is somebody else to blame
+ * for the terms, which is why the choice of mediator is argued about
+ * more than the terms are.
+ */
+function handleOpenTalks(state: GameState, war: string, mediator: Mediator): IntentResult {
+  const talks = talksFor(state, war);
+  if (!talks) return reject(state, 'There is no war to talk about.');
+  if (talks.talking && talks.mediator === mediator) {
+    return reject(state, 'Those talks are already running.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.negotiations = next.negotiations.map((n) =>
+    n.warId === war ? openTalks(n, mediator) : n,
+  );
+  /* Sitting down is read at home as a sign the war is not going well,
+     and is read that way whether or not it is true. */
+  next.approval = clampApproval(next.approval - 1.5);
+
+  const template = findMediator(mediator);
+  log(entries, {
+    kind: 'note',
+    label: `Talks — ${template.label.toLowerCase()}`,
+    delta: -1.5,
+    cause: `${template.blurb} Agreeing to sit down is itself reported as a concession, and will be.`,
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/** Walk out. Costs nothing today. */
+function handleBreakOffTalks(state: GameState, war: string): IntentResult {
+  const talks = talksFor(state, war);
+  if (!talks?.talking) return reject(state, 'Nobody is talking.');
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.negotiations = next.negotiations.map((n) => (n.warId === war ? breakOffTalks(n) : n));
+  log(entries, {
+    kind: 'note',
+    label: 'Talks broken off',
+    delta: 0,
+    cause:
+      'Free today. What it costs is that the terms on the table went with them, and the next ' +
+      'set will be worse for whoever is losing.',
+    unit: '',
+  });
+  return ok(next);
+}
+
+/**
+ * Sign it.
+ *
+ * What it costs at home is what was conceded, less whatever cover the
+ * mediator provides — and it cannot be signed at all if it crosses what
+ * this government said in week one.
+ */
+function handleAcceptTerms(state: GameState, war: string, offerId: string): IntentResult {
+  const talks = talksFor(state, war);
+  const offer = talks?.offers.find((o) => o.id === offerId);
+  if (!talks || !offer) return reject(state, 'There is nothing on the table by that name.');
+  if (blockedByAim(offer, talks)) {
+    return reject(
+      state,
+      `This government cannot sign that. It said in week one what it would never accept, on the strength of a rally, and the sentence is on the record. Taking it back is possible and is its own decision.`,
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.negotiations = next.negotiations.map((n) => (n.warId === war ? accept(n, offerId) : n));
+
+  const cost = domesticCost(offer) * (1 - findMediator(offer.mediator).cover);
+  next.approval = clampApproval(next.approval - cost * 0.4);
+
+  const crisis = next.crises.find((c) => c.id === war);
+  if (crisis) {
+    crisis.stage = 'settled';
+    crisis.settlement =
+      offerValue(offer) > 8 ? 'favourable' : offerValue(offer) < -8 ? 'unfavourable' : 'even';
+  }
+
+  log(entries, {
+    kind: 'event',
+    label: 'Terms accepted',
+    delta: -cost * 0.4,
+    cause:
+      `The country gives up ${offer.weConcede.map((t: PeaceTerm) => findTerm(t).label.toLowerCase()).join(' and ')}. ` +
+      `That will be remembered for ${Math.max(...offer.weConcede.map((t: PeaceTerm) => findTerm(t).memoryYears), 10)} ` +
+      `years, which is longer than anybody involved will be in office.`,
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/** Refuse it. It stays on the record and the next one is worse. */
+function handleRefuseTerms(state: GameState, war: string, offerId: string): IntentResult {
+  const talks = talksFor(state, war);
+  const offer = talks?.offers.find((o) => o.id === offerId);
+  if (!talks || !offer) return reject(state, 'There is nothing on the table by that name.');
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.negotiations = next.negotiations.map((n) => (n.warId === war ? refuse(n, offerId) : n));
+
+  log(entries, {
+    kind: 'note',
+    label: 'Terms refused',
+    delta: offerValue(offer),
+    cause:
+      'It stays on the record. If this war is being lost, the terms available are worst at ' +
+      'the end, and this was better than what will be offered next.',
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Take back what was said in week one.
+ *
+ * The only way out of the trap, and it costs exactly what it looks like:
+ * the government says in public that the thing it told the country it
+ * would never accept is a thing it is now willing to accept. Nobody has
+ * ever done it cheaply and several have not survived it.
+ */
+function handleReviseWarAim(state: GameState, war: string): IntentResult {
+  const talks = talksFor(state, war);
+  if (!talks) return reject(state, 'There is no war to revise an aim for.');
+  if (talks.declaredFirmness < 30) {
+    return reject(state, 'Nothing was said firmly enough to need taking back.');
+  }
+  if (state.politicalCapital < REVISE_AIM_PC) {
+    return reject(
+      state,
+      `Taking back a war aim costs ${REVISE_AIM_PC} PC, and most of that is standing up and saying it.`,
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, REVISE_AIM_PC);
+  next.negotiations = next.negotiations.map((n) =>
+    n.warId === war ? revisAim(n, Math.max(0, n.declaredFirmness - 45)) : n,
+  );
+  next.approval = clampApproval(next.approval - REVISE_AIM_APPROVAL);
+
+  log(entries, {
+    kind: 'event',
+    label: 'The war aim has been revised',
+    delta: -REVISE_AIM_APPROVAL,
+    cause:
+      `This government has said in public that what it told the country it would never accept ` +
+      `is something it is now prepared to accept. It is the only way out of the sentence and ` +
+      `it costs what it looks like it costs. It also makes a settlement possible, which is ` +
+      `the whole reason to do it.`,
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
 function handleDoctrineBelief(state: GameState, to: WarDoctrine): IntentResult {
   const change = doctrineChange(state.doctrine, to);
   if (!change.allowed) return reject(state, change.reason);

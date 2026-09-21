@@ -1685,6 +1685,16 @@ export interface GameState {
   orbat: Orbat;
 
   /**
+   * What the country thinks the other side has, and whether it can stop.
+   *
+   * One per war. Opened the day the war starts rather than the day talks
+   * do, because the trap is set on the first day: what a government says
+   * in week one about what it will never accept is what will not let it
+   * sign in week a hundred.
+   */
+  negotiations: Negotiation[];
+
+  /**
    * What the army believes about how wars are won, and what it is
    * buying for a decade nobody can see.
    *
@@ -2770,4 +2780,81 @@ export interface Doctrine {
   /** Cumulative capability delivered, as an index. */
   capability: number;
   history: DoctrinePoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — Intelligence, negotiation and peace
+ * ------------------------------------------------------------------ */
+
+/**
+ * What the country thinks the other side has.
+ *
+ * Not the truth, and not the truth plus noise. The truth times a bias
+ * whose direction is set by what the organisation producing the estimate
+ * needs to be true — and nobody in the chain is lying, because the
+ * evidence is genuinely ambiguous and everybody is reading it in the
+ * direction they were already facing.
+ */
+export interface EnemyEstimate {
+  /** What they actually have. The engine knows; the government does not. */
+  actual: number;
+  /** What the papers say they have. This is what gets acted on. */
+  estimated: number;
+  bias: import('./content/peace.ts').EstimateBias;
+  /** How much of the estimate rests on something somebody saw, 0–1. */
+  confidence: number;
+  lastRevised: number;
+  /** Their willingness to keep going, estimated the same way. */
+  estimatedResolve: number;
+  actualResolve: number;
+}
+
+/** A settlement on the table, and what it would cost to sign. */
+export interface PeaceOffer {
+  id: string;
+  /** Who put it there. */
+  from: 'us' | 'them';
+  /** What we give up. */
+  weConcede: import('./content/peace.ts').PeaceTerm[];
+  /** And what they do. */
+  theyConcede: import('./content/peace.ts').PeaceTerm[];
+  mediator: import('./content/peace.ts').Mediator;
+  offeredTurn: number;
+  /** How long it stays on the table. Terms get worse, not better. */
+  expiresTurn: number;
+  /** What accepting costs at home, all in. */
+  domesticCost: number;
+  /** Whether it can be signed at all, given what was said in week one. */
+  blockedByAim: boolean;
+}
+
+export interface NegotiationPoint {
+  turn: number;
+  /** What is on the table, as a score. Falls while a war is being lost. */
+  onOffer: number;
+  ourWillingness: number;
+  theirWillingness: number;
+}
+
+export interface Negotiation {
+  warId: string;
+  /**
+   * What the government said it was fighting for, in public, in week one.
+   *
+   * Said on the strength of a rally, before anybody knew whether it was
+   * achievable, and it is now a condition of the government's survival.
+   */
+  declaredAim: string;
+  /** How firmly it was said. The firmer, the tighter the trap. */
+  declaredFirmness: number;
+  estimate: EnemyEstimate;
+  offers: PeaceOffer[];
+  /** Offers refused, which stay on the record. */
+  refused: PeaceOffer[];
+  /** Whether talks are happening at all. */
+  talking: boolean;
+  mediator: import('./content/peace.ts').Mediator;
+  /** What has been conceded, once anything has. */
+  settled: PeaceOffer | null;
+  history: NegotiationPoint[];
 }
