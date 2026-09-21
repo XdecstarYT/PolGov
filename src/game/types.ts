@@ -1685,6 +1685,17 @@ export interface GameState {
   orbat: Orbat;
 
   /**
+   * What the country remembers, which outlives every government in it.
+   *
+   * The point of modelling a war in a political game is what the country
+   * is like afterwards, and this is where afterwards is kept: a record a
+   * player can read back fifty or a hundred years later and find that
+   * the reason a region votes the way it does is a war nobody in the
+   * government was alive for.
+   */
+  timeline: Timeline;
+
+  /**
    * What the country thinks the other side has, and whether it can stop.
    *
    * One per war. Opened the day the war starts rather than the day talks
@@ -2857,4 +2868,52 @@ export interface Negotiation {
   /** What has been conceded, once anything has. */
   settled: PeaceOffer | null;
   history: NegotiationPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — What the country remembers
+ * ------------------------------------------------------------------ */
+
+/**
+ * Something that happened, kept for the rest of the run.
+ *
+ * The point of modelling a war in a political game is what the country
+ * is like afterwards. These outlive the governments that made them and
+ * are read back fifty and a hundred years later, which is the difference
+ * between a strategy game and an alternate history somebody is living
+ * in.
+ */
+export type TimelineKind =
+  | 'war'
+  | 'government'
+  | 'election'
+  | 'treaty'
+  | 'economy'
+  | 'constitutional'
+  | 'disaster';
+
+export interface TimelineEntry {
+  id: string;
+  kind: TimelineKind;
+  /** The in-game year it started, and ended if it has. */
+  startYear: number;
+  endYear: number | null;
+  /** What it is called. Written once, in the words of the time. */
+  title: string;
+  /** One line, in the register a history would use rather than a report. */
+  summary: string;
+  /** The lines under it: what it did, each one a fact. */
+  consequences: string[];
+  /** How much of the country's later life it explains, 0–100. */
+  weight: number;
+  /** The war it belongs to, where it belongs to one. */
+  warId?: string;
+}
+
+export interface Timeline {
+  entries: TimelineEntry[];
+  /** Wars, kept in full, because they are read back in most detail. */
+  wars: WarRecord[];
+  /** The year the run began, so everything else can be dated from it. */
+  firstYear: number;
 }

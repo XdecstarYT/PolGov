@@ -215,6 +215,17 @@ import {
   stepDoctrine,
 } from './systems/doctrine.ts';
 import {
+  closeEntry,
+  openEntryFor,
+  record as recordEntry,
+  warPressure,
+  warSummary,
+  weightOf,
+  yearOf,
+} from './systems/timeline.ts';
+import { WAR_OUTCOME_LABELS } from './content/war.ts';
+import type { WarRecord } from './types.ts';
+import {
   accept,
   blockedByAim,
   breakOffTalks,
@@ -2786,6 +2797,10 @@ export function resolveTurn(state: GameState): GameState {
   const conflictTick = stepConflicts(next.crises, {
     military: next.military,
     world: next.world,
+    /* The army's real headcount, so that a war costs a share of the
+       people in it rather than a flat figure decided before the manpower
+       engine existed. */
+    forceThousands: (underArms(next.manpower) * ARMY_SHARE) / 1000,
     turn: next.turnNumber,
     rng,
   });
@@ -3561,6 +3576,172 @@ export function resolveTurn(state: GameState): GameState {
     });
   }
 
+  /*
+   * WAR TOUCHES EVERYTHING.
+   *
+   * The five chains, applied in one place. A war is not a subsystem; it
+   * is a pressure on every other subsystem, and the reason governments
+   * lose elections over wars they are winning is that the winning
+   * happens in one place and the pressure arrives everywhere else. The
+   * whole shape is in `warPressure` so it can be read at once rather
+   * than hunted for as thirty separate adjustments.
+   */
+  {
+    const fightingNow = next.crises.filter((c) => c.stage === 'war');
+    const weekCasualties = fightingNow.reduce(
+      (sum, c) => sum + Math.max(0, c.casualties - (casualtiesBefore.get(c.id) ?? c.casualties)),
+      0,
+    );
+    const pressure = warPressure({
+      wars: next.crises,
+      theatres: next.theatres,
+      /* A crisis this country escalated to war is one it started, in the
+         eyes of everybody who was not asked. */
+      weStarted: fightingNow.some((c) => c.ourResolve > c.theirResolve + 10),
+      population: next.demography.population,
+      casualties: weekCasualties,
+      turn: absoluteWeek(next),
+    });
+
+    if (pressure.intensity > 0) {
+      /* ---- WAR → ECONOMY ---- */
+      next.economy = {
+        ...next.economy,
+        growth: next.economy.growth - pressure.growthDrag,
+      };
+
+      /* ---- WAR → SOCIETY ---- */
+      /*
+       * Bereavement is a social fact before it is a political one, and
+       * it lands on the belief that anything anybody does makes a
+       * difference — at exactly the moment the country most wants that
+       * to be true.
+       */
+      next.opinion = {
+        ...next.opinion,
+        efficacy: clamp01to100(next.opinion.efficacy - pressure.efficacyDrain),
+        frustration: clamp01to100(next.opinion.frustration + pressure.bereaved * 0.35),
+      };
+      if (pressure.displaced > 0.5) {
+        next.demography = {
+          ...next.demography,
+          population: Math.max(0.1, next.demography.population - pressure.displaced / 1000),
+        };
+      }
+
+      /* ---- WAR → POLITICS ---- */
+      next.opinion = {
+        ...next.opinion,
+        trust: next.opinion.trust.map((t) =>
+          t.key === 'government' || t.key === 'parliament'
+            ? { ...t, level: clamp01to100(t.level - pressure.trustDrain) }
+            : t,
+        ),
+      };
+      next.culture = {
+        ...next.culture,
+        politicalCulture: clamp01to100(next.culture.politicalCulture - pressure.normsDrain),
+      };
+
+      /* ---- WAR → GEOPOLITICS ---- */
+      if (pressure.reputationDrain > 0) {
+        next.world = {
+          ...next.world,
+          reputation: clamp01to100(next.world.reputation - pressure.reputationDrain),
+        };
+      }
+
+      /* ---- WAR → THE ARMY AS A CONSTITUENCY ---- */
+      /*
+       * Veterans arrive years after the war, vote reliably, and remember
+       * exactly what they were told it was for. The longest-lived thing
+       * any war produces, and the one no government plans for.
+       */
+      next.military = {
+        ...next.military,
+        veterans: next.military.veterans + pressure.veterans,
+      };
+
+      if (pressure.generational && !next.timeline.entries.some((e) => e.kind === 'war' && e.endYear === null && e.weight > 70)) {
+        log(entries, {
+          kind: 'note',
+          label: 'This has become a generational event',
+          delta: pressure.intensity,
+          cause:
+            'Past this point the war is not something the country is doing; it is something ' +
+            'the country is. The people formed by it will vote on it for forty years, and ' +
+            'none of that is available to be decided at this desk any more.',
+          unit: 'idx',
+        });
+      }
+    }
+
+    /* ---- What the country will remember ---- */
+    const year = yearOf(next.timeline, absoluteWeek(next));
+    for (const crisis of fightingNow) {
+      if (openEntryFor(next.timeline, crisis.id)) continue;
+      const nation = findNation(crisis.nation);
+      next.timeline = recordEntry(next.timeline, {
+        kind: 'war',
+        startYear: year,
+        endYear: null,
+        title: `${year} \u2014 the war with ${nation.name}`,
+        summary: crisis.cause,
+        consequences: [],
+        weight: weightOf('war'),
+        warId: crisis.id,
+      });
+    }
+
+    /*
+     * And closing it, which is the part that matters. A war that ends is
+     * not over — it becomes the thing a country carries, and this is
+     * where it starts being carried.
+     */
+    for (const entry of next.timeline.entries.filter((e) => e.kind === 'war' && e.endYear === null)) {
+      const crisis = next.crises.find((c) => c.id === entry.warId);
+      if (crisis && crisis.stage === 'war') continue;
+      const record: WarRecord = {
+        id: entry.warId ?? entry.id,
+        name: entry.title.split('\u2014 ')[1] ?? entry.title,
+        kind: 'limited',
+        against: crisis ? findNation(crisis.nation).name : 'a state',
+        aim: 'compel_settlement',
+        outcome:
+          crisis?.settlement === 'favourable'
+            ? 'favourable_settlement'
+            : crisis?.settlement === 'unfavourable'
+              ? 'unfavourable_settlement'
+              : 'status_quo',
+        startedTurn: (entry.startYear - next.timeline.firstYear) * TURNS_PER_YEAR,
+        endedTurn: absoluteWeek(next),
+        casualties: crisis?.casualties ?? 0,
+        peakIntensity: crisis?.escalation ?? 0,
+        casus: entry.summary,
+        governmentsFallen: 0,
+        peakDebt: next.debt,
+        deepestRecession: Math.min(0, next.economy.growth),
+        territoryChanged: 0,
+        alliesInvolved: crisis?.allies.length ?? 0,
+      };
+      const written = warSummary(
+        { ...record, outcome: WAR_OUTCOME_LABELS[record.outcome] },
+        next.timeline.firstYear,
+      );
+      next.timeline = {
+        ...closeEntry(next.timeline, entry.id, year, written.consequences),
+        wars: [...next.timeline.wars, record],
+      };
+      log(entries, {
+        kind: 'event',
+        label: written.title,
+        delta: -record.casualties,
+        cause: `${written.summary} ${written.consequences.join('. ')}.`,
+        unit: 'k',
+      });
+    }
+  }
+
   const economyBefore = next.economy;
   next.economy = stepEconomy(next.economy, {
     fiscalImpulse: fiscalImpulse(fiscal),
@@ -4033,6 +4214,32 @@ export function runElection(state: GameState): GameState {
   const playerSeats = result.playerSeatsAfter;
   const largest = Math.max(...Object.values(result.seatsByParty));
   if (playerSeats >= largest) next.career.electionsWon += 1;
+
+  /*
+   * And the country remembers it. An election is a smaller thing than a
+   * war and it is still the thing a later history uses to date
+   * everything else — which is the whole function of a timeline: not to
+   * list what happened, but to give a reader something to hang the rest
+   * on fifty years later.
+   */
+  {
+    const year = yearOf(next.timeline, absoluteWeek(next));
+    const held = playerSeats >= largest;
+    next.timeline = recordEntry(next.timeline, {
+      kind: 'election',
+      startYear: year,
+      endYear: year,
+      title: `${year} \u2014 general election`,
+      summary: held
+        ? 'The government was returned.'
+        : 'The government lost its majority and left office.',
+      consequences: [
+        `${playerSeats} seats, against ${largest} for the largest party`,
+        `Turnout and the manifesto both judged: ${verdict.kept} kept, ${verdict.broken} broken`,
+      ],
+      weight: weightOf(held ? 'election' : 'government', 0, held ? 0 : 1),
+    });
+  }
 
   next.campaign = null;
   for (const region of next.regions) region.campaignInvestment = 0;

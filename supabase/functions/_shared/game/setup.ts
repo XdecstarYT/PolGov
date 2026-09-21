@@ -41,6 +41,7 @@ import { buildOrbat } from './systems/orbat.ts';
 import { buildNavy } from './systems/naval.ts';
 import { buildLogistics } from './systems/logistics.ts';
 import { buildDoctrine } from './systems/doctrine.ts';
+import { buildTimeline } from './systems/timeline.ts';
 import { buildWarEconomy } from './systems/warEconomy.ts';
 import { buildAirForce } from './systems/air.ts';
 import { buildLiving } from './systems/living.ts';
@@ -53,7 +54,7 @@ import { buildIntelligence } from './systems/intelligence.ts';
 import { assignMinistries, buildBudget } from './systems/budgetProcess.ts';
 import { buildPartyInternals } from './systems/partyInternals.ts';
 import { buildSenate } from './systems/parliament.ts';
-import { MMP_DISTRICT_SHARE } from './balance.ts';
+import { MMP_DISTRICT_SHARE, START_YEAR } from './balance.ts';
 import type { ElectoralSystem } from './systems/electoralSystems.ts';
 import { buildNegotiation, hasMajority } from './systems/coalition.ts';
 import { simulateElection } from './systems/election.ts';
@@ -489,6 +490,10 @@ export function createGame(options: NewGameOptions): GameState {
       new Set<string>(),
       openingCulture.politicalCulture,
     ),
+
+    /* Nothing a history would record yet. Everything the country is
+       now, it was when this government arrived. */
+    timeline: buildTimeline(START_YEAR),
 
     /* Nothing to negotiate. A file opens the day a war does. */
     negotiations: [],

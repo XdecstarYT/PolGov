@@ -64,6 +64,7 @@ export * from './systems/orbat.ts';
 export * from './content/orbat.ts';
 export * from './systems/theatre.ts';
 export * from './content/theatre.ts';
+export * from './systems/timeline.ts';
 export * from './systems/peace.ts';
 export * from './content/peace.ts';
 export * from './systems/doctrine.ts';

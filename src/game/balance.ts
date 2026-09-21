@@ -1790,6 +1790,18 @@ export const DEESCALATION_APPROVAL = -6;
 /** Points of approval a casualty costs, and does not give back. */
 export const CASUALTY_APPROVAL = -0.25;
 
+/**
+ * Approval per point of the army lost in a week.
+ *
+ * Priced as a SHARE rather than a count, because that is how a country
+ * feels it: five thousand dead is a national catastrophe in a country of
+ * five million and a news item in one of a billion, and an engine that
+ * charges both the same is modelling neither. Calibrated so that losing
+ * half a per cent of the army in a week — a hard war — costs about a
+ * third of an approval point, and a year of it costs eighteen.
+ */
+export const CASUALTY_SHARE_APPROVAL = -70;
+
 /** Points of growth a week of war takes out of the economy. */
 export const WAR_ECONOMY_SHOCK = -0.09;
 
@@ -2618,6 +2630,19 @@ export const ASSUMED_CONTROL = 50;
 /** Civilian casualties per week per point of fighting, per thousand present. */
 export const CIVILIAN_TOLL = 0.00042;
 
+/**
+ * Share of the people actually engaged who become casualties in a week
+ * of full-intensity fighting.
+ *
+ * Denominated in PEOPLE, because casualties are people. The first
+ * version of this took the sector's combat VALUE — an index built from
+ * equipment, experience and command — and divided it by a million as
+ * though the result were thousands of soldiers, which produced 254,000
+ * casualties in a year for an army of 65,000 and made every war a
+ * national extinction.
+ */
+export const WEEKLY_CASUALTY_RATE = 0.009;
+
 /** How fast a sector is wrecked by being fought over. */
 export const DEVASTATION_RATE = 0.38;
 
@@ -2949,3 +2974,62 @@ export const SETTLE_THRESHOLD = 42;
  */
 export const REVISE_AIM_PC = 22;
 export const REVISE_AIM_APPROVAL = 9;
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — What war does to everything else
+ * ------------------------------------------------------------------ */
+
+/**
+ * The five chains, as weights.
+ *
+ * Every one of these is a multiplier on something a war produces —
+ * casualties, exhaustion, intensity — applied to a system that has
+ * nothing to do with the war. They are gathered here rather than spread
+ * through the turn loop so that the shape of the whole thing can be read
+ * in one place: a war is not a subsystem, it is a pressure on every
+ * other subsystem, and the reason governments lose elections over wars
+ * they are winning is in these numbers.
+ */
+
+/** WAR → SOCIETY. Bereavement is a social fact before it is a political one. */
+export const BEREAVEMENT_PER_THOUSAND = 0.055;
+
+/** WAR → SOCIETY. What a war does to the belief that acting works. */
+export const WAR_EFFICACY_DRAIN = 0.02;
+
+/** WAR → POLITICS. Trust in government, per week of a war that is not ending. */
+export const WAR_TRUST_DRAIN = 0.016;
+
+/** WAR → POLITICS. And the norms, under an emergency nobody voted for. */
+export const WAR_NORMS_DRAIN = 0.011;
+
+/** WAR → ECONOMY. Growth knocked off per point of war intensity, annualised. */
+export const WAR_GROWTH_DRAG = 0.021;
+
+/** WAR → SOCIETY. Displacement per point of sector devastation, in thousands. */
+export const DISPLACEMENT_RATE = 0.85;
+
+/** WAR → GEOPOLITICS. Reputation per week of a war the country started. */
+export const AGGRESSOR_REPUTATION = 0.7;
+
+/**
+ * Veterans, per thousand casualties, as a constituency.
+ *
+ * They arrive years after the war, vote reliably, and remember exactly
+ * what they were told it was for — which is the longest-lived thing any
+ * war produces and the one no government plans for.
+ */
+export const VETERANS_PER_THOUSAND = 3.2;
+
+/** Casualties, in thousands, above which a war is a generational event. */
+export const GENERATIONAL_CASUALTIES = 60;
+
+/**
+ * The year a run begins.
+ *
+ * Near enough to now that the world is recognisable and far enough that
+ * nothing in it is a claim about anybody currently in office. Everything
+ * in the timeline is dated from here, which is what lets a player look
+ * back fifty years from the end of a long run.
+ */
+export const START_YEAR = 2034;

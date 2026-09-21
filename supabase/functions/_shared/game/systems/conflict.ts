@@ -27,7 +27,6 @@
  */
 
 import {
-  CASUALTY_APPROVAL,
   CRISIS_RALLY,
   CRISIS_RALLY_HALFLIFE,
   PATIENCE_FLOOR,
@@ -35,6 +34,8 @@ import {
   RESOLVE_DECAY,
   WAR_ECONOMY_SHOCK,
   months,
+  CASUALTY_SHARE_APPROVAL,
+  WEEKLY_CASUALTY_RATE,
 } from '../balance.ts';
 import { findNation, type NationKey } from '../content/nations.ts';
 import type { Rng } from '../rng.ts';
@@ -160,6 +161,18 @@ export function deterred(crisis: Crisis, military: Military, world: World): bool
 export interface ConflictInputs {
   military: Military;
   world: World;
+  /**
+   * How many people are actually under arms, in thousands.
+   *
+   * Added when the manpower engine gave the army a real headcount. Until
+   * then this file produced a flat figure of up to six thousand
+   * casualties a week against a force it had no number for — which was
+   * defensible while the military was an index and became a quarter of a
+   * million casualties a year for an army of sixty-five thousand the
+   * moment it was not. Two engines with two casualty models is the
+   * defect; this is where they are reconciled.
+   */
+  forceThousands: number;
   turn: number;
   rng: Rng;
 }
@@ -245,9 +258,29 @@ export function stepConflicts(crises: readonly Crisis[], inputs: ConflictInputs)
        * not come back, which is the honest asymmetry: a war that is going
        * well costs a government almost as much as one that is not.
        */
-      const weekly = clamp(2.2 / Math.max(0.4, balance), 0.4, 6);
+      /*
+       * A share of the people actually in it, rather than a flat figure.
+       * A war going badly costs more of them, and a bigger army loses
+       * more people for the same war — which is the arithmetic that
+       * makes a large country's wars so much more expensive than a small
+       * one's, and it only works if the army has a headcount.
+       */
+      const weekly = clamp(
+        inputs.forceThousands * WEEKLY_CASUALTY_RATE * 0.55 / Math.max(0.4, balance),
+        0.05,
+        inputs.forceThousands * 0.035,
+      );
       casualties += weekly;
-      approval += weekly * CASUALTY_APPROVAL;
+      /*
+       * Charged as a share of the army rather than as a count. Five
+       * thousand dead is a national catastrophe in a country of five
+       * million and a news item in one of a billion, and for a while
+       * this charged both the same — which, once casualties were scaled
+       * to the real force, made a war approval-POSITIVE, because the
+       * rally outlived a cost that had quietly become a twelfth of what
+       * it was.
+       */
+      approval += (weekly / Math.max(1, inputs.forceThousands)) * CASUALTY_SHARE_APPROVAL;
       economicShock += WAR_ECONOMY_SHOCK;
 
       /* It ends when one side has had enough. */

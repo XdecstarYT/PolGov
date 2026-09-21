@@ -47,6 +47,7 @@ import {
   STAGNANT_THRESHOLD,
   SUPPLY_AT_BASE,
   SUPPLY_DECAY_PER_DEPTH,
+  WEEKLY_CASUALTY_RATE,
 } from '../balance.ts';
 import {
   FORTIFICATION,
@@ -486,11 +487,26 @@ export function stepTheatre(theatre: Theatre, inputs: TheatreInputs): TheatreTic
      * Holding a contested line with nobody attacking costs less than
      * either and never nothing, which is how a front nobody is fighting
      * over consumes an army over three years.
+     *
+     * Counted in PEOPLE. `ours` and `theirs` above are combat VALUES —
+     * indices built from equipment, experience and command — and the
+     * first version of this divided one of those by a million and
+     * called the result thousands of soldiers, which produced a quarter
+     * of a million casualties a year for an army of sixty-five thousand.
      */
+    const engaged = sector.garrison.reduce((sum, id) => {
+      const formation = inputs.orbat.formations.find((f) => f.id === id);
+      return sum + (formation ? formation.personnel * (formation.strength / 100) : 0);
+    }, 0);
     const effort = attacking ? 1.9 : defending ? 0.85 : 0.3;
     const heat = (inputs.intensity / 100) * terrain.attrition;
-    const ourLoss = (ours / 1_000_000) * heat * effort;
-    const theirLoss = (theirs / 1_000_000) * heat * (attacking ? 0.95 : defending ? 1.5 : 0.3);
+    const ourLoss = (engaged / 1000) * WEEKLY_CASUALTY_RATE * heat * effort;
+    /* And theirs, in proportion to how the fighting is going, because
+       the engine does not hold their order of battle. */
+    const theirLoss =
+      ourLoss *
+      clamp(theirs / Math.max(1, ours), 0.35, 2.4) *
+      (attacking ? 0.95 : defending ? 1.5 : 1);
     casualties += ourLoss;
     enemyCasualties += theirLoss;
 

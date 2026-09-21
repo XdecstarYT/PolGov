@@ -36,6 +36,7 @@ export type MovementKey =
   | 'independence'
   | 'nationalist'
   | 'anti_government'
+  | 'anti_war'
   | 'pro_government'
   | 'reform';
 
@@ -51,6 +52,7 @@ export const MOVEMENT_KEYS: MovementKey[] = [
   'independence',
   'nationalist',
   'anti_government',
+  'anti_war',
   'pro_government',
   'reform',
 ];
@@ -254,6 +256,23 @@ export const MOVEMENT_TEMPLATES: MovementTemplate[] = [
     legitimacy: 0.3,
     concessionCost: 0.003,
     demand: 'the government, and it is not on offer',
+  },
+  {
+    key: 'anti_war',
+    label: 'An anti-war movement',
+    about:
+      'People who were told what this was for in week one and have since read the casualty returns. It does not form while a war is going well.',
+    grievances: ['unrest', 'social_exclusion'],
+    constituency: ['students', 'graduates', 'professionals'],
+    repertoire: ['petition', 'demonstration', 'civil_disobedience', 'mass_movement'],
+    escalation: 0.026,
+    /* Considerable, and it rises with every week the war does not end,
+       because the case for it was made once and has not been remade. */
+    legitimacy: 0.52,
+    /* Conceding costs nothing in money and everything in the sentence
+       the government said in week one. */
+    concessionCost: 0.001,
+    demand: 'an end to it, on whatever terms are available',
   },
   {
     key: 'pro_government',

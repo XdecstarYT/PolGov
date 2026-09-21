@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  CASUALTY_APPROVAL,
+  CASUALTY_SHARE_APPROVAL,
   CRISIS_RALLY,
   CRISIS_RALLY_HALFLIFE,
   DEESCALATION_APPROVAL,
@@ -84,7 +84,7 @@ function run(
   const rng = new Rng(11);
 
   for (let week = 1; week <= weeks; week += 1) {
-    const tick = stepConflicts(crises, { military, world, turn: week, rng });
+    const tick = stepConflicts(crises, { military, world, forceThousands: 36, turn: week, rng });
     crises = tick.crises;
     approvalByWeek.push(tick.approval);
     events.push(...tick.events.map((e) => e.label));
@@ -208,7 +208,7 @@ describe('what decides a war', () => {
        that does not come back. */
     expect(crises[0]!.casualties).toBeGreaterThan(0);
     expect(sum(approvalByWeek)).toBeLessThan(0);
-    expect(CASUALTY_APPROVAL).toBeLessThan(0);
+    expect(CASUALTY_SHARE_APPROVAL).toBeLessThan(0);
   });
 
   it('ends when one side has had enough, not when anybody wins', () => {
@@ -230,6 +230,7 @@ describe('what decides a war', () => {
     const tick = stepConflicts([war], {
       military: buildMilitary(),
       world,
+      forceThousands: 36,
       turn: 2,
       rng: new Rng(4),
     });
