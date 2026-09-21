@@ -74,6 +74,7 @@ export function migrateState(raw: unknown): GameState | null {
   if (!next.manpower) next.manpower = fresh.manpower;
   if (!next.orbat) next.orbat = fresh.orbat;
   if (!next.theatres) next.theatres = [];
+  if (!next.doctrine) next.doctrine = fresh.doctrine;
   if (!next.logistics) next.logistics = fresh.logistics;
   if (!next.warEconomy) next.warEconomy = fresh.warEconomy;
   if (!next.navy) next.navy = fresh.navy;

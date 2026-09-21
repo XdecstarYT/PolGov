@@ -206,6 +206,22 @@ import {
 } from './content/naval.ts';
 import { stepLogistics, stockOf, weeksRemaining } from './systems/logistics.ts';
 import {
+  cancelResearch,
+  doctrineChange,
+  forceDoctrine,
+  orderDoctrine,
+  researchCost,
+  startResearch,
+  stepDoctrine,
+} from './systems/doctrine.ts';
+import { DOCTRINE_FORCE_APPROVAL, FORCE_DOCTRINE_PC, RESEARCH_PC } from './balance.ts';
+import {
+  findResearch as findResearchField,
+  findWarDoctrine,
+  type ResearchField,
+  type WarDoctrine,
+} from './content/doctrine.ts';
+import {
   footingChange,
   militaryOutput,
   setFinance,
@@ -509,6 +525,10 @@ export type Intent =
   | { type: 'order_squadron'; aircraft: AircraftKind }
   | { type: 'set_war_footing'; footing: WarFooting }
   | { type: 'set_war_finance'; finance: WarFinance }
+  | { type: 'set_doctrine_belief'; doctrine: WarDoctrine }
+  | { type: 'force_doctrine' }
+  | { type: 'start_research'; field: ResearchField }
+  | { type: 'cancel_research'; id: string }
   | { type: 'withdraw_bill'; billId: string }
   | { type: 'public_address' }
   | { type: 'coalition_concession'; partyId: string }
@@ -3294,6 +3314,103 @@ export function resolveTurn(state: GameState): GameState {
     }
   }
 
+  /*
+   * What the army believes, and what a previous government bought.
+   *
+   * Both run on clocks longer than a term. A doctrine ordered this week
+   * arrives under a successor and a programme started this week arrives
+   * under the one after that, which is why this is the part of defence
+   * policy that no electoral cycle has ever been able to hold.
+   */
+  {
+    const fightingNow = next.crises.filter((c) => c.stage === 'war');
+    const atWar = fightingNow.length > 0;
+    /*
+     * Officer turnover is what actually moves a doctrine, so it is
+     * measured rather than assumed: the share of the officer corps that
+     * has changed since last week.
+     */
+    const serving_ = serving(next.orbat);
+    const turnover =
+      serving_.length > 0
+        ? serving_.filter((c) => absoluteWeek(next) - c.appointedTurn < 2).length /
+          serving_.length
+        : 0;
+
+    const doctrineTick = stepDoctrine(next.doctrine, {
+      orbat: next.orbat,
+      turnover,
+      atWar,
+      battlefield: atWar
+        ? Math.max(
+            -1,
+            Math.min(
+              1,
+              fightingNow.reduce((s, c) => s + (c.ourResolve - c.theirResolve), 0) /
+                (fightingNow.length * 100),
+            ),
+          )
+        : 0,
+      /* Until Engine 7J reads their order of battle, the doctrine of
+         whoever is winning is the honest available guess at what the
+         army is being taught by. */
+      opposing: atWar ? 'attrition' : null,
+      funding: next.services.find((x) => x.key === 'defence')?.staffing ?? 1,
+      turn: absoluteWeek(next),
+    });
+    next.doctrine = doctrineTick.doctrine;
+
+    if (doctrineTick.adopted) {
+      const template = findWarDoctrine(next.doctrine.current);
+      log(entries, {
+        kind: 'note',
+        label: `The army now does ${template.label.toLowerCase()}`,
+        delta: 0,
+        cause:
+          `Ordered ${Math.round((absoluteWeek(next) - next.doctrine.orderedTurn) / TURNS_PER_YEAR)} ` +
+          `years ago. It did not arrive because it was restated; it arrived because the ` +
+          `officers who believed the other one retired.`,
+        unit: '',
+      });
+    }
+    if (doctrineTick.learned && next.doctrine.lastWarLesson) {
+      const lesson = findWarDoctrine(next.doctrine.lastWarLesson);
+      log(entries, {
+        kind: 'note',
+        label: `The army has concluded something about ${lesson.label.toLowerCase()}`,
+        delta: 0,
+        cause:
+          next.doctrine.lastWarLesson === next.doctrine.current
+            ? `It is winning with it, which is the strongest argument any doctrine ever has ` +
+              `and is drawn from one war.`
+            : `It is being beaten by it. Armies adopt the doctrine of whoever beat them, and ` +
+              `nobody has ever adopted the doctrine of an army they beat.`,
+        unit: '',
+      });
+    }
+    for (const { programme, dated } of doctrineTick.delivered) {
+      const template = findResearchField(programme.field);
+      log(entries, {
+        kind: 'note',
+        label: `${template.label} — delivered`,
+        delta: programme.realised ?? 0,
+        cause: dated
+          ? `Started ${Math.round((absoluteWeek(next) - programme.startedTurn) / TURNS_PER_YEAR)} ` +
+            `years ago and specified against a doctrine the army no longer holds. It arrived ` +
+            `on time and is worth a fraction of what was promised for it, which is what ` +
+            `buying for a decade means.`
+          : `Started ${Math.round((absoluteWeek(next) - programme.startedTurn) / TURNS_PER_YEAR)} ` +
+            `years ago by a government that is not this one, and worth exactly what was ` +
+            `promised — which happens when the decade turns out as specified.`,
+        unit: 'idx',
+      });
+    }
+
+    /* The research bill, which is paid every year and shows nothing. */
+    const bill = researchCost(next.doctrine, next.moneyScale) / TURNS_PER_YEAR;
+    if (bill > 0) next.debt += bill;
+  }
+
   const economyBefore = next.economy;
   next.economy = stepEconomy(next.economy, {
     fiscalImpulse: fiscalImpulse(fiscal),
@@ -3873,6 +3990,14 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleWarFooting(state, intent.footing);
     case 'set_war_finance':
       return handleWarFinance(state, intent.finance);
+    case 'set_doctrine_belief':
+      return handleDoctrineBelief(state, intent.doctrine);
+    case 'force_doctrine':
+      return handleForceDoctrine(state);
+    case 'start_research':
+      return handleStartResearch(state, intent.field);
+    case 'cancel_research':
+      return handleCancelResearch(state, intent.id);
     case 'withdraw_bill':
       return handleWithdrawBill(state, intent.billId);
     case 'public_address':
@@ -5367,6 +5492,154 @@ function handleFileTradeComplaint(state: GameState, key: NationKey): IntentResul
  * and members who represent them. Nothing here can be undone inside a
  * term, which is the point rather than a limitation.
  */
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — what the army believes
+ * ------------------------------------------------------------------ */
+
+/**
+ * Tell the army how wars are won.
+ *
+ * It will not listen, for about seven years. The people who would have
+ * to make the change are the people who hold the old belief and were
+ * promoted for holding it, and no amount of restating the order moves
+ * that. What moves it is retirement.
+ *
+ * And ordering a doctrine the last war appeared to refute is not brave;
+ * it is betting against the only data anybody has, in public, against
+ * everybody with a record. It is right about one time in three.
+ */
+function handleDoctrineBelief(state: GameState, to: WarDoctrine): IntentResult {
+  const change = doctrineChange(state.doctrine, to);
+  if (!change.allowed) return reject(state, change.reason);
+  if (state.politicalCapital < change.politicalCapital) {
+    return reject(
+      state,
+      `Changing what the army believes costs ${change.politicalCapital} PC, and most of that is the argument with everybody who has a record.`,
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, change.politicalCapital);
+  next.doctrine = orderDoctrine(next.doctrine, to, absoluteWeek(next));
+  if (change.approvalCost > 0) {
+    next.approval = clampApproval(next.approval - change.approvalCost);
+  }
+
+  const template = findWarDoctrine(to);
+  log(entries, {
+    kind: 'note',
+    label: `${template.label} ordered`,
+    delta: -change.approvalCost,
+    cause: change.vindicated
+      ? `${template.blurb} The last war suggested this, which is the only reason an officer ` +
+        `corps ever moves quickly: about ${change.years.toFixed(0)} years rather than a decade.`
+      : `${template.blurb} It will take about ${change.years.toFixed(0)} years, because the ` +
+        `people who would have to make the change are the people who were promoted for the ` +
+        `other one. Until then the army is worse at both than it was at either.`,
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Force it through by replacing the people who disagree.
+ *
+ * It works, and it is the only thing that works quickly. What it costs
+ * is every officer who knew what they were doing — and the officers who
+ * remain have just watched what this government does to people who held
+ * the previous view in good faith, which is a lesson they will apply to
+ * the next thing they are asked about.
+ */
+function handleForceDoctrine(state: GameState): IntentResult {
+  if (!state.doctrine.ordered) {
+    return reject(state, 'Nothing has been ordered for the army to be refusing.');
+  }
+  if (state.politicalCapital < FORCE_DOCTRINE_PC) {
+    return reject(state, `Replacing the officer corps costs ${FORCE_DOCTRINE_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, FORCE_DOCTRINE_PC);
+  const result = forceDoctrine(next.doctrine, next.orbat);
+  next.doctrine = result.doctrine;
+  next.orbat = result.orbat;
+  next.approval = clampApproval(next.approval - DOCTRINE_FORCE_APPROVAL);
+
+  log(entries, {
+    kind: 'note',
+    label: 'The officer corps has been replaced',
+    delta: -result.competenceLost,
+    cause:
+      `The army now does ${findWarDoctrine(next.doctrine.current).label.toLowerCase()}, from ` +
+      `this week, which is the only way it was ever going to happen quickly. It has lost ` +
+      `${result.competenceLost.toFixed(0)} points of competence doing it, and every officer ` +
+      `still in post has watched what happens to people who held the previous view in good ` +
+      `faith.`,
+    unit: 'idx',
+  });
+  return ok(next);
+}
+
+/**
+ * Buy something for 2041.
+ *
+ * The question on this desk is never what the country needs. It is what
+ * the country will need in a decade, and how wrong the government is
+ * willing to be — because the programme records the doctrine it was
+ * specified against, and if the army has moved on by the time it lands
+ * it will land anyway, on time, worth a fraction of what was promised.
+ */
+function handleStartResearch(state: GameState, field: ResearchField): IntentResult {
+  const template = findResearchField(field);
+  if (state.politicalCapital < RESEARCH_PC) {
+    return reject(state, `Starting a development programme costs ${RESEARCH_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, RESEARCH_PC);
+  const started = startResearch(next.doctrine, field, absoluteWeek(next));
+  next.doctrine = started.doctrine;
+
+  log(entries, {
+    kind: 'note',
+    label: `${template.label} — programme started`,
+    delta: -template.annualCost * next.moneyScale,
+    cause:
+      `${template.blurb} \u20a1${(template.annualCost * next.moneyScale).toFixed(1)}bn a year for ` +
+      `${template.leadYears} years, specified against ` +
+      `${findWarDoctrine(next.doctrine.ordered ?? next.doctrine.current).label.toLowerCase()} — ` +
+      `which is what the army believes today and may not be what it believes when this lands.`,
+    unit: '\u20a1bn',
+  });
+  return ok(next);
+}
+
+/** Cancel one. The years already spent do not come back either. */
+function handleCancelResearch(state: GameState, id: string): IntentResult {
+  const programme = state.doctrine.programmes.find((p) => p.id === id && !p.delivered);
+  if (!programme) return reject(state, 'No such programme.');
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.doctrine = cancelResearch(next.doctrine, id);
+
+  log(entries, {
+    kind: 'note',
+    label: `${findResearchField(programme.field).label} — cancelled`,
+    delta: 0,
+    cause:
+      `${Math.round((absoluteWeek(next) - programme.startedTurn) / TURNS_PER_YEAR)} years into ` +
+      `it. The saving starts this week and the years do not come back, which is what makes ` +
+      `cancelling one the easiest decision in any budget and the hardest to reverse.`,
+    unit: '',
+  });
+  return ok(next);
+}
+
 function handleWarFooting(state: GameState, footing: WarFooting): IntentResult {
   const change = footingChange(state.warEconomy, footing, absoluteWeek(state));
   if (!change.allowed) return reject(state, change.reason);

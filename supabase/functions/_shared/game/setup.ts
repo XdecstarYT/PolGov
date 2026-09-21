@@ -40,6 +40,7 @@ import { ARMY_SHARE, buildManpower, underArms } from './systems/manpower.ts';
 import { buildOrbat } from './systems/orbat.ts';
 import { buildNavy } from './systems/naval.ts';
 import { buildLogistics } from './systems/logistics.ts';
+import { buildDoctrine } from './systems/doctrine.ts';
 import { buildWarEconomy } from './systems/warEconomy.ts';
 import { buildAirForce } from './systems/air.ts';
 import { buildLiving } from './systems/living.ts';
@@ -488,6 +489,11 @@ export function createGame(options: NewGameOptions): GameState {
       new Set<string>(),
       openingCulture.politicalCulture,
     ),
+
+    /* Whatever the army already believes, believed completely, decided
+       by nobody in this run — which is what makes changing it cost what
+       it costs. */
+    doctrine: buildDoctrine(),
 
     /* Depots at the levels somebody else left them at, with production
        exactly matching consumption, so nothing moves until something is

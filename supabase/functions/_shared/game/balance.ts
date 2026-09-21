@@ -2849,3 +2849,49 @@ export const PRINTING_INFLATION = 0.0042;
 
 /** And approval per week of an emergency war tax, which is visible. */
 export const WAR_TAX_APPROVAL = 0.05;
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — Doctrine and research
+ * ------------------------------------------------------------------ */
+
+/**
+ * Years of officer turnover for a doctrine to be fully taken up.
+ *
+ * Doctrine is a belief system rather than a setting, and this is the
+ * speed at which the people who hold the old belief are replaced by
+ * people who do not. It is not a delay that money shortens; it is a
+ * property of how armies promote.
+ */
+export const ADOPTION_YEARS = 7;
+
+/**
+ * How much faster a doctrine is adopted when the last war vindicated it.
+ *
+ * Evidence is persuasive and an officer corps is not being unreasonable
+ * in wanting some. A doctrine with a victory behind it goes in about
+ * twice as fast as one with an argument behind it.
+ */
+export const VINDICATED_SPEED = 2.1;
+
+/** And how much slower when the last war appeared to refute it. */
+export const REFUTED_SPEED = 0.45;
+
+/**
+ * How much of an army's strength survives sacking the officer corps to
+ * force a doctrine through.
+ *
+ * It works. It is the only thing that works quickly. What it costs is
+ * every officer who knew what they were doing, and the number is here
+ * rather than in the narrative because a government should be able to
+ * see it before it does it.
+ */
+export const PURGE_COMPETENCE_COST = 0.62;
+
+/** Approval cost of forcing a doctrine on an army that disagrees. */
+export const DOCTRINE_FORCE_APPROVAL = 6;
+
+/** What replacing the officer corps to force a doctrine through costs. */
+export const FORCE_DOCTRINE_PC = 28;
+
+/** And starting a programme that a successor will collect. */
+export const RESEARCH_PC = 7;

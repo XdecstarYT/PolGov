@@ -64,6 +64,8 @@ export * from './systems/orbat.ts';
 export * from './content/orbat.ts';
 export * from './systems/theatre.ts';
 export * from './content/theatre.ts';
+export * from './systems/doctrine.ts';
+export * from './content/doctrine.ts';
 export * from './systems/logistics.ts';
 export * from './systems/warEconomy.ts';
 export * from './content/logistics.ts';

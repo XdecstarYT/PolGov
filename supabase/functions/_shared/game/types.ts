@@ -1685,6 +1685,16 @@ export interface GameState {
   orbat: Orbat;
 
   /**
+   * What the army believes about how wars are won, and what it is
+   * buying for a decade nobody can see.
+   *
+   * Both run on clocks longer than a term, which is why they are the
+   * two military decisions a government makes that it will never see the
+   * result of.
+   */
+  doctrine: Doctrine;
+
+  /**
    * The depots, and the arithmetic nobody does.
    *
    * Weeks of ammunition, weeks of fuel, and how many people are behind
@@ -2697,4 +2707,67 @@ export interface WarEconomy {
    */
   civilianForegone: number;
   history: WarEconomyPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — Doctrine and research
+ * ------------------------------------------------------------------ */
+
+/** Something started that will be collected by somebody else. */
+export interface ResearchProgramme {
+  id: string;
+  field: import('./content/doctrine.ts').ResearchField;
+  startedTurn: number;
+  dueTurn: number;
+  /**
+   * The doctrine it was specified against.
+   *
+   * Recorded at the start, because the thing being bought is an answer
+   * to a question asked today and it will be delivered into a decade
+   * that may be asking a different one.
+   */
+  specifiedFor: import('./content/doctrine.ts').WarDoctrine;
+  spent: number;
+  delivered: boolean;
+  /** What it was worth on arrival, after the decade had its say. */
+  realised: number | null;
+}
+
+export interface DoctrinePoint {
+  turn: number;
+  adoption: number;
+  effectiveness: number;
+}
+
+export interface Doctrine {
+  /** What the army actually does. */
+  current: import('./content/doctrine.ts').WarDoctrine;
+  /**
+   * What the government has ordered, if that is something else.
+   *
+   * A government can order a change and the army will not make one,
+   * because the people who would have to make it are the people who
+   * believe the old one and were promoted for believing it.
+   */
+  ordered: import('./content/doctrine.ts').WarDoctrine | null;
+  orderedTurn: number;
+  /**
+   * How far the officer corps has actually taken it up, 0–1.
+   *
+   * Moves at the speed of officer turnover, which is years. Halfway
+   * through, the army is worse at both than it was at either.
+   */
+  adoption: number;
+  /**
+   * The doctrine the last war appeared to vindicate.
+   *
+   * The one with evidence behind it, which is why every army prepares
+   * for the last war and why doing so is rational rather than stupid.
+   */
+  lastWarLesson: import('./content/doctrine.ts').WarDoctrine | null;
+  /** Research under way, and research that arrived. */
+  programmes: ResearchProgramme[];
+  /** Cumulative capability delivered, as an index. */
+  capability: number;
+  history: DoctrinePoint[];
 }
