@@ -63,6 +63,8 @@ export const ALLOWED_INTENT_TYPES: ReadonlySet<Intent['type']> = new Set([
   'consolidate_ownership',
   'break_up_ownership',
   'launch_media_literacy',
+  'set_comms_strategy',
+  'release_information',
   'emergency_budget',
   'set_funding',
   'diplomatic_act',

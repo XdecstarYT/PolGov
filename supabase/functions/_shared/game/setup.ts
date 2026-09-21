@@ -47,6 +47,7 @@ import { buildJustice } from './systems/justice.ts';
 import { buildIntegrity } from './systems/integrity.ts';
 import { buildStateCapacity } from './systems/stateCapacity.ts';
 import { buildPress } from './systems/press.ts';
+import { buildCommunications } from './systems/communications.ts';
 import { buildWarEconomy } from './systems/warEconomy.ts';
 import { buildAirForce } from './systems/air.ts';
 import { buildLiving } from './systems/living.ts';
@@ -516,6 +517,9 @@ export function createGame(options: NewGameOptions): GameState {
 
     /* The press, plural and free at whatever an ordinary country's is. */
     press: buildPress(),
+
+    /* Nothing sitting unannounced yet, and a line the cabinet mostly holds. */
+    communications: buildCommunications(),
 
     /* Nothing a history would record yet. Everything the country is
        now, it was when this government arrived. */

@@ -1745,6 +1745,13 @@ export interface GameState {
   press: Press;
 
   /**
+   * What the government says on purpose, before anyone else says it
+   * for them. A leak is information the government doesn't control
+   * the timing of, and timing is most of what this is.
+   */
+  communications: Communications;
+
+  /**
    * What the country remembers, which outlives every government in it.
    *
    * The point of modelling a war in a political game is what the country
@@ -3235,4 +3242,30 @@ export interface Press {
   /** A decaying stock from media-literacy investment, cutting disinformation while it lasts. */
   literacyStock: number;
   history: PressPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 6D/6E — Information releases and political communication
+ * ------------------------------------------------------------------ */
+
+export interface CommsPoint {
+  turn: number;
+  discipline: number;
+  pendingDisclosures: number;
+  leaked: boolean;
+}
+
+export interface Communications {
+  strategy: import('./content/communications.ts').CommsStrategy;
+  /** How on-message the government is, 0–100. */
+  discipline: number;
+  /**
+   * Routine embarrassing information piling up unannounced — the
+   * ordinary FOI-eligible correspondence and minor cockups every
+   * government generates. Released on purpose, or found.
+   */
+  pendingDisclosures: number;
+  /** Leaks this run. Each one makes the press hungrier for the next. */
+  leaksThisRun: number;
+  history: CommsPoint[];
 }

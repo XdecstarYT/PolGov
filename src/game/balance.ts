@@ -3242,3 +3242,33 @@ export const BREAK_UP_OWNERSHIP_EFFECT = 0.05;
 
 export const LAUNCH_MEDIA_LITERACY_PC = 5;
 export const LAUNCH_MEDIA_LITERACY_EFFECT = 18;
+
+/* ------------------------------------------------------------------ *
+ * Engine 6D/6E — Information releases and political communication
+ * ------------------------------------------------------------------ */
+
+export const DISCIPLINE_START = 45;
+export const DISCIPLINE_RATE = 0.04;
+/** How much a plotting minister (see cabinet.ts) costs discipline, per week, per plotter. */
+export const PLOTTER_DISCIPLINE_DRAG = 1.4;
+
+/** Routine embarrassment accumulates toward this level if never released. */
+export const PENDING_DISCLOSURES_CEILING = 8;
+export const PENDING_DISCLOSURES_RATE = 0.06;
+
+/** Base weekly chance of a leak at ordinary risk. Scaled by the risk multiplier computed each week. */
+export const LEAK_BASE_CHANCE = 0.01;
+/** How much each leak this run makes the press hungrier for the next one. */
+export const LEAK_MOMENTUM = 0.35;
+
+export const RELEASE_INFORMATION_PC = 4;
+/** Approval cost per unit of pending disclosure released on purpose. */
+export const RELEASE_APPROVAL_COST = 0.6;
+/** Approval cost per unit of pending disclosure a leak reveals instead — larger, on purpose. */
+export const LEAK_APPROVAL_COST = 1.6;
+export const LEAK_DISCIPLINE_HIT = 12;
+
+export const SET_COMMS_STRATEGY_PC = 4;
+
+/** How much discipline changes the effect of a public address, at the low and high ends. */
+export const DISCIPLINE_ADDRESS_FLOOR = 0.6;

@@ -217,6 +217,7 @@ import {
 import {
   appoint as appointMinister,
   ministerFor,
+  plotting,
   removalCost,
   reshuffle as fullReshuffle,
   setMachinePosture,
@@ -272,6 +273,13 @@ import {
 } from './systems/press.ts';
 import { PRESS_POSTURES, type OwnerType, type PressPosture } from './content/press.ts';
 import {
+  addressEffectMultiplier,
+  releaseInformation,
+  setCommsStrategy,
+  stepCommunications,
+} from './systems/communications.ts';
+import { COMMS_STRATEGIES, type CommsStrategy } from './content/communications.ts';
+import {
   SET_TRANSPARENCY_PC,
   SET_ANTICORRUPTION_PC,
   LAUNCH_AUDIT_PC,
@@ -287,6 +295,7 @@ import {
   BREAK_UP_OWNERSHIP_PC,
   LAUNCH_MEDIA_LITERACY_PC,
 } from './balance.ts';
+import { RELEASE_INFORMATION_PC, SET_COMMS_STRATEGY_PC } from './balance.ts';
 import {
   findEnforcementPosture,
   findSentencing,
@@ -678,6 +687,8 @@ export type Intent =
   | { type: 'consolidate_ownership'; target: Exclude<OwnerType, 'independent'> }
   | { type: 'break_up_ownership' }
   | { type: 'launch_media_literacy' }
+  | { type: 'set_comms_strategy'; strategy: CommsStrategy }
+  | { type: 'release_information' }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
   | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
@@ -3764,6 +3775,36 @@ export function resolveTurn(state: GameState): GameState {
     next.press = pressTick.press;
   }
 
+  /* What the government says on purpose, and what gets found instead. */
+  {
+    const rng = new Rng(next.rngState);
+    const commsTick = stepCommunications(
+      next.communications,
+      {
+        plotters: plotting(next.cabinet).length,
+        civilServiceMorale: next.civilService.morale,
+        pressFreedom: next.press.freedomIndex,
+        turn: absoluteWeek(next),
+      },
+      rng,
+    );
+    next.rngState = rng.state;
+    next.communications = commsTick.communications;
+
+    if (commsTick.leaked) {
+      applyEffects(next, { approval: -commsTick.leakApprovalCost }, 'Leak', entries);
+      log(entries, {
+        kind: 'note',
+        label: 'A leak',
+        delta: -commsTick.leakApprovalCost,
+        cause:
+          'Not announced. Found — which costs more than the same fact would have cost said out loud, ' +
+          `on a week nobody in this government chose. ${next.communications.leaksThisRun} this run.`,
+        unit: 'idx',
+      });
+    }
+  }
+
   /*
    * What the country thinks they have, and whether it can stop.
    *
@@ -4724,6 +4765,10 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleBreakUpOwnership(state);
     case 'launch_media_literacy':
       return handleLaunchMediaLiteracy(state);
+    case 'set_comms_strategy':
+      return handleSetCommsStrategy(state, intent.strategy);
+    case 'release_information':
+      return handleReleaseInformation(state);
     case 'emergency_budget':
       return handleEmergencyBudget(state);
     case 'set_funding':
@@ -5141,7 +5186,9 @@ function handlePublicAddress(state: GameState): IntentResult {
   spendPc(next, PC_COSTS.publicAddress);
 
   const effect =
-    PUBLIC_ADDRESS_APPROVAL * Math.pow(PUBLIC_ADDRESS_DIMINISH, next.addressesThisTerm);
+    PUBLIC_ADDRESS_APPROVAL *
+    Math.pow(PUBLIC_ADDRESS_DIMINISH, next.addressesThisTerm) *
+    addressEffectMultiplier(next.communications);
   next.addressesThisTerm += 1;
 
   log(entries, {
@@ -5715,6 +5762,55 @@ function handleLaunchMediaLiteracy(state: GameState): IntentResult {
     label: 'Media-literacy programme',
     delta: -LAUNCH_MEDIA_LITERACY_PC,
     cause: 'A stock that decays. Worth relaunching rather than a single fix.',
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleSetCommsStrategy(state: GameState, strategy: CommsStrategy): IntentResult {
+  if (state.communications.strategy === strategy) {
+    return reject(state, 'That is the strategy already.');
+  }
+  if (state.politicalCapital < SET_COMMS_STRATEGY_PC) {
+    return reject(state, `Changing communications strategy costs ${SET_COMMS_STRATEGY_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SET_COMMS_STRATEGY_PC);
+  next.communications = setCommsStrategy(next.communications, strategy);
+
+  const template = COMMS_STRATEGIES.find((s) => s.key === strategy)!;
+  log(entries, {
+    kind: 'note',
+    label: `Communications strategy: ${template.label}`,
+    delta: -SET_COMMS_STRATEGY_PC,
+    cause: `${template.blurb}`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleReleaseInformation(state: GameState): IntentResult {
+  if (state.communications.pendingDisclosures <= 0.01) {
+    return reject(state, 'There is nothing pending to release.');
+  }
+  if (state.politicalCapital < RELEASE_INFORMATION_PC) {
+    return reject(state, `Releasing this costs ${RELEASE_INFORMATION_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, RELEASE_INFORMATION_PC);
+  const result = releaseInformation(next.communications);
+  next.communications = result.communications;
+
+  applyEffects(next, { approval: -result.approvalCost }, 'Information released on purpose', entries);
+  log(entries, {
+    kind: 'note',
+    label: 'Getting ahead of it',
+    delta: -RELEASE_INFORMATION_PC,
+    cause: 'Announced on a week this government chose, which is worth less to a reporter than a week it did not.',
     unit: 'PC',
   });
   return ok(next);
