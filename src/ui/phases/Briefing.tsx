@@ -55,6 +55,7 @@ import { CabinetPanel } from '../components/CabinetPanel.tsx';
 import { JusticePanel } from '../components/JusticePanel.tsx';
 import { IntegrityPanel } from '../components/IntegrityPanel.tsx';
 import { StateCapacityPanel } from '../components/StateCapacityPanel.tsx';
+import { PressPanel } from '../components/PressPanel.tsx';
 import { ServicesPanel } from '../components/ServicesPanel.tsx';
 import { IndustryPanel } from '../components/IndustryPanel.tsx';
 import { PopulationPanel } from '../components/PopulationPanel.tsx';
@@ -181,6 +182,7 @@ export function Briefing() {
                 <JusticePanel />
                 <IntegrityPanel />
                 <StateCapacityPanel />
+                <PressPanel />
                 <ServicesPanel />
                 <EconomyPanel />
                 <IndustryPanel />

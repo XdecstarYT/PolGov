@@ -3216,3 +3216,29 @@ export const DISASTER_READINESS_START = 55;
 export const DISASTER_READINESS_RATE = 0.015;
 export const INVEST_READINESS_PC = 5;
 export const INVEST_READINESS_EFFECT = 12;
+
+/* ------------------------------------------------------------------ *
+ * Engine 6A/6B/6C — The press, its owners, and the feed
+ * ------------------------------------------------------------------ */
+
+export const PRESS_FREEDOM_START = 68;
+export const PRESS_FREEDOM_RATE = 0.03;
+/** How much a point of concentration pulls the freedom target down. */
+export const CONCENTRATION_FREEDOM_DRAG = 45;
+
+export const DISINFORMATION_RATE = 0.05;
+export const LITERACY_DECAY = 0.04;
+
+export const PRESSURE_OUTLET_PC = 5;
+/** Immediate hit to the freedom index from one pressure campaign. */
+export const PRESSURE_OUTLET_EFFECT = 8;
+export const SET_PRESS_POSTURE_PC = 4;
+
+export const CONSOLIDATE_OWNERSHIP_PC = 3;
+/** How much share moves from independent to the target owner, per use. Small, on purpose. */
+export const CONSOLIDATE_OWNERSHIP_EFFECT = 0.04;
+export const BREAK_UP_OWNERSHIP_PC = 12;
+export const BREAK_UP_OWNERSHIP_EFFECT = 0.05;
+
+export const LAUNCH_MEDIA_LITERACY_PC = 5;
+export const LAUNCH_MEDIA_LITERACY_EFFECT = 18;

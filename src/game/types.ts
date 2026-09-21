@@ -1735,6 +1735,16 @@ export interface GameState {
   stateCapacity: StateCapacity;
 
   /**
+   * Who owns the outlets, how free they are to cover this government,
+   * and how much of what circulates is false.
+   *
+   * Pressuring a single outlet is fast, visible and expensive. Buying a
+   * stake in one is slow, quiet and cheap each time — which is the
+   * whole mechanism, not a flavour label on the numbers.
+   */
+  press: Press;
+
+  /**
    * What the country remembers, which outlives every government in it.
    *
    * The point of modelling a war in a political game is what the country
@@ -3187,4 +3197,42 @@ export interface StateCapacity {
   /** Stockpiled capacity for the next disaster, 0–100. Depletes when drawn on, rebuilds slowly. */
   disasterReadiness: number;
   history: StateCapacityPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 6A/6B/6C — The press, its owners, and the feed
+ * ------------------------------------------------------------------ */
+
+export interface PressPoint {
+  turn: number;
+  freedomIndex: number;
+  concentration: number;
+  disinformation: number;
+}
+
+/** Shares of the country's outlets by who owns them. Sums to 1. */
+export interface Ownership {
+  independent: number;
+  conglomerate: number;
+  state_owned: number;
+  partisan_patron: number;
+}
+
+export interface Press {
+  posture: import('./content/press.ts').PressPosture;
+  /** How free the press actually is to cover the government, 0–100. */
+  freedomIndex: number;
+  ownership: Ownership;
+  /**
+   * The Herfindahl–Hirschman Index of `ownership`, 0.25 (four equal
+   * owners) to 1 (one owner of everything). Only ever moves through a
+   * deliberate consolidation or break-up decision — nothing here drifts
+   * ownership on its own, because someone has to actually buy something.
+   */
+  concentration: number;
+  /** How much of what circulates is false, 0–100. */
+  disinformation: number;
+  /** A decaying stock from media-literacy investment, cutting disinformation while it lasts. */
+  literacyStock: number;
+  history: PressPoint[];
 }

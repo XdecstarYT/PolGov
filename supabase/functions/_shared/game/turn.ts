@@ -263,6 +263,15 @@ import {
 } from './systems/stateCapacity.ts';
 import { EMERGENCY_LEVELS, type EmergencyLevel } from './content/emergency.ts';
 import {
+  breakUpOwnership,
+  consolidateOwnership,
+  launchMediaLiteracy,
+  pressureOutlet,
+  setPressPosture,
+  stepPress,
+} from './systems/press.ts';
+import { PRESS_POSTURES, type OwnerType, type PressPosture } from './content/press.ts';
+import {
   SET_TRANSPARENCY_PC,
   SET_ANTICORRUPTION_PC,
   LAUNCH_AUDIT_PC,
@@ -271,6 +280,13 @@ import {
   REGULATORY_STOCK_START,
 } from './balance.ts';
 import { DECLARE_EMERGENCY_PC, DECLARE_MARTIAL_LAW_PC, INVEST_READINESS_PC } from './balance.ts';
+import {
+  PRESSURE_OUTLET_PC,
+  SET_PRESS_POSTURE_PC,
+  CONSOLIDATE_OWNERSHIP_PC,
+  BREAK_UP_OWNERSHIP_PC,
+  LAUNCH_MEDIA_LITERACY_PC,
+} from './balance.ts';
 import {
   findEnforcementPosture,
   findSentencing,
@@ -657,6 +673,11 @@ export type Intent =
   | { type: 'declare_emergency'; level: EmergencyLevel }
   | { type: 'stand_down_emergency' }
   | { type: 'invest_readiness' }
+  | { type: 'set_press_posture'; posture: PressPosture }
+  | { type: 'pressure_outlet' }
+  | { type: 'consolidate_ownership'; target: Exclude<OwnerType, 'independent'> }
+  | { type: 'break_up_ownership' }
+  | { type: 'launch_media_literacy' }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
   | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
@@ -2261,12 +2282,8 @@ export function resolveTurn(state: GameState): GameState {
       policeQuality: policingQuality(next.justice),
       adminQuality: next.services.find((x) => x.key === 'administration')?.quality ?? 60,
       crimeRate: problemOf(next.problems, 'crime') * 0.45,
-      /* Until Engine 6A models ownership, a single public broadcaster in
-         poor health is the best available proxy for a thin press. */
-      mediaConcentration: clamp01to100(
-        100 - (next.services.find((x) => x.key === 'broadcasting')?.quality ?? 60),
-      ) / 100,
-      disinformation: 0,
+      mediaConcentration: next.press.concentration,
+      disinformation: next.press.disinformation,
       incomeGini: next.society.incomeGini,
       legislativeSuccess:
         next.career.billsPassed + next.career.billsFailed > 0
@@ -3738,6 +3755,15 @@ export function resolveTurn(state: GameState): GameState {
     }
   }
 
+  /* Who owns the feed, and what that is doing to what circulates. */
+  {
+    const pressTick = stepPress(next.press, {
+      polarisation: chamberPolarisation(next.parties),
+      turn: absoluteWeek(next),
+    });
+    next.press = pressTick.press;
+  }
+
   /*
    * What the country thinks they have, and whether it can stop.
    *
@@ -4688,6 +4714,16 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleStandDownEmergency(state);
     case 'invest_readiness':
       return handleInvestReadiness(state);
+    case 'set_press_posture':
+      return handleSetPressPosture(state, intent.posture);
+    case 'pressure_outlet':
+      return handlePressureOutlet(state);
+    case 'consolidate_ownership':
+      return handleConsolidateOwnership(state, intent.target);
+    case 'break_up_ownership':
+      return handleBreakUpOwnership(state);
+    case 'launch_media_literacy':
+      return handleLaunchMediaLiteracy(state);
     case 'emergency_budget':
       return handleEmergencyBudget(state);
     case 'set_funding':
@@ -5571,6 +5607,114 @@ function handleInvestReadiness(state: GameState): IntentResult {
     label: 'Disaster readiness investment',
     delta: -INVEST_READINESS_PC,
     cause: 'Stockpile and standing arrangements, built before they are needed rather than after.',
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleSetPressPosture(state: GameState, posture: PressPosture): IntentResult {
+  if (state.press.posture === posture) return reject(state, 'That is the posture already.');
+  if (state.politicalCapital < SET_PRESS_POSTURE_PC) {
+    return reject(state, `Changing how the press is treated costs ${SET_PRESS_POSTURE_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SET_PRESS_POSTURE_PC);
+  next.press = setPressPosture(next.press, posture);
+
+  const template = PRESS_POSTURES.find((p) => p.key === posture)!;
+  log(entries, {
+    kind: 'note',
+    label: `Press posture: ${template.label}`,
+    delta: -SET_PRESS_POSTURE_PC,
+    cause: `${template.blurb}`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handlePressureOutlet(state: GameState): IntentResult {
+  if (state.politicalCapital < PRESSURE_OUTLET_PC) {
+    return reject(state, `A pressure campaign costs ${PRESSURE_OUTLET_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, PRESSURE_OUTLET_PC);
+  next.press = pressureOutlet(next.press);
+
+  log(entries, {
+    kind: 'note',
+    label: 'A pressure campaign against a critical outlet',
+    delta: -PRESSURE_OUTLET_PC,
+    cause: 'Fast, and everyone can see exactly what happened and why. That is the whole cost of this route.',
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleConsolidateOwnership(
+  state: GameState,
+  target: Exclude<OwnerType, 'independent'>,
+): IntentResult {
+  if (state.politicalCapital < CONSOLIDATE_OWNERSHIP_PC) {
+    return reject(state, `Arranging this costs ${CONSOLIDATE_OWNERSHIP_PC} PC.`);
+  }
+  if (state.press.ownership.independent <= 0.01) {
+    return reject(state, 'There is no more independent ownership left to move.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, CONSOLIDATE_OWNERSHIP_PC);
+  next.press = consolidateOwnership(next.press, target);
+
+  log(entries, {
+    kind: 'note',
+    label: 'A quiet ownership transfer',
+    delta: -CONSOLIDATE_OWNERSHIP_PC,
+    cause: 'Barely moves anything today. Nobody writes the story about a single week of this.',
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleBreakUpOwnership(state: GameState): IntentResult {
+  if (state.politicalCapital < BREAK_UP_OWNERSHIP_PC) {
+    return reject(state, `Antitrust action against the press costs ${BREAK_UP_OWNERSHIP_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, BREAK_UP_OWNERSHIP_PC);
+  next.press = breakUpOwnership(next.press);
+
+  log(entries, {
+    kind: 'note',
+    label: 'Ownership broken up',
+    delta: -BREAK_UP_OWNERSHIP_PC,
+    cause: 'Expensive, and worth less per point than the consolidation it is reversing cost to build.',
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleLaunchMediaLiteracy(state: GameState): IntentResult {
+  if (state.politicalCapital < LAUNCH_MEDIA_LITERACY_PC) {
+    return reject(state, `A media-literacy programme costs ${LAUNCH_MEDIA_LITERACY_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, LAUNCH_MEDIA_LITERACY_PC);
+  next.press = launchMediaLiteracy(next.press);
+
+  log(entries, {
+    kind: 'note',
+    label: 'Media-literacy programme',
+    delta: -LAUNCH_MEDIA_LITERACY_PC,
+    cause: 'A stock that decays. Worth relaunching rather than a single fix.',
     unit: 'PC',
   });
   return ok(next);
