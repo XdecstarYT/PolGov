@@ -1111,6 +1111,8 @@ export interface NationState {
   lastSummitTurn: number | null;
   /** Are they under our sanctions? */
   sanctioned: boolean;
+  /** The turn sanctions began, or null if not sanctioned. What erosion is measured from. */
+  sanctionedSince: number | null;
   /**
    * What they remember, 0–100, independent of the relations number
    * above. Relations can recover fully while this stays live for

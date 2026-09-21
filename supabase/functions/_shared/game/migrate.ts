@@ -150,6 +150,7 @@ export function migrateState(raw: unknown): GameState | null {
         grievance: nation.grievance ?? 0,
         negotiationGoodwill: nation.negotiationGoodwill ?? 0,
         sweetenedThisRun: nation.sweetenedThisRun ?? 0,
+        sanctionedSince: nation.sanctionedSince ?? (nation.sanctioned ? (next.turnNumber ?? 1) : null),
       };
     }),
   };

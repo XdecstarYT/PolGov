@@ -39,7 +39,6 @@ import {
   NEIGHBOUR_GRAVITY,
   RETALIATION_DELAY,
   RETALIATION_RATIO,
-  SANCTION_TRADE_MULTIPLIER,
   TARIFF_ELASTICITY,
   TRADE_ADJUST_RATE,
   TRADE_RELATIONS_WEIGHT,
@@ -52,6 +51,7 @@ import {
   type IndustryKey,
 } from '../content/industries.ts';
 import { findNation, type NationKey } from '../content/nations.ts';
+import { sanctionMultiplier } from './sanctions.ts';
 import type { Economy, Trade, TradeFlow, World } from '../types.ts';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -313,8 +313,13 @@ export function naturalFlow(
      extremes, which is a great deal of money and nothing like a doubling. */
   const warmth = 1 + ((nation?.relations ?? 0) / 100) * TRADE_RELATIONS_WEIGHT;
   const treaty = inputs.agreements.has(flow.nation) ? TRADE_TREATY_BONUS : 1;
-  /* Sanctions do not stop trade. They make it expensive and furtive. */
-  const sanctioned = nation?.sanctioned ? SANCTION_TRADE_MULTIPLIER : 1;
+  /* Sanctions do not stop trade. They make it expensive and furtive, and
+     the longer they run the more of it has found a way round — a race
+     between the damage and the workaround, never fully won by either. */
+  const sanctioned =
+    nation?.sanctioned && nation.sanctionedSince !== null
+      ? sanctionMultiplier(inputs.turn - nation.sanctionedSince)
+      : 1;
   /* A country that does not recognise another does not clear its cargo. */
   const recognised = nation?.recognised === false ? 0.05 : 1;
 

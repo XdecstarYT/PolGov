@@ -1632,6 +1632,21 @@ export const TRADE_RELATIONS_WEIGHT = 0.25;
 export const TRADE_TREATY_BONUS = 1.22;
 /** What sanctions leave of a trading relationship. */
 export const SANCTION_TRADE_MULTIPLIER = 0.2;
+
+/* ------------------------------------------------------------------ *
+ * Engine 8I/8J — Sanctions and peace/conflict diplomacy
+ * ------------------------------------------------------------------ */
+
+/**
+ * Sanctions are most effective in the first year and erode after —
+ * the target finds alternate markets, third-party routes and willing
+ * intermediaries, and the trade the multiplier above choked off
+ * partly finds its way back. `SANCTION_EROSION_FLOOR` is where that
+ * erosion stops: some damage is permanent, because rerouting is never
+ * free, but the multiplier never fully returns to what it started at.
+ */
+export const SANCTION_EROSION_RATE = 0.006;
+export const SANCTION_EROSION_FLOOR = 0.55;
 /** How much a point of tariff suppresses the flow it falls on. */
 export const TARIFF_ELASTICITY = 0.9;
 /** Supply chains are physical objects with contracts attached. */

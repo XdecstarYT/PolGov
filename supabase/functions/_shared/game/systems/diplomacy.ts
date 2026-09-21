@@ -114,6 +114,7 @@ export function buildWorld(player: CountryKey = DEFAULT_PLAYER_COUNTRY): World {
     recognised: true,
     lastSummitTurn: null,
     sanctioned: false,
+    sanctionedSince: null,
     tradeDependence: dependenceOn(f, 'theirs'),
     ourDependence: dependenceOn(f, 'ours'),
     /* Live from here on. Countries rise, fall, and change what they are. */

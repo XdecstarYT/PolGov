@@ -27,6 +27,7 @@ import {
   byWeight,
   canSummit,
   describeGrievance,
+  describeSanctionErosion,
   exposures,
   findNation,
   obligationOf,
@@ -164,6 +165,11 @@ export function WorldPanel() {
                   {nation.grievance > 5 && (
                     <p className="mt-1 text-[0.7rem] text-warn">
                       Grievance {nation.grievance.toFixed(0)} — {describeGrievance(nation.grievance)}
+                    </p>
+                  )}
+                  {nation.sanctioned && nation.sanctionedSince !== null && (
+                    <p className="mt-1 text-[0.7rem] text-warn">
+                      {describeSanctionErosion(game.turnNumber - nation.sanctionedSince)}
                     </p>
                   )}
 

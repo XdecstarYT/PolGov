@@ -6197,10 +6197,15 @@ function handleDiplomaticAct(
       updated = { ...updated, recognised: true };
       break;
     case 'sanction':
-      updated = { ...updated, sanctioned: true, grievance: addGrievance(updated.grievance, 'sanctioned') };
+      updated = {
+        ...updated,
+        sanctioned: true,
+        sanctionedSince: next.turnNumber,
+        grievance: addGrievance(updated.grievance, 'sanctioned'),
+      };
       break;
     case 'lift_sanction':
-      updated = { ...updated, sanctioned: false };
+      updated = { ...updated, sanctioned: false, sanctionedSince: null };
       break;
     default:
       break;
