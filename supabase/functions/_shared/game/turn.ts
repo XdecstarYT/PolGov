@@ -181,8 +181,18 @@ import {
   stepManpower,
 } from './systems/manpower.ts';
 import {
+  buildTheatre,
+  garrison,
+  setPosture,
+  setReconnaissance,
+  stepTheatre,
+} from './systems/theatre.ts';
+import { ATTACK_SUPPLY_FLOOR } from './balance.ts';
+import { SECTOR_POSTURE_LABELS, type SectorPosture } from './content/theatre.ts';
+import {
   commanderOf,
   dismissCommander,
+  forceValue,
   orderLag,
   replacementDemand,
   serving,
@@ -451,6 +461,9 @@ export type Intent =
   | { type: 'set_mobilisation'; model: ManpowerModel }
   | { type: 'dismiss_commander'; commander: string }
   | { type: 'commit_formations'; formations: string[]; committed: boolean }
+  | { type: 'set_sector_posture'; theatre: string; sector: string; posture: SectorPosture }
+  | { type: 'garrison_sector'; theatre: string; sector: string; formations: string[] }
+  | { type: 'set_reconnaissance'; theatre: string; effort: number }
   | { type: 'withdraw_bill'; billId: string }
   | { type: 'public_address' }
   | { type: 'coalition_concession'; partyId: string }
@@ -2868,6 +2881,123 @@ export function resolveTurn(state: GameState): GameState {
     }
   }
 
+  /*
+   * The ground.
+   *
+   * A map appears when a crisis becomes a war and stays until it stops
+   * being one. It is stepped after the fighting is scored, because what
+   * the sectors do this week is what the casualties were made of — and
+   * before the report is written, because the report is written from the
+   * BELIEF rather than from the ground, and the difference between those
+   * two is the whole point of having a map at all.
+   */
+  {
+    const fightingNow = next.crises.filter((c) => c.stage === 'war');
+
+    /* A war on land gets a theatre. It gets exactly one. */
+    for (const crisis of fightingNow) {
+      if (next.theatres.some((t) => t.warId === crisis.id)) continue;
+      const nation = findNation(crisis.nation);
+      next.theatres = [
+        ...next.theatres,
+        buildTheatre(crisis.id, `the ${nation.name} front`, false, rng),
+      ];
+      log(entries, {
+        kind: 'event',
+        label: `A front has opened against ${nation.name}`,
+        delta: 0,
+        cause:
+          'There is now ground being fought over, and a map of it. The map is drawn from ' +
+          'what has been reported rather than from what is there, and nothing on it marks ' +
+          'which parts are which.',
+        unit: '',
+      });
+    }
+
+    /* And loses it when the shooting stops. The devastation does not go
+       with it; that belongs to the country it happened in. */
+    next.theatres = next.theatres.filter((t) => fightingNow.some((c) => c.id === t.warId));
+
+    const army = next.military.arms.find((a) => a.key === 'army');
+    next.theatres = next.theatres.map((theatre) => {
+      const crisis = fightingNow.find((c) => c.id === theatre.warId)!;
+      const tick = stepTheatre(theatre, {
+        orbat: next.orbat,
+        /*
+         * What is in front of us, scaled to what they are. Until Engine
+         * 7J models their order of battle, their combat power against
+         * ours is the honest available read.
+         */
+        enemyStrength:
+          forceValue(next.orbat, 'defence') *
+          Math.max(0.3, Math.min(2.2, 0.4 + (crisis.theirResolve / 100) * 1.2)),
+        intensity: crisis.escalation,
+        /* Engine 7F will run the logistics. Until then, readiness. */
+        logistics: Math.max(0.3, Math.min(1.2, (army?.readiness ?? 55) / 70)),
+        theyAttack: rng.chance(0.3),
+        turn: absoluteWeek(next),
+        rng,
+      });
+
+      for (const id of tick.culminating) {
+        const sector = tick.theatre.sectors.find((x) => x.id === id);
+        if (!sector) continue;
+        log(entries, {
+          kind: 'note',
+          label: `The attack on ${sector.name} has outrun its supply`,
+          delta: -sector.supply,
+          cause:
+            'Every mile forward is a mile further from the railheads and a mile nearer ' +
+            'theirs, so it has been getting weaker at exactly the rate they have been ' +
+            'getting stronger. It will be reported as progress for a while yet, because ' +
+            'from the despatches it still looks like one.',
+          unit: 'idx',
+        });
+      }
+      for (const id of tick.encircled) {
+        const sector = tick.theatre.sectors.find((x) => x.id === id);
+        if (!sector) continue;
+        log(entries, {
+          kind: 'note',
+          label: `${sector.name} is cut off`,
+          delta: -1,
+          cause:
+            'That is not a sector under pressure. It is a sector with a deadline, and the ' +
+            'deadline is measured in weeks.',
+          unit: '',
+        });
+      }
+      if (tick.stagnant) {
+        log(entries, {
+          kind: 'note',
+          label: 'The line has stopped going anywhere',
+          delta: tick.theatre.stagnantWeeks,
+          cause:
+            `${tick.theatre.stagnantWeeks} weeks without the front moving. It is still ` +
+            'costing what it cost in the first week, which is the part that decides this ' +
+            'rather than anything either army does.',
+          unit: 'weeks',
+        });
+      }
+      if (tick.civilianCasualties > 0.5) {
+        log(entries, {
+          kind: 'note',
+          label: 'Civilian casualties',
+          delta: -tick.civilianCasualties,
+          cause:
+            'A sector is a place people live. Nobody asked them, and they are counted ' +
+            'separately because they are.',
+          unit: 'k',
+          informational: true,
+        });
+      }
+
+      /* What the ground cost, charged to the crisis that produced it. */
+      crisis.casualties += tick.casualties + tick.enemyCasualties;
+      return tick.theatre;
+    });
+  }
+
   const economyBefore = next.economy;
   next.economy = stepEconomy(next.economy, {
     fiscalImpulse: fiscalImpulse(fiscal),
@@ -3429,6 +3559,12 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleDismissCommander(state, intent.commander);
     case 'commit_formations':
       return handleCommitFormations(state, intent.formations, intent.committed);
+    case 'set_sector_posture':
+      return handleSectorPosture(state, intent.theatre, intent.sector, intent.posture);
+    case 'garrison_sector':
+      return handleGarrison(state, intent.theatre, intent.sector, intent.formations);
+    case 'set_reconnaissance':
+      return handleReconnaissance(state, intent.theatre, intent.effort);
     case 'withdraw_bill':
       return handleWithdrawBill(state, intent.billId);
     case 'public_address':
@@ -4882,6 +5018,116 @@ function handleFileTradeComplaint(state: GameState, key: NationKey): IntentResul
  * successor a conscripting country, and that is the part nobody argues
  * about on the day.
  */
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — the ground
+ * ------------------------------------------------------------------ */
+
+/**
+ * Tell a sector what to do.
+ *
+ * The order is free and arrives late, and what it costs is decided by
+ * ground the government did not choose. Ordering an attack past the
+ * culminating point is not a bolder decision than ordering one short of
+ * it; it is the same decision made without the supply figure, and the
+ * despatches will report progress for several weeks either way.
+ */
+function handleSectorPosture(
+  state: GameState,
+  theatreId: string,
+  sectorId: string,
+  posture: SectorPosture,
+): IntentResult {
+  const theatre = state.theatres.find((t) => t.warId === theatreId);
+  if (!theatre) return reject(state, 'There is no front there.');
+  const sector = theatre.sectors.find((s) => s.id === sectorId);
+  if (!sector) return reject(state, 'No such sector.');
+  if (posture === 'attacking' && sector.garrison.length === 0) {
+    return reject(
+      state,
+      'There is nobody there to attack with. An order to advance issued to an empty sector is still an order, and it is still reported as one.',
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.theatres = next.theatres.map((t) =>
+    t.warId === theatreId ? setPosture(t, sectorId, posture) : t,
+  );
+
+  /*
+   * The one thing worth saying out loud, because the supply figure is on
+   * the same screen and nobody reads it: this attack cannot be fed.
+   */
+  if (posture === 'attacking' && sector.supply < ATTACK_SUPPLY_FLOOR) {
+    log(entries, {
+      kind: 'note',
+      label: `${sector.name}: the attack cannot be supplied`,
+      delta: sector.supply,
+      cause:
+        `Supply there is ${sector.supply.toFixed(0)} against a floor of ${ATTACK_SUPPLY_FLOOR}. ` +
+        'The order stands and the attack will not go. It will cost what an attack costs.',
+      unit: 'idx',
+    });
+  } else {
+    log(entries, {
+      kind: 'note',
+      label: `${sector.name}: ${SECTOR_POSTURE_LABELS[posture].toLowerCase()}`,
+      delta: 0,
+      cause: `The order will reach them in ${orderLag(next.orbat, 0.5).toFixed(1)} weeks.`,
+      unit: '',
+      informational: true,
+    });
+  }
+  return ok(next);
+}
+
+/** Move weight onto a piece of ground, and off whatever it was on. */
+function handleGarrison(
+  state: GameState,
+  theatreId: string,
+  sectorId: string,
+  formations: string[],
+): IntentResult {
+  const theatre = state.theatres.find((t) => t.warId === theatreId);
+  if (!theatre) return reject(state, 'There is no front there.');
+  if (!theatre.sectors.some((s) => s.id === sectorId)) return reject(state, 'No such sector.');
+  const known = formations.filter((id) => state.orbat.formations.some((f) => f.id === id));
+
+  const next = clone(state);
+  next.theatres = next.theatres.map((t) =>
+    t.warId === theatreId ? garrison(t, sectorId, known) : t,
+  );
+  /* Anything sent to the ground is in the fight, whatever the paperwork
+     at home says about it. */
+  next.orbat = setCommitment(next.orbat, known, true);
+  return ok(next);
+}
+
+/**
+ * Decide how much of the army spends its week finding out what is there.
+ *
+ * Reconnaissance is not free and it is not glamorous, and what it buys
+ * is the difference between the map and the ground. A government that
+ * spends nothing on it is not fighting with less information; it is
+ * fighting from a map that stopped being updated, briefed in the present
+ * tense, with nothing marking which parts those are.
+ */
+function handleReconnaissance(
+  state: GameState,
+  theatreId: string,
+  effort: number,
+): IntentResult {
+  if (!state.theatres.some((t) => t.warId === theatreId)) {
+    return reject(state, 'There is no front there.');
+  }
+  const next = clone(state);
+  next.theatres = next.theatres.map((t) =>
+    t.warId === theatreId ? setReconnaissance(t, effort) : t,
+  );
+  return ok(next);
+}
+
 function handleMobilisation(state: GameState, model: ManpowerModel): IntentResult {
   const template = findManpowerModel(model);
   const change = mobilisationChange(state.manpower, model, absoluteWeek(state));

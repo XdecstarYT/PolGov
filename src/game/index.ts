@@ -62,6 +62,8 @@ export * from './systems/manpower.ts';
 export * from './content/manpower.ts';
 export * from './systems/orbat.ts';
 export * from './content/orbat.ts';
+export * from './systems/theatre.ts';
+export * from './content/theatre.ts';
 export * from './content/problems.ts';
 export * from './content/trust.ts';
 export * from './content/culture.ts';

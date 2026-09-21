@@ -2525,3 +2525,88 @@ export const UNRELIABLE_ALARM = 0.25;
  * how much army there is, not by how much detail anybody wants.
  */
 export const FORMATION_TARGET_COUNT = 34;
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — The theatre
+ * ------------------------------------------------------------------ */
+
+/**
+ * How much supply a sector loses per sector of depth from its base.
+ *
+ * THE most important number in land warfare and the one every game
+ * leaves out. It is the culminating point: an offensive that succeeds
+ * lengthens its own supply line and shortens the enemy's, so the further
+ * it goes the weaker it gets and the stronger they get. Every advance
+ * carries the arithmetic of its own halt, and the halt arrives whether
+ * or not anybody has decided to stop.
+ */
+export const SUPPLY_DECAY_PER_DEPTH = 9;
+
+/** Supply at the base of it all, where the railheads are. */
+export const SUPPLY_AT_BASE = 100;
+
+/**
+ * How fast control actually changes hands, per week, at parity.
+ *
+ * Small on purpose. A front that moves visibly every week is a front
+ * that is collapsing, and most fronts do not collapse — they sit, at
+ * enormous cost, which is the fact that decides most wars and disappoints
+ * every government that starts one.
+ */
+export const CONTROL_PACE = 3.4;
+
+/**
+ * Force ratio at which an attack stops grinding and starts breaking
+ * through.
+ *
+ * Above this the pace multiplies rather than adds, which is why
+ * breakthroughs look sudden: nothing happens for months and then a
+ * hundred miles happen in a fortnight. It is the same arithmetic
+ * throughout.
+ */
+export const BREAKTHROUGH_RATIO = 2.6;
+
+/** How much faster a breakthrough moves than a grind. */
+export const BREAKTHROUGH_PACE = 3.5;
+
+/** Supply below which a formation cannot attack at all, whatever its orders. */
+export const ATTACK_SUPPLY_FLOOR = 42;
+
+/**
+ * What being cut off does per week.
+ *
+ * An encircled formation is not a formation under pressure. It is a
+ * formation with a deadline, and the deadline is measured in weeks.
+ */
+export const ENCIRCLEMENT_LOSS = 9;
+
+/** How fast reconnaissance closes the gap between belief and the ground. */
+export const RECON_RATE = 0.42;
+
+/**
+ * How much better a sector is reported than it is.
+ *
+ * No commander has ever reported their own sector as worse than it is,
+ * and no staff has ever passed one up unimproved. It is small, it is
+ * constant, it is in the same direction every time, and it is why a
+ * government is always slightly more confident than the ground
+ * warrants even when its intelligence is excellent.
+ */
+export const REPORT_OPTIMISM = 5;
+
+/**
+ * What the staff assume about ground nobody has looked at.
+ *
+ * Not a guess at the truth — a placeholder that gets briefed like one.
+ * The map has to say something, so it says this.
+ */
+export const ASSUMED_CONTROL = 50;
+
+/** Civilian casualties per week per point of fighting, per thousand present. */
+export const CIVILIAN_TOLL = 0.00042;
+
+/** How fast a sector is wrecked by being fought over. */
+export const DEVASTATION_RATE = 0.38;
+
+/** Weeks of no movement before a front is called what it is. */
+export const STAGNANT_THRESHOLD = 16;

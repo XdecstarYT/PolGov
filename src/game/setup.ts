@@ -485,6 +485,10 @@ export function createGame(options: NewGameOptions): GameState {
       openingCulture.politicalCulture,
     ),
 
+    /* No ground being fought over. A map appears when something has
+       gone badly wrong, and not before. */
+    theatres: [],
+
     /* No quarrels yet. They arrive, which is the correct shape: the
        decision a government faces is never whether to have a crisis. */
     crises: [],

@@ -1684,6 +1684,16 @@ export interface GameState {
    */
   orbat: Orbat;
 
+  /**
+   * The ground, where there is any.
+   *
+   * One per war being fought on land. Empty almost always, which is the
+   * correct shape: the map is not a screen a government visits, it is a
+   * thing that appears when something has gone badly wrong and does not
+   * go away when the government would like it to.
+   */
+  theatres: Theatre[];
+
   /** Quarrels with other states, and how far up the ladder each one is. */
   crises: Crisis[];
 
@@ -2376,4 +2386,93 @@ export interface Orbat {
    */
   chainDepth: number;
   history: OrbatPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — The theatre
+ * ------------------------------------------------------------------ */
+
+/**
+ * What the government believes about a sector.
+ *
+ * Kept separate from the sector itself, deliberately and permanently. A
+ * government does not see a war; it reads about one, several days late,
+ * from people who were not everywhere and would rather not say so. Every
+ * panel in the game reads THIS, and the engine resolves the other one.
+ */
+export interface SectorBelief {
+  /** Who we think holds it. */
+  control: number;
+  /** What we think is in front of us. */
+  enemyStrength: number;
+  /** How well we think it is being supplied. */
+  supply: number;
+  /** The turn any of this was last confirmed by somebody who was there. */
+  lastSeen: number;
+  /** Whether anybody has ever looked. */
+  everSeen: boolean;
+}
+
+export interface FrontSector {
+  id: string;
+  name: string;
+  terrain: import('./content/theatre.ts').TerrainKey;
+  /**
+   * Who holds it, 0–100, ours at 100.
+   *
+   * Continuous rather than a flag, because ground does not change hands
+   * in an afternoon and the weeks in between are where wars are decided.
+   */
+  control: number;
+  fortification: import('./content/theatre.ts').FortificationLevel;
+  /** Weeks of work put into the next level. Time, not money. */
+  works: number;
+  /**
+   * How well supplied the sector is, 0–100.
+   *
+   * Falls with distance from where the supply comes from, which is the
+   * whole of the culminating point: an offensive that succeeds lengthens
+   * its own supply line and shortens the enemy's, so the further it goes
+   * the weaker it gets and the stronger they get.
+   */
+  supply: number;
+  /** Distance from our own base of supply, in sectors. */
+  depth: number;
+  /** Formation ids fighting here. */
+  garrison: string[];
+  /** What they are up against, as a combat value. */
+  enemyStrength: number;
+  posture: import('./content/theatre.ts').SectorPosture;
+  /** True while it is cut off. The worst thing that can happen to one. */
+  encircled: boolean;
+  /** Civilians, in thousands. A sector is a place people live. */
+  population: number;
+  /** How much of it is rubble. Never recovers inside a run. */
+  devastation: number;
+  belief: SectorBelief;
+}
+
+export interface TheatrePoint {
+  turn: number;
+  /** Average control across the theatre. The front line, as one number. */
+  line: number;
+  /** How far belief was from the truth, averaged. The fog, measured. */
+  fog: number;
+  supply: number;
+}
+
+export interface Theatre {
+  /** The war this map belongs to. */
+  warId: string;
+  name: string;
+  sectors: FrontSector[];
+  /**
+   * Which sector our supply comes from. Everything is measured from it.
+   */
+  baseSector: string;
+  /** Reconnaissance effort, 0–1. What the government is spending to see. */
+  reconnaissance: number;
+  /** Weeks since the front last moved anywhere. */
+  stagnantWeeks: number;
+  history: TheatrePoint[];
 }

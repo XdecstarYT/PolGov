@@ -73,6 +73,7 @@ export function migrateState(raw: unknown): GameState | null {
      country has, drawn against the same seed. */
   if (!next.manpower) next.manpower = fresh.manpower;
   if (!next.orbat) next.orbat = fresh.orbat;
+  if (!next.theatres) next.theatres = [];
   if (typeof next.society.inequality !== 'number' || !(next.society.inequality > 0)) {
     next.society.inequality = 1;
   }
