@@ -309,6 +309,16 @@ export function membersOfOrganisation(key: OrganisationKey): NationKey[] {
   ).map((c) => c.key);
 }
 
+/**
+ * Which memberships are actual common markets rather than merely rooms
+ * with a vote in them — the ones where the real-world institution zeroes
+ * tariffs between members as a matter of what membership is. Trade
+ * diplomacy treats co-membership in one of these exactly like a
+ * bilateral trade treaty; a shared seat at the UN or NATO does not get
+ * the same treatment, because it is not the same kind of membership.
+ */
+export const TRADE_BLOC_ORGANISATIONS: OrganisationKey[] = ['eu', 'asean', 'african_union'];
+
 export const ORGANISATION_TEMPLATES: OrganisationTemplate[] = ORGANISATION_BASE.map(
   (template) => {
     const members = membersOfOrganisation(template.key);

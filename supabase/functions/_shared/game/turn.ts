@@ -437,7 +437,7 @@ import { findTrust } from './content/trust.ts';
 import { findCulturalInstitution } from './content/culture.ts';
 import { findAccess } from './content/access.ts';
 import { findClass } from './content/classes.ts';
-import { duesTotal } from './systems/organisations.ts';
+import { duesTotal, tradeBlocPartners } from './systems/organisations.ts';
 import { readDraft, type RawDraft } from './systems/drafting.ts';
 import { findPersona, remember, stepCast } from './systems/personas.ts';
 import { driftPower, globalEffects, stepWorldSim } from './systems/worldSim.ts';
@@ -877,12 +877,18 @@ export function warCost(
  * country, which is what a trade agreement actually is and why it is worth
  * more than a warm relationship.
  */
-function tradeAgreementsWith(world: GameState['world']): Set<NationKey> {
+function tradeAgreementsWith(
+  world: GameState['world'],
+  organisations: readonly import('./types.ts').OrganisationState[],
+): Set<NationKey> {
   const keys = new Set<NationKey>();
   for (const treaty of world.treaties) {
     if (treaty.kind !== 'trade' && treaty.kind !== 'partnership') continue;
     for (const party of treaty.parties) keys.add(party);
   }
+  /* Membership in an actual common market does what a bilateral treaty
+     does, without one having been signed — that is what the membership is. */
+  for (const nation of tradeBlocPartners(organisations)) keys.add(nation);
   return keys;
 }
 
@@ -2698,7 +2704,7 @@ export function resolveTurn(state: GameState): GameState {
    * protection and it is why this is stepped as a system rather than
    * computed as a modifier.
    */
-  const tradeAgreements = tradeAgreementsWith(next.world);
+  const tradeAgreements = tradeAgreementsWith(next.world, next.world.organisations);
   const tradeTick = stepTrade(next.trade, {
     world: next.world,
     economy: next.economy,

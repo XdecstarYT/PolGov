@@ -28,8 +28,10 @@
 
 import {
   ORGANISATION_TEMPLATES,
+  TRADE_BLOC_ORGANISATIONS,
   duesOf,
   findOrganisation,
+  membersOfOrganisation,
   type OrganisationKey,
   type OrganisationTemplate,
   type ResolutionTemplate,
@@ -82,6 +84,23 @@ export function findMembership(
 export function isMember(organisations: readonly OrganisationState[], key: OrganisationKey): boolean {
   const state = organisations.find((o) => o.key === key);
   return Boolean(state?.member && !state.suspended);
+}
+
+/**
+ * Everybody the tariff schedule now treats as if there were a bilateral
+ * trade treaty, because there is a common market that does the same
+ * thing without one having been signed.
+ *
+ * Suspended membership does not count — a country thrown out of the
+ * bloc's institutions is not still inside its tariff wall.
+ */
+export function tradeBlocPartners(organisations: readonly OrganisationState[]): Set<NationKey> {
+  const partners = new Set<NationKey>();
+  for (const key of TRADE_BLOC_ORGANISATIONS) {
+    if (!isMember(organisations, key)) continue;
+    for (const nation of membersOfOrganisation(key)) partners.add(nation);
+  }
+  return partners;
 }
 
 /** Dues across every body the country belongs to, ₡bn a year. */
