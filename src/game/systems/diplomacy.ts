@@ -57,6 +57,7 @@ import {
   type NationKey,
   type NationTemplate,
 } from '../content/nations.ts';
+import { ambassadorDividend, tierStabiliserMultiplier } from './diplomats.ts';
 import {
   worldFrom,
   type ForeignCountry,
@@ -103,6 +104,8 @@ export function buildWorld(player: CountryKey = DEFAULT_PLAYER_COUNTRY): World {
     relations: f.startingRelations,
     embassy: f.startingRelations > -25,
     ambassadorMonths: f.startingRelations > 0 ? 24 : null,
+    ambassador: null,
+    embassyTier: 'standard',
     recognised: true,
     lastSummitTurn: null,
     sanctioned: false,
@@ -335,13 +338,23 @@ export function stepWorld(world: World, inputs: DiplomacyInputs): WorldTick {
     const natural = naturalRelations(template, inputs.playerIdeology, nation);
 
     /* An embassy does not improve relations. It slows their decay, which is
-       the quiet and unglamorous argument for keeping one open. */
-    const drift = RELATIONS_DRIFT_RATE * (nation.embassy ? EMBASSY_STABILISER : 1);
+       the quiet and unglamorous argument for keeping one open. A higher
+       tier is a bigger brake on the same decline, never an improvement. */
+    const drift =
+      RELATIONS_DRIFT_RATE *
+      (nation.embassy ? EMBASSY_STABILISER * tierStabiliserMultiplier(nation.embassyTier) : 1);
     let relations = nation.relations + (natural - nation.relations) * drift;
 
     /* A settled ambassador is worth a little, every month, forever. */
     if (nation.ambassadorMonths !== null && nation.ambassadorMonths >= AMBASSADOR_SETTLING_MONTHS) {
       relations += 0.12;
+    }
+
+    /* A named appointee is a second, independent dividend on top of the
+       flat settling figure above — real skill and connections doing
+       something the generic posting alone does not. */
+    if (nation.ambassador) {
+      relations += ambassadorDividend(nation.ambassador);
     }
 
     /* Treaties in force pay a standing dividend while they hold. */

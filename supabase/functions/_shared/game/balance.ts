@@ -3298,3 +3298,13 @@ export const CONFIRMED_DISCIPLINE_HIT = 18;
 export const SCANDAL_SEVERITY_FROM_LEAK = 6;
 /** Severity a corruption-triggered scandal opens at. */
 export const CORRUPTION_SCANDAL_SEVERITY = 35;
+
+/* ------------------------------------------------------------------ *
+ * Engine 8A/8B — Diplomatic core, embassies and diplomats
+ * ------------------------------------------------------------------ */
+
+/** How much a named ambassador's own dividend scales with their skill, per month settled. */
+export const AMBASSADOR_SKILL_DIVIDEND = 0.003;
+
+export const SET_EMBASSY_TIER_PC = 3;
+export const RECALL_AMBASSADOR_PC = 2;

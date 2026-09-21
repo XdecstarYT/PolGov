@@ -78,6 +78,8 @@ export * from './systems/communications.ts';
 export * from './content/communications.ts';
 export * from './systems/scandal.ts';
 export * from './content/scandal.ts';
+export * from './systems/diplomats.ts';
+export * from './content/diplomats.ts';
 export * from './systems/timeline.ts';
 export * from './systems/peace.ts';
 export * from './content/peace.ts';

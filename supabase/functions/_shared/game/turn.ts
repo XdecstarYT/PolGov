@@ -285,6 +285,9 @@ import {
   spawnScandal,
   stepScandals,
 } from './systems/scandal.ts';
+import { buildAmbassador } from './systems/diplomats.ts';
+import { EMBASSY_TIERS, type EmbassyTier } from './content/diplomats.ts';
+import { SET_EMBASSY_TIER_PC, RECALL_AMBASSADOR_PC } from './balance.ts';
 import { SCANDAL_RESPONSES, type ScandalResponse } from './content/scandal.ts';
 import {
   CONFIRMED_APPROVAL_COST,
@@ -702,6 +705,8 @@ export type Intent =
   | { type: 'set_comms_strategy'; strategy: CommsStrategy }
   | { type: 'release_information' }
   | { type: 'respond_scandal'; scandalId: string; response: ScandalResponse }
+  | { type: 'set_embassy_tier'; nation: NationKey; tier: EmbassyTier }
+  | { type: 'recall_ambassador'; nation: NationKey }
   | { type: 'emergency_budget' }
   | { type: 'set_funding'; sector: SectorKey; amount: number }
   | { type: 'diplomatic_act'; nation: NationKey; act: DiplomaticAct }
@@ -4822,6 +4827,10 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleReleaseInformation(state);
     case 'respond_scandal':
       return handleRespondScandal(state, intent.scandalId, intent.response);
+    case 'set_embassy_tier':
+      return handleSetEmbassyTier(state, intent.nation, intent.tier);
+    case 'recall_ambassador':
+      return handleRecallAmbassador(state, intent.nation);
     case 'emergency_budget':
       return handleEmergencyBudget(state);
     case 'set_funding':
@@ -5898,6 +5907,61 @@ function handleRespondScandal(
   return ok(next);
 }
 
+function handleSetEmbassyTier(state: GameState, key: NationKey, tier: EmbassyTier): IntentResult {
+  const nation = state.world.nations.find((n) => n.key === key);
+  if (!nation) return reject(state, 'No such country.');
+  if (!nation.embassy) return reject(state, 'There is no mission there to change the tier of.');
+  if (nation.embassyTier === tier) return reject(state, 'That is the tier already.');
+  if (state.politicalCapital < SET_EMBASSY_TIER_PC) {
+    return reject(state, `Changing the mission's tier costs ${SET_EMBASSY_TIER_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, SET_EMBASSY_TIER_PC);
+  next.world = {
+    ...next.world,
+    nations: next.world.nations.map((n) => (n.key === key ? { ...n, embassyTier: tier } : n)),
+  };
+
+  const template = EMBASSY_TIERS.find((t) => t.key === tier)!;
+  log(entries, {
+    kind: 'note',
+    label: `Mission tier: ${template.label}`,
+    delta: -SET_EMBASSY_TIER_PC,
+    cause: `${template.blurb}`,
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
+function handleRecallAmbassador(state: GameState, key: NationKey): IntentResult {
+  const nation = state.world.nations.find((n) => n.key === key);
+  if (!nation) return reject(state, 'No such country.');
+  if (!nation.ambassador) return reject(state, 'There is no named ambassador there to recall.');
+  if (state.politicalCapital < RECALL_AMBASSADOR_PC) {
+    return reject(state, `Recalling the ambassador costs ${RECALL_AMBASSADOR_PC} PC.`);
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, RECALL_AMBASSADOR_PC);
+  const name = nation.ambassador.name;
+  next.world = {
+    ...next.world,
+    nations: next.world.nations.map((n) => (n.key === key ? { ...n, ambassador: null } : n)),
+  };
+
+  log(entries, {
+    kind: 'note',
+    label: `${name} recalled`,
+    delta: -RECALL_AMBASSADOR_PC,
+    cause: 'The posting stays settled — what leaves is the second dividend a named appointee was worth.',
+    unit: 'PC',
+  });
+  return ok(next);
+}
+
 function handleEmergencyBudget(state: GameState): IntentResult {
   if (canEditBudget(state)) return reject(state, 'The budget is already open this turn.');
   if (state.politicalCapital < PC_COSTS.emergencyBudget) {
@@ -6032,6 +6096,7 @@ function handleDiplomaticAct(
   const next = clone(state);
   spendPc(next, cost);
   const entries = currentLog(next);
+  const rng = new Rng(next.rngState);
   const index = next.world.nations.findIndex((n) => n.key === key);
   let updated = next.world.nations[index]!;
 
@@ -6058,11 +6123,16 @@ function handleDiplomaticAct(
     case 'close_embassy':
       /* Cheap, popular, and it removes the only channel through which the
          next crisis could have been defused. */
-      updated = { ...updated, embassy: false, ambassadorMonths: null };
+      updated = { ...updated, embassy: false, ambassadorMonths: null, ambassador: null };
       break;
-    case 'appoint_ambassador':
-      updated = { ...updated, ambassadorMonths: 0 };
+    case 'appoint_ambassador': {
+      const used = new Set(
+        next.world.nations.map((n) => n.ambassador?.name).filter((n): n is string => n != null),
+      );
+      const ambassador = buildAmbassador(next.country, rng, used, absoluteWeek(next));
+      updated = { ...updated, ambassadorMonths: 0, ambassador };
       break;
+    }
     case 'summit':
       updated = { ...updated, lastSummitTurn: next.turnNumber };
       next.approval = clampApproval(next.approval + SUMMIT_APPROVAL);
@@ -6073,7 +6143,7 @@ function handleDiplomaticAct(
       );
       break;
     case 'expel_diplomats':
-      updated = { ...updated, ambassadorMonths: null };
+      updated = { ...updated, ambassadorMonths: null, ambassador: null };
       break;
     case 'recognise':
       updated = { ...updated, recognised: true };
@@ -6092,10 +6162,14 @@ function handleDiplomaticAct(
     ...next.world,
     nations: next.world.nations.map((n, i) => (i === index ? updated : n)),
   };
+  next.rngState = rng.state;
 
   log(entries, {
     kind: 'note',
-    label: template.name,
+    label:
+      act === 'appoint_ambassador' && updated.ambassador
+        ? `${updated.ambassador.name} to ${template.name}`
+        : template.name,
     delta: updated.relations - nation.relations,
     cause: DIPLOMATIC_ACT_LABELS[act],
     unit: 'pts',

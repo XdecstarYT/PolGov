@@ -18,8 +18,12 @@ import { useGame } from '../../state/store.ts';
 import {
   BLOC_LABELS,
   DIPLOMACY_PC_COSTS,
+  EMBASSY_TIERS,
   POSTURE_LABELS,
+  RECALL_AMBASSADOR_PC,
+  SET_EMBASSY_TIER_PC,
   TREATY_LABELS,
+  ambassadorDividend,
   byWeight,
   canSummit,
   exposures,
@@ -155,6 +159,54 @@ export function WorldPanel() {
                       ? ' — which means the leverage is theirs.'
                       : ' — which means the leverage is ours.'}
                   </p>
+
+                  {nation.embassy && (
+                    <div className="mt-2 text-[0.7rem] text-ink-faint">
+                      {nation.ambassador ? (
+                        <span>
+                          {nation.ambassador.name}, skill {nation.ambassador.skill.toFixed(0)} —
+                          worth {ambassadorDividend(nation.ambassador) >= 0 ? '+' : ''}
+                          {ambassadorDividend(nation.ambassador).toFixed(2)}/month on top of the
+                          settled dividend.{' '}
+                          <button
+                            type="button"
+                            className="underline"
+                            disabled={game.politicalCapital < RECALL_AMBASSADOR_PC}
+                            onClick={() =>
+                              void dispatch({ type: 'recall_ambassador', nation: nation.key })
+                            }
+                          >
+                            Recall · {RECALL_AMBASSADOR_PC} PC
+                          </button>
+                        </span>
+                      ) : (
+                        <span>No named ambassador — appointing one below sends a career posting only.</span>
+                      )}
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {EMBASSY_TIERS.map((t) => (
+                          <Button
+                            key={t.key}
+                            variant="quiet"
+                            disabled={
+                              nation.embassyTier === t.key ||
+                              game.politicalCapital < SET_EMBASSY_TIER_PC
+                            }
+                            title={t.blurb}
+                            onClick={() =>
+                              void dispatch({
+                                type: 'set_embassy_tier',
+                                nation: nation.key,
+                                tier: t.key,
+                              })
+                            }
+                          >
+                            {t.label}
+                            {nation.embassyTier === t.key && ' ✓'}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {held.length > 0 && (
                     <ul className="mt-2 space-y-1">

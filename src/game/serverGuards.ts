@@ -66,6 +66,8 @@ export const ALLOWED_INTENT_TYPES: ReadonlySet<Intent['type']> = new Set([
   'set_comms_strategy',
   'release_information',
   'respond_scandal',
+  'set_embassy_tier',
+  'recall_ambassador',
   'emergency_budget',
   'set_funding',
   'diplomatic_act',

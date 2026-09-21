@@ -1075,6 +1075,24 @@ export interface Treaty {
 }
 
 /** The state of the relationship with one country. */
+/**
+ * A posting is a person, not just a settling clock.
+ *
+ * The flat, per-month dividend a settled ambassador earns just by being
+ * in post lives on `ambassadorMonths` and stays exactly as it was. This
+ * is the second, independent dividend a named appointee adds on top —
+ * real, because a skilled, well-connected ambassador genuinely does
+ * more with the same posting.
+ */
+export interface Ambassador {
+  id: string;
+  name: string;
+  /** 0–100. */
+  skill: number;
+  traits: import('./content/diplomats.ts').DiplomatTrait[];
+  postedTurn: number;
+}
+
 export interface NationState {
   key: import('./content/nations.ts').NationKey;
   /** −100 hostile to +100 allied. */
@@ -1083,6 +1101,10 @@ export interface NationState {
   embassy: boolean;
   /** Is there an ambassador in it, and how long have they been there? */
   ambassadorMonths: number | null;
+  /** The named person in the post, if the government ever bothered to appoint one specifically. */
+  ambassador: Ambassador | null;
+  /** How substantial the mission is. Only means anything while `embassy` is true. */
+  embassyTier: import('./content/diplomats.ts').EmbassyTier;
   /** Do we recognise them as a state at all? */
   recognised: boolean;
   /** Turn of the last summit attended together. */
