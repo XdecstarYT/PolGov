@@ -147,6 +147,7 @@ export function migrateState(raw: unknown): GameState | null {
         posture: nation.posture ?? reference?.posture ?? 'guarded',
         ambassador: nation.ambassador ?? null,
         embassyTier: nation.embassyTier ?? 'standard',
+        grievance: nation.grievance ?? 0,
       };
     }),
   };

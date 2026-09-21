@@ -26,6 +26,7 @@ import {
   ambassadorDividend,
   byWeight,
   canSummit,
+  describeGrievance,
   exposures,
   findNation,
   obligationOf,
@@ -159,6 +160,11 @@ export function WorldPanel() {
                       ? ' — which means the leverage is theirs.'
                       : ' — which means the leverage is ours.'}
                   </p>
+                  {nation.grievance > 5 && (
+                    <p className="mt-1 text-[0.7rem] text-warn">
+                      Grievance {nation.grievance.toFixed(0)} — {describeGrievance(nation.grievance)}
+                    </p>
+                  )}
 
                   {nation.embassy && (
                     <div className="mt-2 text-[0.7rem] text-ink-faint">

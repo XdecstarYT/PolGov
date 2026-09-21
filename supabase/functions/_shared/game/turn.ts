@@ -286,6 +286,7 @@ import {
   stepScandals,
 } from './systems/scandal.ts';
 import { buildAmbassador } from './systems/diplomats.ts';
+import { addGrievance } from './systems/grievances.ts';
 import { EMBASSY_TIERS, type EmbassyTier } from './content/diplomats.ts';
 import { SET_EMBASSY_TIER_PC, RECALL_AMBASSADOR_PC } from './balance.ts';
 import { SCANDAL_RESPONSES, type ScandalResponse } from './content/scandal.ts';
@@ -6143,13 +6144,18 @@ function handleDiplomaticAct(
       );
       break;
     case 'expel_diplomats':
-      updated = { ...updated, ambassadorMonths: null, ambassador: null };
+      updated = {
+        ...updated,
+        ambassadorMonths: null,
+        ambassador: null,
+        grievance: addGrievance(updated.grievance, 'diplomats_expelled'),
+      };
       break;
     case 'recognise':
       updated = { ...updated, recognised: true };
       break;
     case 'sanction':
-      updated = { ...updated, sanctioned: true };
+      updated = { ...updated, sanctioned: true, grievance: addGrievance(updated.grievance, 'sanctioned') };
       break;
     case 'lift_sanction':
       updated = { ...updated, sanctioned: false };
@@ -6286,12 +6292,16 @@ function handleWithdrawTreaty(state: GameState, treatyId: string): IntentResult 
     { ...next.world, treaties: next.world.treaties.filter((t) => t.id !== treatyId) },
     penalty,
   );
-  /* And the other signatory takes it personally, on top. */
+  /* And the other signatory takes it personally, on top — and remembers
+     it long after the relations figure itself has recovered. */
   next.world = {
     ...next.world,
     nations: next.world.nations.map((n) =>
       treaty.parties.includes(n.key)
-        ? applyDiplomaticAct(n, DIPLOMACY_EFFECTS.treatyWithdrawn, findNation(n.key))
+        ? {
+            ...applyDiplomaticAct(n, DIPLOMACY_EFFECTS.treatyWithdrawn, findNation(n.key)),
+            grievance: addGrievance(n.grievance, 'treaty_withdrawn'),
+          }
         : n,
     ),
   };

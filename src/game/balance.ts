@@ -3308,3 +3308,16 @@ export const AMBASSADOR_SKILL_DIVIDEND = 0.003;
 
 export const SET_EMBASSY_TIER_PC = 3;
 export const RECALL_AMBASSADOR_PC = 2;
+
+/* ------------------------------------------------------------------ *
+ * Engine 8C/8D — International relationships and treaties
+ * ------------------------------------------------------------------ */
+
+/**
+ * How fast grievance fades, per week — kept well below the relations
+ * drift rate so it genuinely outlasts the relationship recovering.
+ */
+export const GRIEVANCE_DECAY_RATE = 0.002;
+
+/** How much of the grievance score turns into extra resistance to signing a new treaty. */
+export const GRIEVANCE_SIGNING_WEIGHT = 0.35;

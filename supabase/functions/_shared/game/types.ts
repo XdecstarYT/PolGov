@@ -1111,6 +1111,12 @@ export interface NationState {
   lastSummitTurn: number | null;
   /** Are they under our sanctions? */
   sanctioned: boolean;
+  /**
+   * What they remember, 0–100, independent of the relations number
+   * above. Relations can recover fully while this stays live for
+   * decades — it is not the same claim as being trusted.
+   */
+  grievance: number;
   /** How much of their trade is with us, 0–1. Leverage runs both ways. */
   tradeDependence: number;
   /** How much of OUR trade is with them. The other half of the leverage. */

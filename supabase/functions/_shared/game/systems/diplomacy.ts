@@ -58,6 +58,7 @@ import {
   type NationTemplate,
 } from '../content/nations.ts';
 import { ambassadorDividend, tierStabiliserMultiplier } from './diplomats.ts';
+import { decayGrievance, grievanceSigningPenalty } from './grievances.ts';
 import {
   worldFrom,
   type ForeignCountry,
@@ -106,6 +107,7 @@ export function buildWorld(player: CountryKey = DEFAULT_PLAYER_COUNTRY): World {
     ambassadorMonths: f.startingRelations > 0 ? 24 : null,
     ambassador: null,
     embassyTier: 'standard',
+    grievance: 0,
     recognised: true,
     lastSummitTurn: null,
     sanctioned: false,
@@ -266,7 +268,11 @@ export function willSign(nation: NationState, kind: TreatyKind, reputation: numb
   if (!nation.recognised || nation.sanctioned) return false;
   /* A country with a record of breaking agreements is offered fewer. */
   const reputationPenalty = (60 - reputation) * 0.25;
-  return nation.relations >= treatyThreshold(kind) + reputationPenalty;
+  /* And a country that remembers being sanctioned or walked out on asks
+     for more than the relations number alone would suggest — the
+     grievance outlives the recovery. */
+  const grievancePenalty = grievanceSigningPenalty(nation.grievance);
+  return nation.relations >= treatyThreshold(kind) + reputationPenalty + grievancePenalty;
 }
 
 /** What a treaty actually obliges, in one line. */
@@ -368,6 +374,7 @@ export function stepWorld(world: World, inputs: DiplomacyInputs): WorldTick {
     return {
       ...nation,
       relations: clampRelations(relations),
+      grievance: decayGrievance(nation.grievance),
       ambassadorMonths:
         nation.ambassadorMonths === null ? null : nation.ambassadorMonths + 1,
     };
