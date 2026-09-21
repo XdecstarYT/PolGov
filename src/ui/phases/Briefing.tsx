@@ -51,6 +51,7 @@ import { LivingPanel } from '../components/LivingPanel.tsx';
 import { CulturePanel } from '../components/CulturePanel.tsx';
 import { OpinionPanel } from '../components/OpinionPanel.tsx';
 import { ProblemsPanel } from '../components/ProblemsPanel.tsx';
+import { MovementsPanel } from '../components/MovementsPanel.tsx';
 import { ElectoratePanel } from '../components/ElectoratePanel.tsx';
 
 export function Briefing() {
@@ -173,6 +174,7 @@ export function Briefing() {
                 <CulturePanel />
                 <OpinionPanel />
                 <ProblemsPanel />
+                <MovementsPanel />
                 <FinancePanel />
                 <ElectoratePanel />
               </>

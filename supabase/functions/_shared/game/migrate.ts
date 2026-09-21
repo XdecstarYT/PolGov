@@ -25,6 +25,7 @@ import { buildLiving } from './systems/living.ts';
 import { buildOpinion } from './systems/opinion.ts';
 import { buildProblems } from './systems/problems.ts';
 import { buildGenerations } from './systems/generations.ts';
+import { buildMovements } from './systems/movements.ts';
 import { buildTrade } from './systems/trade.ts';
 import { buildPairs } from './systems/worldSim.ts';
 import { buildOrganisations } from './systems/organisations.ts';
@@ -67,6 +68,7 @@ export function migrateState(raw: unknown): GameState | null {
   if (!next.opinion) next.opinion = buildOpinion();
   if (!next.problems) next.problems = buildProblems();
   if (!next.generations) next.generations = buildGenerations();
+  if (!next.movements) next.movements = buildMovements();
   if (typeof next.society.inequality !== 'number' || !(next.society.inequality > 0)) {
     next.society.inequality = 1;
   }

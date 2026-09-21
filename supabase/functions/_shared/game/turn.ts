@@ -62,6 +62,7 @@ import type {
   GameEvent,
   GameState,
   LogEntry,
+  MovementResponse,
   Party,
   Resolution,
   SectorKey,
@@ -177,6 +178,7 @@ import { stepSociety } from './systems/society.ts';
 import { accessOf, stepLiving } from './systems/living.ts';
 import {
   belongingGap,
+  excludedShare,
   institutionOf,
   leastIncluded,
   stepCulture,
@@ -184,15 +186,23 @@ import {
 import {
   complianceFactor,
   institutionalTrust,
+  mobilisation,
   stepOpinion,
   trustOf,
 } from './systems/opinion.ts';
-import { describeProblems, problemOf, stepProblems } from './systems/problems.ts';
+import {
+  describeProblems,
+  problemOf,
+  severity,
+  stepProblems,
+} from './systems/problems.ts';
 import {
   describeGenerations,
   generationGap,
   stepGenerations,
 } from './systems/generations.ts';
+import { responseEffects, stepMovements } from './systems/movements.ts';
+import { TACTIC_LABELS, findMovement } from './content/movements.ts';
 import { findProblem } from './content/problems.ts';
 import { homeownership } from './systems/society.ts';
 import { findTrust } from './content/trust.ts';
@@ -421,6 +431,7 @@ export type Intent =
    */
   | { type: 'record_remark'; personaId: string; about: string; text: string }
   | { type: 'set_language_policy'; level: number }
+  | { type: 'answer_movement'; movement: string; response: MovementResponse }
   | { type: 'withdraw_bill'; billId: string }
   | { type: 'public_address' }
   | { type: 'coalition_concession'; partyId: string }
@@ -1852,6 +1863,77 @@ export function resolveTurn(state: GameState): GameState {
     next.problems = problemsTick.problems;
 
     /*
+     * And what anybody is organising about.
+     *
+     * A movement needs a grievance, a constituency and the belief that
+     * acting works, all three. Stepped after opinion, because the last of
+     * those comes from there — and the government's own answers feed back
+     * into it, which is the whole decision.
+     */
+    const movementsTick = stepMovements(next.movements, {
+      severity: (key) => severity(next.problems, key as never),
+      mobilisation: mobilisation(next.opinion),
+      frustration: next.opinion.frustration,
+      efficacy: next.opinion.efficacy,
+      norms: next.culture.politicalCulture,
+      excludedShare: excludedShare(next.culture),
+      institutionalTrust: institutionalTrust(next.opinion),
+      turn: absoluteWeek(next),
+    });
+    next.movements = movementsTick.movements;
+
+    /* What the government's own answers have done to the belief that
+       organising works. Slow, and it decides what forms next year. */
+    if (Math.abs(next.movements.efficacyPressure) > 0.01) {
+      next.opinion = {
+        ...next.opinion,
+        efficacy: clamp01to100(
+          next.opinion.efficacy + next.movements.efficacyPressure * 0.02,
+        ),
+      };
+    }
+
+    for (const key of movementsTick.formed) {
+      const template = findMovement(key);
+      log(entries, {
+        kind: 'note',
+        label: `${template.label} forms`,
+        delta: 0,
+        cause: `${template.about} They are asking for ${template.demand}.`,
+        unit: '',
+      });
+    }
+    for (const { key, to } of movementsTick.escalated) {
+      const template = findMovement(key);
+      log(entries, {
+        kind: 'note',
+        label: `${template.label}: ${TACTIC_LABELS[to].toLowerCase()}`,
+        delta: 0,
+        cause:
+          `Nobody answered, so they have reached for the next thing. What they do now costs ` +
+          `the country more than the concession would have.`,
+        unit: '',
+      });
+    }
+    for (const { key, outcome } of movementsTick.ended) {
+      const template = findMovement(key);
+      log(entries, {
+        kind: 'note',
+        label: `${template.label} ends`,
+        delta: 0,
+        cause:
+          outcome === 'won'
+            ? 'They got what they asked for. The country has learned that organising works, which is true and which is the bill.'
+            : outcome === 'suppressed'
+              ? 'Cleared out. That is not the same as settled, and it is remembered for a long time.'
+              : outcome === 'absorbed'
+                ? 'The grievance went away and so did they.'
+                : 'They ran out of people. Nothing was conceded and nothing changed, which is how most of them end.',
+        unit: '',
+      });
+    }
+
+    /*
      * And the electorate replacing itself underneath all of it.
      *
      * Nobody changes their mind here. The oldest cohort leaves and the
@@ -3160,6 +3242,8 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleRecordRemark(state, intent.personaId, intent.about, intent.text);
     case 'set_language_policy':
       return handleLanguagePolicy(state, intent.level);
+    case 'answer_movement':
+      return handleAnswerMovement(state, intent.movement, intent.response);
     case 'withdraw_bill':
       return handleWithdrawBill(state, intent.billId);
     case 'public_address':
@@ -4808,6 +4892,82 @@ function handleLanguagePolicy(state: GameState, level: number): IntentResult {
       `follows this figure over years and belonging follows recognition, so whoever is ` +
       `sitting here in two terms gets the result.`,
     unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Answer a movement, or decide not to.
+ *
+ * The four answers are the decision this engine exists for and none of
+ * them is free. Conceding costs money and raises the belief that
+ * organising works, which produces the next movement. Negotiating buys
+ * time without addressing anything. Ignoring is free this week and
+ * expensive next. Suppressing works briefly and costs the norms, the
+ * police's standing, and the sympathy of everybody who was watching —
+ * and it converts a movement about housing into a movement about the
+ * government, which is one no concession ends.
+ *
+ * There is no correct answer. That is why it is on the desk rather than
+ * resolved by the engine.
+ */
+function handleAnswerMovement(
+  state: GameState,
+  key: string,
+  response: MovementResponse,
+): IntentResult {
+  const movement = state.movements.active.find((m) => m.key === key);
+  if (!movement) return reject(state, 'Nobody is organised about that.');
+  if (movement.lastResponse) return reject(state, 'You have already answered them this week.');
+
+  const effects = responseEffects(movement, response, state.economy.gdp);
+  if (state.politicalCapital < effects.politicalCapital) {
+    return reject(state, 'Not enough political capital to answer them at all.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, effects.politicalCapital);
+
+  /* A concession is a standing commitment, not a one-off payment: it goes
+     on the revenue line as an annual cost somebody has to keep paying. */
+  if (effects.money > 0) next.revenueModifier -= effects.money;
+
+  if (effects.norms !== 0) {
+    next.culture = {
+      ...next.culture,
+      politicalCulture: clamp01to100(next.culture.politicalCulture + effects.norms),
+    };
+  }
+  if (effects.policeTrust !== 0) {
+    next.opinion = {
+      ...next.opinion,
+      trust: next.opinion.trust.map((t) =>
+        t.key === 'police' ? { ...t, level: clamp01to100(t.level + effects.policeTrust) } : t,
+      ),
+    };
+  }
+  if (effects.frustration !== 0) {
+    next.opinion = {
+      ...next.opinion,
+      frustration: clamp01to100(next.opinion.frustration + effects.frustration),
+    };
+  }
+
+  next.movements = {
+    ...next.movements,
+    active: next.movements.active.map((m) =>
+      m.key === key ? { ...m, lastResponse: response } : m,
+    ),
+  };
+
+  const template = findMovement(movement.key);
+  log(entries, {
+    kind: 'note',
+    label: `${template.label}: ${response}`,
+    delta: -effects.money,
+    cause: effects.summary,
+    unit: effects.money > 0 ? '\u20a1bn/yr' : '',
   });
   return ok(next);
 }

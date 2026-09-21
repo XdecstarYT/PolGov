@@ -1627,6 +1627,15 @@ export interface GameState {
    */
   generations: Generations;
 
+  /**
+   * What anybody is organised about, and what the government did about it.
+   *
+   * A movement needs a grievance, a constituency and the belief that
+   * acting works. The four answers to one are the decision this engine
+   * exists for, and none of them is free.
+   */
+  movements: Movements;
+
   /** What the country is built out of, and what is being built. */
   infrastructure: Infrastructure;
 
@@ -2074,4 +2083,50 @@ export interface Generations {
   /** And what the country is making of it so far. */
   forming: Ideology;
   history: GenerationsPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Social movements
+ * ------------------------------------------------------------------ */
+
+/** What a government can do about a movement. None of them is free. */
+export type MovementResponse = 'concede' | 'negotiate' | 'ignore' | 'suppress';
+
+export interface Movement {
+  key: import('./content/movements.ts').MovementKey;
+  startedTurn: number;
+  /** Share of the country behind it, 0–100. */
+  support: number;
+  /** What it has left in it. Decays weekly; replenished by the grievance. */
+  intensity: number;
+  peakSupport: number;
+  tactic: import('./content/movements.ts').Tactic;
+  /** Weeks since anybody answered. Escalation runs off this. */
+  weeksIgnored: number;
+  /** What the government did this week, consumed at the next step. */
+  lastResponse: MovementResponse | null;
+  outcome: 'won' | 'absorbed' | 'exhausted' | 'suppressed' | null;
+  endedTurn: number;
+}
+
+export interface MovementsPoint {
+  turn: number;
+  count: number;
+  support: number;
+  disruption: number;
+}
+
+export interface Movements {
+  active: Movement[];
+  resolved: Movement[];
+  /**
+   * What this government's answers have done to the belief that acting
+   * works.
+   *
+   * Conceding raises it, which means more movements later; suppressing
+   * lowers it, which means fewer and a country that has stopped asking.
+   * The most consequential number in the engine and the slowest to show.
+   */
+  efficacyPressure: number;
+  history: MovementsPoint[];
 }

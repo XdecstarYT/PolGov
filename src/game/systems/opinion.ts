@@ -36,6 +36,7 @@ import {
   CONTAGION_DOWN,
   CONTAGION_UP,
   EFFICACY_ADJUST_RATE,
+  MOBILISATION_PIVOT,
   MOOD_ADJUST_RATE,
   TRUST_ADJUST_RATE,
   WITHDRAWAL_DRIVE,
@@ -116,7 +117,17 @@ export function complianceFactor(opinion: Opinion): number {
  * can do to its own electorate without noticing.
  */
 export function mobilisation(opinion: Opinion): number {
-  return (opinion.frustration / 100) * ((opinion.efficacy - 42) / 58);
+  /*
+   * The pivot is where a country stops believing enough to act at all.
+   *
+   * Set at 42 it sat in the middle of the range real runs actually
+   * produce — efficacy lands between about 35 and 65 — so roughly half of
+   * all countries had exactly zero mobilisation and nothing ever
+   * organised in any of them. A pivot has to sit below the ordinary
+   * range, not inside it: an unremarkable country does a little of this,
+   * and only a genuinely hopeless one does none.
+   */
+  return (opinion.frustration / 100) * ((opinion.efficacy - MOBILISATION_PIVOT) / 70);
 }
 
 /* ------------------------------------------------------------------ *

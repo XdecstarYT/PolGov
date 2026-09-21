@@ -56,6 +56,8 @@ export * from './systems/culture.ts';
 export * from './systems/opinion.ts';
 export * from './systems/problems.ts';
 export * from './systems/generations.ts';
+export * from './systems/movements.ts';
+export * from './content/movements.ts';
 export * from './content/problems.ts';
 export * from './content/trust.ts';
 export * from './content/culture.ts';

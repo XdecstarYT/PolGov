@@ -2262,3 +2262,50 @@ export const UNREST_BREADTH_THRESHOLD = 0.3;
  * a single larger complaint.
  */
 export const UNREST_BREADTH_WEIGHT = 0.9;
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Social movements
+ * ------------------------------------------------------------------ */
+
+/**
+ * How much grievance, constituency and mobilisation together it takes
+ * before anybody organises.
+ *
+ * The three multiply, so a severe grievance in a country that has given
+ * up clears nothing and a mobilised country with nothing wrong clears
+ * nothing either.
+ */
+export const MOVEMENT_FORM_THRESHOLD = 0.02;
+
+/** How fast support follows the case a movement has. */
+export const MOVEMENT_SUPPORT_RATE = 0.04;
+
+/** How fast a movement runs out of people. Organising is exhausting. */
+export const MOVEMENT_DECAY = 0.02;
+
+/**
+ * What conceding does to the belief that acting works.
+ *
+ * Positive, and deliberately so: a concession addresses the grievance AND
+ * teaches the country that organising is how things get done. Both are
+ * true, and the second is the bill.
+ */
+export const CONCESSION_EFFICACY_GAIN = 0.55;
+
+/**
+ * What clearing a movement out does to its resolve.
+ *
+ * Suppression makes a movement smaller and angrier, and hands it the
+ * sympathy of people who were not previously involved. That combination
+ * is why it so often fails on a timescale longer than a news cycle.
+ */
+export const SUPPRESSION_BACKFIRE = 0.09;
+
+/**
+ * The efficacy below which a country does not act on its anger at all.
+ *
+ * Deliberately below the range ordinary runs produce. Set inside that
+ * range it silently zeroed the mobilisation of about half of all
+ * countries, and nothing organised in any of them.
+ */
+export const MOBILISATION_PIVOT = 30;
