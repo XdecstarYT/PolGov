@@ -284,3 +284,40 @@ export function filibusterRisk(
 
   return Math.max(0, Math.min(0.65, hostility * opportunity * 1.6));
 }
+
+/**
+ * How far apart the chamber actually is, 0–1.
+ *
+ * The seat-weighted spread of the benches' own positions, rather than a
+ * constant a country was handed. Measured rather than asserted for the
+ * same reason everything else here is: a chamber polarises because of
+ * what happened in it, and a government that governed through the centre
+ * for two terms should be able to see the number come down.
+ *
+ * Computed as mean distance from the seat-weighted centre across all
+ * three ideological axes, normalised so that a chamber split between two
+ * opposite poles reads near one and a chamber that agrees reads near
+ * zero.
+ */
+export function chamberPolarisation(parties: readonly Party[]): number {
+  const seated = parties.filter((p) => p.seats > 0);
+  const total = seated.reduce((sum, p) => sum + p.seats, 0);
+  if (total <= 0 || seated.length < 2) return 0;
+
+  const axes = ['economic', 'social', 'environmental'] as const;
+  const centre = axes.map(
+    (axis) => seated.reduce((sum, p) => sum + p.ideology[axis] * p.seats, 0) / total,
+  );
+
+  const spread =
+    seated.reduce((sum, party) => {
+      const distance = Math.sqrt(
+        axes.reduce((d, axis, i) => d + (party.ideology[axis] - centre[i]!) ** 2, 0) / axes.length,
+      );
+      return sum + distance * party.seats;
+    }, 0) / total;
+
+  /* A spread of about 0.7 on a -1..1 axis is a chamber at war with
+     itself; anything beyond that is not a parliament. */
+  return Math.max(0, Math.min(1, spread / 0.7));
+}

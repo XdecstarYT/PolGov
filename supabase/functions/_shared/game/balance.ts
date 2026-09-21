@@ -2112,3 +2112,43 @@ export const URBAN_STANDARD_TILT = 20;
  * decide the thing that caused it.
  */
 export const FLOW_STANDARD_TILT = 0.6;
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Culture
+ * ------------------------------------------------------------------ */
+
+/** How fast a shared national story follows what is actually shared. */
+export const IDENTITY_ADJUST_RATE = 0.006;
+
+/** How fast a community's sense of belonging follows how it is treated. */
+export const BELONGING_ADJUST_RATE = 0.008;
+
+/**
+ * Where the norms sit in a country nobody has damaged.
+ *
+ * High, because in an ordinary democracy conceding an election and
+ * obeying a court are not decisions anybody makes — which is exactly what
+ * makes them possible to lose without repealing anything.
+ */
+export const NORMS_START = 72;
+
+/** How fast norms recover. They erode a good deal faster. */
+export const NORMS_ADJUST_RATE = 0.004;
+
+/** How fast pride follows how the country is actually doing. */
+export const PRIDE_ADJUST_RATE = 0.02;
+
+/** Points of religiosity a country loses per year, absent anything else. */
+export const SECULARISATION_PER_YEAR = 0.55;
+
+/** Scales how fast an institution follows its funding. */
+export const INSTITUTION_DECAY_SCALE = 0.11;
+
+/**
+ * Points of belonging gap at which a country is said to be coming apart.
+ *
+ * Paired with a test that enough of the country is in the affected
+ * communities: a wide gap over one household in fifty is a real grievance
+ * and is not a nation fracturing.
+ */
+export const BELONGING_ALARM = 22;

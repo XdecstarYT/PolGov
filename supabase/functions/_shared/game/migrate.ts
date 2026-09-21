@@ -60,6 +60,7 @@ export function migrateState(raw: unknown): GameState | null {
      at the opening one, which is exactly what buildSociety describes. */
   if (!next.society) next.society = buildSociety();
   if (!next.living) next.living = buildLiving();
+  if (!next.culture) next.culture = fresh.culture;
   if (typeof next.society.inequality !== 'number' || !(next.society.inequality > 0)) {
     next.society.inequality = 1;
   }

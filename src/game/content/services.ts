@@ -287,8 +287,9 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
   },
   {
     key: 'broadcasting',
-    name: 'Public broadcasting',
-    blurb: 'News and programming. Argued about far past its share of the budget.',
+    name: 'Broadcasting and culture',
+    blurb:
+      'The broadcaster, the museums, the orchestras and the libraries. The cheapest line in the budget and the one argued about most.',
     sector: 'education',
     driver: 'population',
     costPerMillion: 0.6012,

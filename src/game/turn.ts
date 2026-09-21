@@ -175,6 +175,13 @@ import {
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
 import { stepSociety } from './systems/society.ts';
 import { accessOf, stepLiving } from './systems/living.ts';
+import {
+  belongingGap,
+  institutionOf,
+  leastIncluded,
+  stepCulture,
+} from './systems/culture.ts';
+import { findCulturalInstitution } from './content/culture.ts';
 import { findAccess } from './content/access.ts';
 import { findClass } from './content/classes.ts';
 import { duesTotal } from './systems/organisations.ts';
@@ -345,6 +352,7 @@ import {
   renewSenate,
   senateVerdict,
   senateVote,
+  chamberPolarisation,
 } from './systems/parliament.ts';
 import {
   authorityTarget,
@@ -397,6 +405,7 @@ export type Intent =
    * Capped hard, because the text arrives from a client.
    */
   | { type: 'record_remark'; personaId: string; about: string; text: string }
+  | { type: 'set_language_policy'; level: number }
   | { type: 'withdraw_bill'; billId: string }
   | { type: 'public_address' }
   | { type: 'coalition_concession'; partyId: string }
@@ -1769,6 +1778,62 @@ export function resolveTurn(state: GameState): GameState {
     });
     next.living = livingTick.living;
 
+    /*
+     * And what the country is, as distinct from what it has.
+     *
+     * The broadcasting-and-culture line pays for the institutions; the
+     * distribution, the regional gap and how the politics is conducted
+     * decide whether a shared story is still tellable. All of it moves
+     * too slowly for the government doing the damage to see it.
+     */
+    const cultureLine = next.services.find((x) => x.key === 'broadcasting');
+    const cultureTick = stepCulture(next.culture, {
+      culturalSpend: cultureLine?.funding ?? 0,
+      culturalDemand: cultureLine?.demand ?? 1,
+      broadcasting: cultureLine?.quality ?? 60,
+      education: findSector(next.sectors, 'education').health,
+      incomeGini: next.society.incomeGini,
+      ruralGap: next.living.ruralGap,
+      /* How far apart the benches actually are, measured rather than
+         asserted: the spread of the chamber's own positions. */
+      polarisation: chamberPolarisation(next.parties),
+      corruption: 0,
+      growth: next.economy.growth,
+      unemployment: next.economy.unemployment,
+      standing: next.world.reputation,
+      youthShare: next.demography.youthShare,
+      turn: absoluteWeek(next),
+    });
+    next.culture = cultureTick.culture;
+
+    for (const key of cultureTick.hollowed) {
+      const template = findCulturalInstitution(key);
+      log(entries, {
+        kind: 'sector',
+        label: `${template.label} — hollowed out`,
+        delta: institutionOf(next.culture, key).vitality,
+        cause:
+          `${template.blurb} It has fallen below the point it recovers from. Nothing has ` +
+          `closed and nothing will be missed this year, which is what makes this line the ` +
+          `easiest saving in the budget and the hardest to reverse.`,
+        unit: 'idx',
+      });
+    }
+    if (cultureTick.comingApart) {
+      const weakest = leastIncluded(next.culture);
+      log(entries, {
+        kind: 'note',
+        label: 'A community that does not feel part of it',
+        delta: -belongingGap(next.culture),
+        cause:
+          `${weakest.label} reads ${weakest.belonging.toFixed(0)} on belonging against ` +
+          `${(weakest.belonging + belongingGap(next.culture)).toFixed(0)} at the top. A country ` +
+          `holds together at its weakest attachment rather than its average, and the average ` +
+          `here is fine.`,
+        unit: 'pts',
+      });
+    }
+
     for (const key of livingTick.failing) {
       const template = findAccess(key);
       log(entries, {
@@ -2906,6 +2971,8 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleDraftBill(state, intent.description, intent.draft);
     case 'record_remark':
       return handleRecordRemark(state, intent.personaId, intent.about, intent.text);
+    case 'set_language_policy':
+      return handleLanguagePolicy(state, intent.level);
     case 'withdraw_bill':
       return handleWithdrawBill(state, intent.billId);
     case 'public_address':
@@ -4510,6 +4577,50 @@ function handleDeployForce(
       `${Math.round(terms.commitment * 100)}% of the force is now somewhere it cannot be used ` +
       'for anything else.',
     unit: '₡bn',
+  });
+  return ok(next);
+}
+
+/**
+ * How far the state conducts itself in more than one language.
+ *
+ * Signage, forms, schooling, courts, broadcast hours. It is among the
+ * cheapest things on the whole desk and among the slowest to be felt:
+ * recognition moves toward this figure over years, and belonging follows
+ * recognition. A government that raises it will hand the benefit to a
+ * successor, and one that lowers it will hand on the bill.
+ *
+ * Deliberately not free in political capital. In a country where one
+ * community's arrangements simply are the national arrangements, changing
+ * them is not an administrative act.
+ */
+function handleLanguagePolicy(state: GameState, level: number): IntentResult {
+  if (!Number.isFinite(level) || level < 0 || level > 100) {
+    return reject(state, 'Language policy runs from nothing to everything.');
+  }
+  const move = Math.abs(level - state.culture.languagePolicy);
+  if (move < 1) return reject(state, 'That is where it already stands.');
+
+  const cost = Math.min(20, Math.round(4 + move * 0.16));
+  if (state.politicalCapital < cost) {
+    return reject(state, 'Not enough political capital to reopen the language settlement.');
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, cost);
+  const before = next.culture.languagePolicy;
+  next.culture.languagePolicy = level;
+
+  log(entries, {
+    kind: 'note',
+    label: level > before ? 'The state widens its languages' : 'The state narrows its languages',
+    delta: level - before,
+    cause:
+      `Signage, forms, schooling and the courts. Nothing changes this week: recognition ` +
+      `follows this figure over years and belonging follows recognition, so whoever is ` +
+      `sitting here in two terms gets the result.`,
+    unit: 'pts',
   });
   return ok(next);
 }

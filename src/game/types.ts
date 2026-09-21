@@ -1594,6 +1594,12 @@ export interface GameState {
    */
   living: Living;
 
+  /**
+   * What the country is, as distinct from what it has: a shared story,
+   * the institutions that tell it, and the norms nothing enforces.
+   */
+  culture: Culture;
+
   /** What the country is built out of, and what is being built. */
   infrastructure: Infrastructure;
 
@@ -1843,4 +1849,82 @@ export interface Living {
   ruralGap: number;
   regional: { regionId: string; standard: number }[];
   history: LivingPoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 4 — Culture
+ * ------------------------------------------------------------------ */
+
+/**
+ * One community, as a position in a distribution.
+ *
+ * Sizes and standing only. This engine never records who a community is:
+ * no real ethnic group, religion, language or minority is named anywhere
+ * in the game, because the mechanic worth having is structural and the
+ * alternative would require asserting things about real people.
+ */
+export interface CulturalCommunity {
+  id: string;
+  /** An ordinal position — "the second community" — never an identity. */
+  label: string;
+  share: number;
+  /** How far the state conducts itself in a way that includes them, 0–100. */
+  recognition: number;
+  /** How far they feel part of the country, 0–100. */
+  belonging: number;
+}
+
+export interface CulturalInstitution {
+  key: import('./content/culture.ts').CulturalInstitutionKey;
+  /** ₡bn a year reaching it. */
+  funding: number;
+  /** Share of the country it touches, 0–100. */
+  reach: number;
+  /**
+   * Whether it is actually working, 0–100.
+   *
+   * Falls faster than it rises: a disbanded ensemble is not re-formed by
+   * restoring its grant.
+   */
+  vitality: number;
+}
+
+export interface CulturePoint {
+  turn: number;
+  nationalIdentity: number;
+  politicalCulture: number;
+  nationalPride: number;
+  patriotism: number;
+  culturalReach: number;
+}
+
+export interface Culture {
+  /** How strong a shared story the country has, 0–100. */
+  nationalIdentity: number;
+  /** And how strong the local one is, which fills the space if it is thin. */
+  regionalIdentity: number;
+  communities: CulturalCommunity[];
+  /** How far the state supports languages other than the default, 0–100. */
+  languagePolicy: number;
+  traditionStrength: number;
+  /** Share for whom faith is central, %. */
+  religiosity: number;
+  /** Points of religiosity lost per year. A generational trend, not a policy. */
+  secularisation: number;
+  /** Public occasions a year that actually land. */
+  festivals: number;
+  institutions: CulturalInstitution[];
+  /** How far the under-thirties sit from everybody else, 0–100. */
+  youthDivergence: number;
+  /**
+   * The things everyone does because they are done rather than enforced:
+   * conceding, resigning, obeying a court. Has to be gone before a
+   * constitutional crisis is possible.
+   */
+  politicalCulture: number;
+  /** Attachment to the place. Barely moves. */
+  patriotism: number;
+  /** Satisfaction with how it is doing. Moves constantly. */
+  nationalPride: number;
+  history: CulturePoint[];
 }

@@ -40,6 +40,7 @@ import type { Ideology } from '../../types.ts';
 import { makeIdeology } from '../../ideology.ts';
 import type { SegmentKey } from '../segments.ts';
 import type { ElectoralSystem } from '../../systems/electoralSystems.ts';
+import type { CompositionProfile } from '../culture.ts';
 import type { CountryKey } from './countries.ts';
 
 /* ------------------------------------------------------------------ *
@@ -343,6 +344,17 @@ export interface PoliticsProfile {
    * engine treats a higher or lower number as better.
    */
   inequality: number;
+  /**
+   * The shape of the country's cultural composition — sizes only.
+   *
+   * How many distinct communities there are and how large each is. This
+   * engine never records WHO they are: no real ethnic group, religion,
+   * language or national minority is named anywhere in the game. A
+   * country with one community at 96% is a different place to govern
+   * from one whose largest is 44%, and that difference is available
+   * without asserting anything about real people.
+   */
+  composition: CompositionProfile;
   /** Which families have a real presence, largest first, with their weight. */
   families: { family: PartyFamily; weight: number }[];
   regions: RegionProfile[];
@@ -361,6 +373,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(0.05, 0.05, 0.05),
     polarisation: 0.9,
     inequality: 1.12,
+    composition: { shares: [0.82, 0.09, 0.09], majorityDefault: 0.55 },
     families: [
       { family: 'social_democratic', weight: 1.25 },
       { family: 'conservative', weight: 1.2 },
@@ -391,6 +404,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(-0.05, 0.1, 0.25),
     polarisation: 0.85,
     inequality: 0.94,
+    composition: { shares: [0.86, 0.08, 0.06], majorityDefault: 0.68 },
     families: [
       { family: 'christian_democratic', weight: 1.15 },
       { family: 'social_democratic', weight: 1.0 },
@@ -420,6 +434,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(-0.1, 0.05, 0.15),
     polarisation: 1.15,
     inequality: 0.92,
+    composition: { shares: [0.85, 0.09, 0.06], majorityDefault: 0.88 },
     families: [
       { family: 'centrist', weight: 1.0 },
       { family: 'nationalist', weight: 1.0 },
@@ -450,6 +465,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(0, -0.05, 0.1),
     polarisation: 1.1,
     inequality: 1.02,
+    composition: { shares: [0.91, 0.05, 0.04], majorityDefault: 0.72 },
     families: [
       { family: 'conservative', weight: 1.0 },
       { family: 'social_democratic', weight: 0.95 },
@@ -480,6 +496,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(-0.1, 0.15, 0.15),
     polarisation: 1.05,
     inequality: 1.05,
+    composition: { shares: [0.72, 0.17, 0.11], majorityDefault: 0.5 },
     families: [
       { family: 'social_democratic', weight: 1.15 },
       { family: 'conservative', weight: 1.1 },
@@ -509,6 +526,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(0.05, 0.25, 0.2),
     polarisation: 1.0,
     inequality: 0.9,
+    composition: { shares: [0.82, 0.1, 0.08], majorityDefault: 0.6 },
     families: [
       { family: 'liberal', weight: 0.9 },
       { family: 'nationalist', weight: 0.85 },
@@ -538,6 +556,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(-0.2, 0.35, 0.4),
     polarisation: 0.85,
     inequality: 0.82,
+    composition: { shares: [0.8, 0.12, 0.08], majorityDefault: 0.55 },
     families: [
       { family: 'social_democratic', weight: 1.3 },
       { family: 'nationalist', weight: 0.85 },
@@ -567,6 +586,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(0, 0.25, 0.2),
     polarisation: 0.8,
     inequality: 1.0,
+    composition: { shares: [0.92, 0.05, 0.03], majorityDefault: 0.7 },
     families: [
       { family: 'centrist', weight: 1.0 },
       { family: 'conservative', weight: 0.9 },
@@ -594,6 +614,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(0.05, -0.2, -0.05),
     polarisation: 1.2,
     inequality: 0.95,
+    composition: { shares: [0.96, 0.03, 0.01], majorityDefault: 0.85 },
     families: [
       { family: 'conservative', weight: 1.2 },
       { family: 'liberal', weight: 1.1 },
@@ -623,6 +644,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(-0.05, 0.3, 0.2),
     polarisation: 0.85,
     inequality: 1.02,
+    composition: { shares: [0.73, 0.21, 0.06], majorityDefault: 0.42 },
     families: [
       { family: 'centrist', weight: 1.2 },
       { family: 'conservative', weight: 1.15 },
@@ -650,6 +672,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(0.1, 0.15, 0.05),
     polarisation: 0.85,
     inequality: 1.04,
+    composition: { shares: [0.74, 0.14, 0.12], majorityDefault: 0.6 },
     families: [
       { family: 'social_democratic', weight: 1.2 },
       { family: 'conservative', weight: 1.15 },
@@ -676,6 +699,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(-0.05, 0.3, 0.25),
     polarisation: 0.8,
     inequality: 1.03,
+    composition: { shares: [0.7, 0.17, 0.13], majorityDefault: 0.5 },
     families: [
       { family: 'social_democratic', weight: 1.1 },
       { family: 'conservative', weight: 1.15 },
@@ -703,6 +727,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(0.15, -0.15, 0.1),
     polarisation: 0.7,
     inequality: 0.96,
+    composition: { shares: [0.97, 0.02, 0.01], majorityDefault: 0.9 },
     families: [
       { family: 'conservative', weight: 1.6 },
       { family: 'centrist', weight: 0.75 },
@@ -731,6 +756,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(0, -0.2, 0),
     polarisation: 1.1,
     inequality: 1.22,
+    composition: { shares: [0.44, 0.23, 0.18, 0.15], majorityDefault: 0.38 },
     families: [
       { family: 'nationalist', weight: 1.5 },
       { family: 'centrist', weight: 1.0 },
@@ -760,6 +786,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(-0.3, 0.2, 0.1),
     polarisation: 1.15,
     inequality: 1.55,
+    composition: { shares: [0.23, 0.21, 0.18, 0.2, 0.18], majorityDefault: 0.3 },
     families: [
       { family: 'social_democratic', weight: 1.4 },
       { family: 'liberal', weight: 0.9 },
@@ -787,6 +814,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(0.1, -0.1, 0),
     polarisation: 1.25,
     inequality: 1.14,
+    composition: { shares: [0.74, 0.18, 0.08], majorityDefault: 0.72 },
     families: [
       { family: 'conservative', weight: 1.1 },
       { family: 'nationalist', weight: 0.9 },
@@ -815,6 +843,7 @@ export const POLITICS_PROFILES: PoliticsProfile[] = [
     centre: lean(0, 0.1, 0.1),
     polarisation: 1.0,
     inequality: 1.0,
+    composition: { shares: [0.8, 0.12, 0.08], majorityDefault: 0.6 },
     families: [
       { family: 'centrist', weight: 1.0 },
       { family: 'social_democratic', weight: 1.0 },
