@@ -86,6 +86,7 @@ export * from './systems/negotiation.ts';
 export * from './systems/sanctions.ts';
 export * from './systems/softPower.ts';
 export * from './content/softPower.ts';
+export * from './systems/diplomacyWeb.ts';
 export * from './systems/timeline.ts';
 export * from './systems/peace.ts';
 export * from './content/peace.ts';

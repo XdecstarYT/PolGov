@@ -23,6 +23,7 @@ import {
   RECALL_AMBASSADOR_PC,
   SET_EMBASSY_TIER_PC,
   TREATY_LABELS,
+  allianceRippleTargets,
   ambassadorDividend,
   byWeight,
   canSummit,
@@ -342,6 +343,23 @@ export function WorldPanel() {
                         );
                       })}
                     </div>
+                    {(() => {
+                      const rivals = allianceRippleTargets(
+                        world.pairs,
+                        nation.key,
+                        world.nations.map((n) => n.key),
+                      );
+                      if (rivals.length === 0 || held.some((t) => t.kind === 'defence' || t.kind === 'mutual_defence')) {
+                        return null;
+                      }
+                      return (
+                        <p className="mt-1 text-[0.7rem] text-warn">
+                          A defence pact here reads as a choice of sides to{' '}
+                          {rivals.map((r) => findNation(r.nation).name).join(', ')} — an alliance is
+                          never just with one country.
+                        </p>
+                      );
+                    })()}
                   </div>
                 </div>
               )}

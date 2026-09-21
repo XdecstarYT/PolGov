@@ -1662,6 +1662,15 @@ export const SOFT_POWER_INVEST_EFFECT = 8;
 export const HIGH_COMMISSION_ESCALATION_RELIEF = 0.35;
 /** And how much faster it lets a crisis de-escalate once talking has started. */
 export const HIGH_COMMISSION_DEESCALATION_BOOST = 1.4;
+
+/* ------------------------------------------------------------------ *
+ * Engine 8M — the diplomacy web
+ * ------------------------------------------------------------------ */
+
+/** How hostile a third country has to be toward a new ally before the ripple counts them as a rival at all. */
+export const RIVAL_HOSTILITY_THRESHOLD = 35;
+/** How much of a rival's hostility toward the new ally turns into relations cost with us. */
+export const RIVAL_RIPPLE_WEIGHT = 0.18;
 /** How much a point of tariff suppresses the flow it falls on. */
 export const TARIFF_ELASTICITY = 0.9;
 /** Supply chains are physical objects with contracts attached. */

@@ -289,6 +289,7 @@ import { buildAmbassador } from './systems/diplomats.ts';
 import { addGrievance } from './systems/grievances.ts';
 import { sweetenOffer, sweetenValue } from './systems/negotiation.ts';
 import { investSoftPower } from './systems/softPower.ts';
+import { allianceRippleTargets } from './systems/diplomacyWeb.ts';
 import { SWEETEN_OFFER_PC } from './balance.ts';
 import { SOFT_POWER_INVEST_PC } from './balance.ts';
 import { EMBASSY_TIERS, type EmbassyTier } from './content/diplomats.ts';
@@ -6337,6 +6338,35 @@ function handleProposeTreaty(
     cause: obligationOf(kind, template.name),
     unit: '',
   });
+
+  /* An alliance is never just with one country. Whoever that country's
+     own rivals are reads it as aimed at them too, whether or not
+     anyone here said so — the balance-of-power reflex, read straight
+     off the third-party web rather than asserted. */
+  if (kind === 'defence' || kind === 'mutual_defence') {
+    const targets = allianceRippleTargets(
+      next.world.pairs,
+      key,
+      next.world.nations.map((n) => n.key),
+    );
+    if (targets.length > 0) {
+      next.world = {
+        ...next.world,
+        nations: next.world.nations.map((n) => {
+          const target = targets.find((t) => t.nation === n.key);
+          return target ? { ...n, relations: clampRelations(n.relations - target.relationsCost) } : n;
+        }),
+      };
+      log(entries, {
+        kind: 'note',
+        label: 'Read as a choice of sides',
+        delta: -targets.reduce((sum, t) => sum + t.relationsCost, 0),
+        cause: `${targets.map((t) => findNation(t.nation).name).join(', ')} watched a defence pact with ${template.name} land, and drew the obvious conclusion about who it was aimed at.`,
+        unit: 'pts',
+      });
+    }
+  }
+
   return ok(next);
 }
 
