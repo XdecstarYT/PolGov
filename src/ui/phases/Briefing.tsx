@@ -42,6 +42,7 @@ import { DefencePanel } from '../components/DefencePanel.tsx';
 import { ForcesPanel } from '../components/ForcesPanel.tsx';
 import { FleetPanel } from '../components/FleetPanel.tsx';
 import { AirPanel } from '../components/AirPanel.tsx';
+import { LogisticsPanel } from '../components/LogisticsPanel.tsx';
 import { TheatrePanel } from '../components/TheatrePanel.tsx';
 import { IntelligencePanel } from '../components/IntelligencePanel.tsx';
 import { CastPanel } from '../components/CastPanel.tsx';
@@ -219,6 +220,7 @@ export function Briefing() {
                 <ForcesPanel />
                 <FleetPanel />
                 <AirPanel />
+                <LogisticsPanel />
                 <TheatrePanel />
                 <IntelligencePanel />
               </>

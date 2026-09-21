@@ -39,6 +39,8 @@ import { buildSociety } from './systems/society.ts';
 import { ARMY_SHARE, buildManpower, underArms } from './systems/manpower.ts';
 import { buildOrbat } from './systems/orbat.ts';
 import { buildNavy } from './systems/naval.ts';
+import { buildLogistics } from './systems/logistics.ts';
+import { buildWarEconomy } from './systems/warEconomy.ts';
 import { buildAirForce } from './systems/air.ts';
 import { buildLiving } from './systems/living.ts';
 import { buildCulture } from './systems/culture.ts';
@@ -486,6 +488,15 @@ export function createGame(options: NewGameOptions): GameState {
       new Set<string>(),
       openingCulture.politicalCulture,
     ),
+
+    /* Depots at the levels somebody else left them at, with production
+       exactly matching consumption, so nothing moves until something is
+       done to it. */
+    logistics: buildLogistics(),
+
+    /* A peacetime economy, which is the only footing a country is ever
+       ready for. */
+    warEconomy: buildWarEconomy(),
 
     /* Ships somebody else ordered, most of them alongside, and the
        fleet list is not the fleet. */

@@ -1685,6 +1685,23 @@ export interface GameState {
   orbat: Orbat;
 
   /**
+   * The depots, and the arithmetic nobody does.
+   *
+   * Weeks of ammunition, weeks of fuel, and how many people are behind
+   * the front for every one at it. All of it computable on the first
+   * afternoon and none of it briefed.
+   */
+  logistics: Logistics;
+
+  /**
+   * Turning the country over to it, and paying for it.
+   *
+   * Nothing arrives for eighteen months, it arrives under a successor,
+   * and it does not unwind.
+   */
+  warEconomy: WarEconomy;
+
+  /**
    * The fleet: built in decades, lost in an afternoon, and about a third
    * of it ever at sea.
    */
@@ -2600,4 +2617,84 @@ export interface AirForce {
   /** And what it has destroyed, which is real and is not the same thing. */
   bombingDamage: number;
   history: AirForcePoint[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — Logistics and the war economy
+ * ------------------------------------------------------------------ */
+
+/** One class of supply: what there is, and what is arriving. */
+export interface Stockpile {
+  key: import('./content/logistics.ts').SupplyClass;
+  /**
+   * Weeks of ordinary consumption held.
+   *
+   * The number that decides the shape of a war and is never briefed. It
+   * can be worked out on the first afternoon by anybody who wants to.
+   */
+  weeks: number;
+  /** Arriving per week, as a share of ordinary consumption. */
+  production: number;
+  /** And consumed per week, same units. Throughput, not stock. */
+  consumption: number;
+  /** How far production has been raised toward what was ordered, 0–1. */
+  conversion: number;
+  history: { turn: number; weeks: number }[];
+}
+
+export interface LogisticsPoint {
+  turn: number;
+  /** The shortest stock in the inventory, in weeks. The binding one. */
+  shortest: number;
+  /** What actually reaches the front, 0–1. */
+  throughput: number;
+  tail: number;
+}
+
+export interface Logistics {
+  stock: Stockpile[];
+  /**
+   * People behind the front for every one at it.
+   *
+   * The reason an army of a hundred thousand is not a hundred thousand
+   * rifles, and the reason that past some point adding troops reduces
+   * what the country can bring to bear.
+   */
+  tail: number;
+  /** How much of what is needed actually arrives, 0–1. */
+  throughput: number;
+  history: LogisticsPoint[];
+}
+
+export interface WarEconomyPoint {
+  turn: number;
+  output: number;
+  civilianCost: number;
+  converted: number;
+}
+
+export interface WarEconomy {
+  footing: import('./content/logistics.ts').WarFooting;
+  /**
+   * How far the conversion has actually got, 0–1.
+   *
+   * A government that orders a war footing gets nothing for eighteen
+   * months. This is the number that says how much of the nothing is
+   * left, and it is the one that makes the decision a decision.
+   */
+  converted: number;
+  /** The turn the current footing was ordered. The unwind runs from it. */
+  orderedTurn: number;
+  /** How it is being paid for, which decides who pays. */
+  finance: import('./content/logistics.ts').WarFinance;
+  /** Cumulative, in ₡bn. The bill, whoever ends up holding it. */
+  spent: number;
+  /**
+   * What has been taken out of the civilian economy, cumulatively.
+   *
+   * Guns and butter is a lie, and so is guns instead of butter: cutting
+   * civilian production shrinks the tax base that pays for the guns.
+   */
+  civilianForegone: number;
+  history: WarEconomyPoint[];
 }

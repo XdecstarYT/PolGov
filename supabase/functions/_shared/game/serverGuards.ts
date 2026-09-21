@@ -29,6 +29,8 @@ export const ALLOWED_INTENT_TYPES: ReadonlySet<Intent['type']> = new Set([
   'order_ship',
   'set_air_effort',
   'order_squadron',
+  'set_war_footing',
+  'set_war_finance',
   'withdraw_bill',
   'public_address',
   'coalition_concession',

@@ -176,9 +176,11 @@ import {
 import { findService, sectorHealthEffects, stepServices } from './systems/services.ts';
 import { stepSociety } from './systems/society.ts';
 import {
+  ARMY_SHARE,
   applyMobilisation,
   mobilisationChange,
   stepManpower,
+  underArms,
 } from './systems/manpower.ts';
 import {
   buildTheatre,
@@ -202,6 +204,21 @@ import {
   type SeaZone,
   type ShipClass,
 } from './content/naval.ts';
+import { stepLogistics, stockOf, weeksRemaining } from './systems/logistics.ts';
+import {
+  footingChange,
+  militaryOutput,
+  setFinance,
+  setFooting,
+  stepWarEconomy,
+} from './systems/warEconomy.ts';
+import {
+  findFinance,
+  findFooting,
+  findSupply,
+  type WarFinance,
+  type WarFooting,
+} from './content/logistics.ts';
 import {
   findAircraft,
   findCampaign,
@@ -490,6 +507,8 @@ export type Intent =
   | { type: 'order_ship'; shipClass: ShipClass }
   | { type: 'set_air_effort'; effort: Partial<Record<AirCampaign, number>> }
   | { type: 'order_squadron'; aircraft: AircraftKind }
+  | { type: 'set_war_footing'; footing: WarFooting }
+  | { type: 'set_war_finance'; finance: WarFinance }
   | { type: 'withdraw_bill'; billId: string }
   | { type: 'public_address' }
   | { type: 'coalition_concession'; partyId: string }
@@ -3153,6 +3172,128 @@ export function resolveTurn(state: GameState): GameState {
     }
   }
 
+  /*
+   * The depots, and what the country is making.
+   *
+   * Stepped last of the war systems because everything else has already
+   * said what it burned this week. The two numbers that come out of here
+   * — weeks of ammunition, and what reaches the front — are the ones
+   * that decide whether any of the rest of it was possible, and they are
+   * both knowable on the first afternoon of a war by anybody who asks.
+   */
+  {
+    const fightingNow = next.crises.filter((c) => c.stage === 'war');
+    const atWar = fightingNow.length > 0;
+    const intensity = atWar
+      ? Math.min(100, fightingNow.reduce((sum, c) => sum + c.escalation, 0))
+      : 0;
+    const roads = next.infrastructure.assets.find((a) => a.key === 'roads');
+    const rail = next.infrastructure.assets.find((a) => a.key === 'railways');
+    const transport =
+      ((roads ? clamp01to100(roads.condition) : 60) +
+        (rail ? clamp01to100(rail.condition) : 60)) /
+      200;
+
+    const force = underArms(next.manpower);
+    const committedPeople = next.orbat.formations
+      .filter((f) => f.committed)
+      .reduce((sum, f) => sum + f.personnel, 0);
+    const deepest = next.theatres.reduce(
+      (deepest_, t) =>
+        Math.max(deepest_, ...t.sectors.filter((x) => x.garrison.length > 0).map((x) => x.depth), 0),
+      0,
+    );
+
+    const economyTick = stepWarEconomy(next.warEconomy, {
+      gdp: next.economy.gdp,
+      warCost: atWar ? warCost(next.crises, next.moneyScale) / TURNS_PER_YEAR : 0,
+      atWar,
+      turn: absoluteWeek(next),
+      moneyScale: next.moneyScale,
+    });
+    next.warEconomy = economyTick.economy;
+
+    if (economyTick.borrowed > 0) next.debt += economyTick.borrowed;
+    if (economyTick.inflation > 0) {
+      next.economy = {
+        ...next.economy,
+        inflation: next.economy.inflation + economyTick.inflation,
+      };
+    }
+    if (Math.abs(economyTick.approval) > 0.002) {
+      next.approval = clampApproval(next.approval + economyTick.approval);
+    }
+    if (economyTick.converted) {
+      log(entries, {
+        kind: 'note',
+        label: `${findFooting(next.warEconomy.footing).label} — converted`,
+        delta: militaryOutput(next.warEconomy),
+        cause:
+          `Ordered ${Math.round((absoluteWeek(next) - next.warEconomy.orderedTurn) / 4)} months ` +
+          `ago, and producing something from this week. Whoever ordered it paid for all of ` +
+          `that and collected none of it, which is what ordering it is.`,
+        unit: '\u00d7',
+      });
+    }
+
+    const logisticsTick = stepLogistics(next.logistics, {
+      committed: committedPeople,
+      force: Math.max(1, force * ARMY_SHARE),
+      depth: deepest,
+      atWar,
+      intensity,
+      output: militaryOutput(next.warEconomy),
+      funding: next.services.find((x) => x.key === 'defence')?.staffing ?? 1,
+      transport,
+      /*
+       * What the network was built for. A force larger than this is not
+       * better supplied by being larger — it is worse supplied, and so
+       * is everybody already there.
+       */
+      capacity: Math.max(1, transport * 260_000 * next.peopleScale),
+      turn: absoluteWeek(next),
+    });
+    next.logistics = logisticsTick.logistics;
+
+    for (const key of logisticsTick.warning) {
+      const template = findSupply(key);
+      const left = weeksRemaining(stockOf(next.logistics, key));
+      log(entries, {
+        kind: 'note',
+        label: `${template.label}: ${Number.isFinite(left) ? left.toFixed(0) : 'many'} weeks left`,
+        delta: -stockOf(next.logistics, key).weeks,
+        cause:
+          `${template.outcome} Raising production takes ${template.leadMonths} months, which ` +
+          `is longer than the stock lasts — and was longer than the stock lasted on the first ` +
+          `day of this too.`,
+        unit: 'weeks',
+      });
+    }
+    for (const key of logisticsTick.critical) {
+      const template = findSupply(key);
+      log(entries, {
+        kind: 'event',
+        label: `${template.label} is running out`,
+        delta: -1,
+        cause: template.outcome,
+        unit: '',
+      });
+    }
+    if (logisticsTick.diminishing) {
+      log(entries, {
+        kind: 'note',
+        label: 'The tail has started eating the teeth',
+        delta: next.logistics.tail,
+        cause:
+          `${next.logistics.tail.toFixed(1)} people behind the front for every one at it. Past ` +
+          `this point sending more formations forward reduces what can be brought to bear, ` +
+          `because what they consume exceeds what they add. Nothing about that is intuitive ` +
+          `and it does not stop being true for that reason.`,
+        unit: 'ratio',
+      });
+    }
+  }
+
   const economyBefore = next.economy;
   next.economy = stepEconomy(next.economy, {
     fiscalImpulse: fiscalImpulse(fiscal),
@@ -3728,6 +3869,10 @@ export function applyIntent(state: GameState, intent: Intent): IntentResult {
       return handleAirEffort(state, intent.effort);
     case 'order_squadron':
       return handleOrderSquadron(state, intent.aircraft);
+    case 'set_war_footing':
+      return handleWarFooting(state, intent.footing);
+    case 'set_war_finance':
+      return handleWarFinance(state, intent.finance);
     case 'withdraw_bill':
       return handleWithdrawBill(state, intent.billId);
     case 'public_address':
@@ -5211,6 +5356,79 @@ function handleFileTradeComplaint(state: GameState, key: NationKey): IntentResul
  * others. The whole of naval strategy is which waters to be absent from,
  * and no government has ever announced one.
  */
+
+/**
+ * Turn the country over to it.
+ *
+ * The decision is entirely about WHEN. A government ordering a war
+ * economy gets nothing for the better part of two years, pays for all of
+ * it in the meantime, and hands the capacity to a successor — who will
+ * also inherit a country whose defence industry now has towns around it
+ * and members who represent them. Nothing here can be undone inside a
+ * term, which is the point rather than a limitation.
+ */
+function handleWarFooting(state: GameState, footing: WarFooting): IntentResult {
+  const change = footingChange(state.warEconomy, footing, absoluteWeek(state));
+  if (!change.allowed) return reject(state, change.reason);
+  if (state.politicalCapital < change.politicalCapital) {
+    return reject(
+      state,
+      `Directing industry costs ${change.politicalCapital} PC. It is an argument with every firm that is about to be told what to make, and with every constituency that has one.`,
+    );
+  }
+
+  const next = clone(state);
+  const entries = currentLog(next);
+  spendPc(next, change.politicalCapital);
+  next.warEconomy = setFooting(next.warEconomy, footing, absoluteWeek(next));
+  if (change.approvalCost > 0) {
+    next.approval = clampApproval(next.approval - change.approvalCost);
+  }
+
+  const template = findFooting(footing);
+  log(entries, {
+    kind: 'note',
+    label: template.label,
+    delta: -change.approvalCost,
+    cause:
+      change.months > 0
+        ? `${template.blurb} Nothing is produced for ${change.months} months. The cost starts ` +
+          `this week and the capacity arrives under a government that may not be this one, ` +
+          `and cannot be wound back for ${template.unwindMonths} months after that.`
+        : template.blurb,
+    unit: 'pts',
+  });
+  return ok(next);
+}
+
+/**
+ * Decide who pays for the war.
+ *
+ * Not an economic choice. There are three ways, each has a different
+ * group of people at the end of it, and what actually differs is the
+ * delay before those people notice. The shortest delay is the one nobody
+ * chooses, and nothing in this engine rewards choosing it — which is
+ * exactly the situation being modelled.
+ */
+function handleWarFinance(state: GameState, finance: WarFinance): IntentResult {
+  if (state.warEconomy.finance === finance) {
+    return reject(state, 'That is how it is already being paid for.');
+  }
+  const next = clone(state);
+  const entries = currentLog(next);
+  next.warEconomy = setFinance(next.warEconomy, finance);
+
+  const template = findFinance(finance);
+  log(entries, {
+    kind: 'note',
+    label: template.label,
+    delta: 0,
+    cause: `${template.blurb} ${template.victim} They will notice in about ${Math.round(template.delayWeeks / 4)} months.`,
+    unit: '',
+  });
+  return ok(next);
+}
+
 function handleStationFleet(state: GameState, zone: SeaZone, hulls: number): IntentResult {
   const available = seaworthy(state.navy).length;
   if (hulls > available) {

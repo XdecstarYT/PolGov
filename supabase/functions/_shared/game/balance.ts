@@ -2775,3 +2775,77 @@ export const BOMBING_DAMAGE = 0.11;
 
 /** Aircrew a squadron needs per week to stay at establishment. */
 export const AIRCREW_REPLACEMENT = 0.012;
+
+/* ------------------------------------------------------------------ *
+ * Engine 7 — Logistics and the war economy
+ * ------------------------------------------------------------------ */
+
+/**
+ * Weeks of stock below which the shortage is reported rather than noticed.
+ *
+ * Set where a government still has time to do something, which is also
+ * where doing something takes longer than the stock will last. That is
+ * not a design failure; it is the situation.
+ */
+export const STOCK_WARNING_WEEKS = 6;
+
+/** And where the shortage stops being a warning. */
+export const STOCK_CRITICAL_WEEKS = 2;
+
+/**
+ * The most of anything a country can physically hold, as a multiple of
+ * what it started with.
+ *
+ * Warehouses, shelf life, and somewhere to put it. Without this a war
+ * economy quietly accumulates six years of rations, which is not a
+ * stockpile — it is a rounding error with a number in front of it.
+ */
+export const STORAGE_CEILING = 3;
+
+/**
+ * Weeks per month, for converting a footing's stated conversion time
+ * into a weekly rate.
+ *
+ * Each footing converts at its OWN pace rather than a shared one, which
+ * is the difference between preparedness arriving inside a term and a
+ * total war economy arriving under a successor — and that difference is
+ * the entire decision.
+ */
+export const CONVERSION_WEEKS_PER_MONTH = TURNS_PER_YEAR / 12;
+
+/**
+ * Throughput floor: what reaches the front when the tail has collapsed.
+ *
+ * Never zero, because somebody always walks forward with something. It
+ * is not an army's worth of something.
+ */
+export const THROUGHPUT_FLOOR = 0.12;
+
+/**
+ * Tail ratio past which adding troops reduces what can be brought to bear.
+ *
+ * The least intuitive fact in the subject and the one every government
+ * has to be shown twice: what the new formations consume exceeds what
+ * they add, and the front gets weaker as the army gets bigger.
+ */
+export const TAIL_DIMINISHING = 3.4;
+
+/**
+ * How much the tail lengthens per unit of force beyond what the
+ * transport network was built for.
+ *
+ * The same roads, the same railheads, the same three bridges. A force
+ * twice the size of what the network was built for does not get half
+ * the supply each — it gets less than that, because the congestion is
+ * itself consuming the capacity.
+ */
+export const TAIL_CONGESTION = 0.45;
+
+/** How fast the tail stops paying for itself past the diminishing point. */
+export const TAIL_PENALTY = 0.13;
+
+/** Points of inflation per ₡bn of war printed, per year, at reference scale. */
+export const PRINTING_INFLATION = 0.0042;
+
+/** And approval per week of an emergency war tax, which is visible. */
+export const WAR_TAX_APPROVAL = 0.05;
