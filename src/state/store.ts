@@ -17,6 +17,7 @@ import { create } from 'zustand';
 import type {
   Difficulty,
   ElectoralSystem,
+  GameEvent,
   GameState,
   Ideology,
   Intent,
@@ -75,6 +76,11 @@ interface AppState {
   /** Intents applied since the turn opened. Not persisted. */
   journal: Intent[];
 
+  /** True while `skipTurns` is driving the run forward unattended. */
+  skipping: boolean;
+  /** How far a run of `skipTurns` has got, for a progress line. */
+  skipProgress: { done: number; total: number } | null;
+
   init: () => Promise<void>;
   setScreen: (screen: Screen) => void;
   toggleTheme: () => void;
@@ -92,6 +98,15 @@ interface AppState {
 
   dispatch: (intent: Intent) => Promise<void>;
   endTurn: () => Promise<void>;
+  /**
+   * Drive the run forward `weeks` weeks unattended: click through briefing,
+   * agenda and budget exactly as a player clicking "Continue" would, and
+   * answer any event that fires with its cheapest affordable response.
+   * Stops early — before spending a political-capital figure the player
+   * never chose, and before an election or a fallen coalition needs a real
+   * decision — and says why, via `announce`.
+   */
+  skipTurns: (weeks: number) => Promise<void>;
 
   legacy: () => LegacyScore | null;
 
@@ -133,6 +148,97 @@ function opensNewTurn(before: GameState, after: GameState): boolean {
   return after.turnNumber !== before.turnNumber || after.termNumber !== before.termNumber;
 }
 
+/**
+ * The cheapest response to an event that the treasury of political capital
+ * can actually afford — ties broken by whichever comes first, same as a
+ * player scanning the list top to bottom. `null` means every option costs
+ * more than the government currently has, which `skipTurns` treats as a
+ * stopping point rather than a licence to go into debt on the player's
+ * behalf.
+ */
+function cheapestAffordableChoice(event: GameEvent, politicalCapital: number): number | null {
+  let bestIndex: number | null = null;
+  let bestCost = Infinity;
+  event.choices.forEach((choice, index) => {
+    if (choice.pcCost < bestCost) {
+      bestCost = choice.pcCost;
+      bestIndex = index;
+    }
+  });
+  return bestIndex !== null && bestCost <= politicalCapital ? bestIndex : null;
+}
+
+/**
+ * Phases `skipTurns` can drive through on its own, because nothing in them
+ * requires a decision only a player can make once events are answered.
+ * Anything else — an election, coalition talks, the end of a career — is
+ * exactly the kind of moment a skip should hand back rather than click
+ * through.
+ */
+const AUTOPLAYABLE_PHASES: ReadonlySet<GameState['phase']> = new Set([
+  'briefing',
+  'events',
+  'agenda',
+  'budget',
+  'report',
+]);
+
+/**
+ * Drive one full week forward — briefing through report — using the same
+ * `dispatch`/`endTurn` calls the phase screens' own buttons use. Returns why
+ * it stopped short of a week whenever it did, so `skipTurns` can tell the
+ * player rather than leaving them to work it out from where the run ended up.
+ */
+async function advanceOneWeek(
+  get: () => AppState,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  /* A real week never takes more than a handful of phase transitions; this
+     guards against a future bug turning a stuck phase into a frozen tab. */
+  for (let guard = 0; guard < 40; guard++) {
+    const { game, dispatch, endTurn } = get();
+    if (!game) return { ok: false, reason: 'There is no run in progress.' };
+    if (game.status !== 'active') return { ok: false, reason: 'This run has already ended.' };
+    if (!AUTOPLAYABLE_PHASES.has(game.phase)) {
+      return { ok: false, reason: 'The run needs your attention before it can continue.' };
+    }
+
+    switch (game.phase) {
+      case 'events': {
+        const pending = game.events.find((e) => !e.resolved);
+        if (!pending) {
+          await dispatch({ type: 'advance_phase' });
+          break;
+        }
+        const choice = cheapestAffordableChoice(pending, game.politicalCapital);
+        if (choice === null) {
+          return {
+            ok: false,
+            reason: `"${pending.title}" needs a response the government can't currently afford.`,
+          };
+        }
+        await dispatch({ type: 'resolve_event', eventId: pending.id, choiceIndex: choice });
+        break;
+      }
+
+      case 'budget':
+        await endTurn();
+        break;
+
+      case 'report':
+        await dispatch({ type: 'advance_phase' });
+        return get().error ? { ok: false, reason: get().error! } : { ok: true };
+
+      default:
+        /* briefing, agenda — nothing here blocks moving on. */
+        await dispatch({ type: 'advance_phase' });
+        break;
+    }
+
+    if (get().error) return { ok: false, reason: get().error! };
+  }
+  return { ok: false, reason: 'Could not make progress on this week.' };
+}
+
 export const useGame = create<AppState>((set, get) => ({
   screen: 'title',
   game: null,
@@ -147,6 +253,8 @@ export const useGame = create<AppState>((set, get) => ({
   resolvingRemotely: false,
   turnStart: null,
   journal: [],
+  skipping: false,
+  skipProgress: null,
 
   async init() {
     const theme = readTheme();
@@ -421,6 +529,37 @@ export const useGame = create<AppState>((set, get) => ({
 
     await get().dispatch({ type: 'advance_phase' });
     set({ announcement: 'Turn resolved. The report is ready.' });
+  },
+
+  async skipTurns(weeks) {
+    if (get().skipping) return;
+    set({ skipping: true, skipProgress: { done: 0, total: weeks }, error: null });
+
+    let completed = 0;
+    let stopReason: string | null = null;
+
+    for (; completed < weeks; completed++) {
+      const result = await advanceOneWeek(get);
+      if (!result.ok) {
+        stopReason = result.reason;
+        break;
+      }
+      set({ skipProgress: { done: completed + 1, total: weeks } });
+    }
+
+    const weekWord = completed === 1 ? 'week' : 'weeks';
+    const stoppedEarly = stopReason !== null && completed < weeks;
+    set({
+      skipping: false,
+      skipProgress: null,
+      /* The sr-only announcement region is silent to a sighted player, and a
+         stop worth explaining — an election, an event nobody can afford —
+         is worth more than that. Reuse the one visible banner the app has. */
+      error: stoppedEarly ? `Skipped ${completed} of ${weeks} ${weekWord} — ${stopReason}` : null,
+      announcement: stoppedEarly
+        ? `Skip stopped after ${completed} ${weekWord}: ${stopReason}`
+        : `Skipped ${completed} ${weekWord}.`,
+    });
   },
 
   legacy() {

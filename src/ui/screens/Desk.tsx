@@ -13,6 +13,8 @@
 import { useMemo } from 'react';
 import { useGame } from '../../state/store.ts';
 import {
+  BUDGET_TURN_INTERVAL,
+  CONVERSION_WEEKS_PER_MONTH,
   MAJORITY_SEATS,
   TURNS_PER_TERM,
   coalitionPartners,
@@ -49,7 +51,8 @@ const PHASE_ORDER: { phase: Phase; label: string; player: boolean }[] = [
 ];
 
 export function Desk() {
-  const { game, theme, toggleTheme, quitToTitle, exportGame, setScreen } = useGame();
+  const { game, theme, toggleTheme, quitToTitle, exportGame, setScreen, skipTurns, skipping, skipProgress } =
+    useGame();
   if (!game) return null;
 
   const player = playerParty(game.parties);
@@ -155,6 +158,47 @@ export function Desk() {
               );
             })}
             {campaign && <Tag tone="accent">Campaign</Tag>}
+
+            <span className="ml-auto flex flex-wrap items-center gap-1.5">
+              {skipping && skipProgress && (
+                <span className="text-[0.68rem] text-ink-faint tnum">
+                  Skipping… week {skipProgress.done} of {skipProgress.total}
+                </span>
+              )}
+              <span className="text-[0.68rem] text-ink-faint">Skip</span>
+              <Button
+                variant="quiet"
+                disabled={skipping}
+                onClick={() => void skipTurns(1)}
+                title="Play one week automatically. Any event that fires gets its cheapest affordable response."
+              >
+                1 wk
+              </Button>
+              <Button
+                variant="quiet"
+                disabled={skipping}
+                onClick={() => void skipTurns(2)}
+                title="Play two weeks automatically"
+              >
+                2 wk
+              </Button>
+              <Button
+                variant="quiet"
+                disabled={skipping}
+                onClick={() => void skipTurns(Math.round(CONVERSION_WEEKS_PER_MONTH))}
+                title={`Play about a month automatically (${Math.round(CONVERSION_WEEKS_PER_MONTH)} weeks)`}
+              >
+                Month
+              </Button>
+              <Button
+                variant="quiet"
+                disabled={skipping}
+                onClick={() => void skipTurns(BUDGET_TURN_INTERVAL)}
+                title={`Play a quarter automatically (${BUDGET_TURN_INTERVAL} weeks)`}
+              >
+                Quarter
+              </Button>
+            </span>
           </nav>
         </div>
       </header>
