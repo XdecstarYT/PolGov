@@ -8,6 +8,23 @@
  *
  * No model is ever asked to decide a mechanic. These calls send outcomes that
  * game code has already computed and ask only for words about them.
+ *
+ * TWO WAYS TO REACH GROQ
+ *
+ * The default, and the only one documented in DEPLOY.md's main path, is the
+ * Supabase edge function: the key stays server-side, calls are rate-limited
+ * per signed-in user, and RLS gates who can even ask. That path is used
+ * whenever `isCloudConfigured` is true.
+ *
+ * The second is `VITE_GROQ_API_KEY` — calling Groq straight from the
+ * browser, no backend at all. It exists because a backend is a real cost to
+ * set up, and this game is meant to be playable without one. It is also a
+ * real security trade-off: a `VITE_` value is compiled into the public
+ * bundle, so the key is readable by anyone who opens dev tools on the
+ * deployed site, there is no way to stop them using it, and a client-side
+ * call counter (below) only guards against this game's own bugs, not
+ * against a key already lifted out of the page. Set it only with a key
+ * you have accepted could end up spent by someone else.
  */
 
 import type { BillMagnitude, GameEvent, GameState, NewsItem } from '../game/index.ts';
@@ -25,17 +42,15 @@ import {
 } from '../game/content/news.ts';
 import { SECTOR_LABELS } from '../game/balance.ts';
 import { isCloudConfigured, supabase } from './supabase.ts';
+import {
+  MAX_TOKENS,
+  STRUCTURED_KINDS,
+  SYSTEM_PROMPTS,
+  TEMPERATURE,
+  type NarratorKind,
+} from './aiPrompts.ts';
 
-export type NarratorKind =
-  | 'news'
-  | 'event_narrative'
-  | 'opposition_quote'
-  | 'coalition_dialogue'
-  | 'debate_line'
-  | 'career_summary'
-  | 'bill_draft'
-  | 'leader_voice'
-  | 'press_column';
+export type { NarratorKind };
 
 /** Give up quickly — a slow narrator must never hold up a turn. */
 const TIMEOUT_MS = 6000;
@@ -52,7 +67,17 @@ async function callNarrator(
   gameId: string,
   context: unknown,
 ): Promise<string | null> {
-  if (!isCloudConfigured || !supabase) return null;
+  if (isCloudConfigured && supabase) return callViaEdgeFunction(kind, gameId, context);
+  if (directApiKey) return callGroqDirect(kind, context);
+  return null;
+}
+
+async function callViaEdgeFunction(
+  kind: NarratorKind,
+  gameId: string,
+  context: unknown,
+): Promise<string | null> {
+  if (!supabase) return null;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -63,6 +88,65 @@ async function callNarrator(
     });
     if (error) return null;
     const text = (data as { text?: string } | null)?.text;
+    return typeof text === 'string' && text.trim().length > 0 ? text.trim() : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * The insecure path — see the file header. Present only when the player has
+ * explicitly set it; absent (the default), this whole branch never runs.
+ */
+const directApiKey = import.meta.env.VITE_GROQ_API_KEY as string | undefined;
+const directModel =
+  (import.meta.env.VITE_GROQ_MODEL as string | undefined) || 'llama-3.3-70b-versatile';
+
+/** Calls allowed per hour, tracked in memory only — see the file header. */
+const DIRECT_RATE_LIMIT_PER_HOUR = 60;
+const directCallTimestamps: number[] = [];
+
+function withinDirectRateLimit(): boolean {
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  while (directCallTimestamps.length > 0 && directCallTimestamps[0]! < cutoff) {
+    directCallTimestamps.shift();
+  }
+  return directCallTimestamps.length < DIRECT_RATE_LIMIT_PER_HOUR;
+}
+
+async function callGroqDirect(kind: NarratorKind, context: unknown): Promise<string | null> {
+  if (!directApiKey || !withinDirectRateLimit()) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${directApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: directModel,
+        temperature: TEMPERATURE[kind],
+        max_tokens: MAX_TOKENS[kind],
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPTS[kind] },
+          { role: 'user', content: JSON.stringify(context ?? {}) },
+        ],
+        ...(STRUCTURED_KINDS.has(kind) ? { response_format: { type: 'json_object' } } : {}),
+      }),
+    });
+
+    if (!response.ok) return null;
+    directCallTimestamps.push(Date.now());
+
+    const payload = await response.json();
+    const text: unknown = payload?.choices?.[0]?.message?.content;
     return typeof text === 'string' && text.trim().length > 0 ? text.trim() : null;
   } catch {
     return null;

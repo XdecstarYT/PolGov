@@ -7,12 +7,21 @@
  * can just as easily end up in a sourcemap or a CSS url().
  *
  * Exits non-zero on any finding, so it can gate a deploy.
+ *
+ * ONE DELIBERATE EXCEPTION: `VITE_GROQ_API_KEY` opts a build into calling
+ * Groq straight from the browser (see `src/services/narrator.ts`), which
+ * means the key is *meant* to reach the bundle. If that variable was set for
+ * this build, the two Groq-key-shaped rules below are skipped — everything
+ * else (service-role keys, private-key blocks, the `GROQ_API_KEY` name
+ * itself) still runs at full strength, so this narrows the exception to
+ * exactly the thing that was opted into rather than turning the check off.
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 const DIST = 'dist';
+const CLIENT_KEY_OPT_IN = Boolean(process.env.VITE_GROQ_API_KEY);
 
 /**
  * Each rule is a thing that must never reach the browser.
@@ -23,12 +32,14 @@ const RULES = [
     name: 'Groq API key prefix',
     pattern: /gsk_[A-Za-z0-9]{8,}/g,
     allow: [],
+    skip: CLIENT_KEY_OPT_IN,
   },
   {
     name: 'Groq API key prefix (bare)',
     // The literal prefix on its own, even without a plausible body.
     pattern: /gsk_/g,
     allow: [],
+    skip: CLIENT_KEY_OPT_IN,
   },
   {
     name: 'Supabase secret/service key',
@@ -81,6 +92,7 @@ for (const file of files) {
   }
 
   for (const rule of RULES) {
+    if (rule.skip) continue;
     rule.pattern.lastIndex = 0;
     for (const match of content.matchAll(rule.pattern)) {
       if (rule.allow.includes(match[0])) continue;
@@ -95,7 +107,13 @@ for (const file of files) {
 }
 
 console.log(`check:secrets — scanned ${files.length} files (${(bytes / 1024).toFixed(0)} kB) in ${DIST}/`);
-for (const rule of RULES) console.log(`  · ${rule.name}: ${findings.filter((f) => f.rule === rule.name).length} match(es)`);
+for (const rule of RULES) {
+  console.log(
+    `  · ${rule.name}: ${
+      rule.skip ? 'skipped (VITE_GROQ_API_KEY opt-in)' : `${findings.filter((f) => f.rule === rule.name).length} match(es)`
+    }`,
+  );
+}
 
 if (findings.length > 0) {
   console.error('\nFAILED — secret material found in the production bundle:');
@@ -105,4 +123,14 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log('\nPASS — zero matches. No key material reaches the client.');
+if (CLIENT_KEY_OPT_IN) {
+  console.warn(
+    '\nWARN — VITE_GROQ_API_KEY was set for this build, so the Groq-key-shaped ' +
+      'checks above were skipped on purpose: that key is now IN the public bundle, ' +
+      'readable by any visitor via dev tools or view-source. Every other rule still ' +
+      'ran and found nothing. This is the documented, opted-into trade-off of the ' +
+      'no-backend AI path — not a pass you should mistake for "no key exposure".',
+  );
+} else {
+  console.log('\nPASS — zero matches. No key material reaches the client.');
+}

@@ -91,6 +91,45 @@ than a degraded one.
 
 ---
 
+## 3b. AI without Supabase at all (not recommended)
+
+Everything above — accounts, cloud saves, `resolve-turn`, and the safe path
+to Groq — needs a Supabase project. If you don't want one but still want AI
+prose, the client can call Groq directly from the browser instead. This is a
+straight security trade-off, not a shortcut to the same thing:
+
+- The key ships **inside the public bundle**. Anyone who opens dev tools or
+  views the page source on your deployed site can read it and spend it as
+  their own. There is no way to stop this short of rotating the key.
+- There is no per-user rate limit, because there is no server to hold one.
+  The client throttles itself to 60 calls an hour, which stops this game's
+  own code from running away with your quota — it does nothing against
+  someone using the key they just lifted from the page.
+- `npm run check:secrets` is written to fail a build that embeds a Groq key,
+  on purpose. Setting `VITE_GROQ_API_KEY` makes it print a loud warning and
+  skip only the two rules shaped for that key, instead of failing — every
+  other rule (service-role keys, private-key blocks, the `GROQ_API_KEY`
+  name) still runs.
+
+If that trade-off is one you want:
+
+```bash
+# .env.local, or your host's environment variables — NOT committed
+VITE_GROQ_API_KEY=<your Groq key>
+VITE_GROQ_MODEL=llama-3.3-70b-versatile   # optional
+```
+
+On Netlify specifically: Site configuration → Environment variables → add
+`VITE_GROQ_API_KEY`, then trigger a redeploy — Vite bakes `VITE_` values in
+at build time, so setting the variable alone does not change an
+already-built site.
+
+When both this and a configured Supabase project are present, the Supabase
+path is used and this one is never called — this is purely a fallback for
+when there is no backend at all, not a way to add a second key.
+
+---
+
 ## 4. Before you publish
 
 ```bash
