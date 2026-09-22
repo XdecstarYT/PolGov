@@ -179,27 +179,69 @@ export function Briefing() {
             blurb:
               'What the state actually does, what the economy is doing underneath it, and who is in it. None of these figures are yours to set directly; all of them are downstream of decisions you take in the next three phases.',
             content: (
-              <>
-                <CabinetPanel />
-                <JusticePanel />
-                <IntegrityPanel />
-                <StateCapacityPanel />
-                <PressPanel />
-                <CommunicationsPanel />
-                <ScandalsPanel />
-                <ServicesPanel />
-                <EconomyPanel />
-                <IndustryPanel />
-                <PopulationPanel />
-                <SocietyPanel />
-                <LivingPanel />
-                <CulturePanel />
-                <OpinionPanel />
-                <ProblemsPanel />
-                <MovementsPanel />
-                <FinancePanel />
-                <ElectoratePanel />
-              </>
+              <Dossier
+                sections={[
+                  {
+                    key: 'government',
+                    label: 'Government & law',
+                    blurb:
+                      'The apparatus you run through: the cabinet you appointed, the courts, the integrity of the system, and its capacity to act.',
+                    content: (
+                      <>
+                        <CabinetPanel />
+                        <JusticePanel />
+                        <IntegrityPanel />
+                        <StateCapacityPanel />
+                      </>
+                    ),
+                  },
+                  {
+                    key: 'media',
+                    label: 'Media & opinion',
+                    blurb: 'What is being said about you, by whom, and what the public makes of it.',
+                    flag: game.scandals.length,
+                    content: (
+                      <>
+                        <PressPanel />
+                        <CommunicationsPanel />
+                        <ScandalsPanel />
+                        <OpinionPanel />
+                        <MovementsPanel />
+                      </>
+                    ),
+                  },
+                  {
+                    key: 'economy',
+                    label: 'Economy',
+                    blurb:
+                      'The money: what the country produces, what the treasury holds, and the services it funds.',
+                    content: (
+                      <>
+                        <EconomyPanel />
+                        <IndustryPanel />
+                        <FinancePanel />
+                        <ServicesPanel />
+                      </>
+                    ),
+                  },
+                  {
+                    key: 'society',
+                    label: 'Society',
+                    blurb:
+                      'Who lives here, how they are doing, and what is straining underneath the approval figure.',
+                    content: (
+                      <>
+                        <PopulationPanel />
+                        <SocietyPanel />
+                        <LivingPanel />
+                        <CulturePanel />
+                        <ProblemsPanel />
+                        <ElectoratePanel />
+                      </>
+                    ),
+                  },
+                ]}
+              />
             ),
           },
           {
@@ -231,19 +273,40 @@ export function Briefing() {
               'Every decision on these pages is slow and every consequence is late. A government that cuts readiness changes nothing anybody can see, and changes what is possible under a government that will not be this one.',
             flag: game.crises.filter((c) => c.stage !== 'settled').length,
             content: (
-              <>
-                <CrisisPanel />
-                <DefencePanel />
-                <ForcesPanel />
-                <FleetPanel />
-                <AirPanel />
-                <LogisticsPanel />
-                <DoctrinePanel />
-                <PeacePanel />
-                <TimelinePanel />
-                <TheatrePanel />
-                <IntelligencePanel />
-              </>
+              <Dossier
+                sections={[
+                  {
+                    key: 'situation',
+                    label: 'Situation',
+                    blurb: 'What is live right now, and how it is trending.',
+                    flag: game.crises.filter((c) => c.stage !== 'settled').length,
+                    content: (
+                      <>
+                        <CrisisPanel />
+                        <TimelinePanel />
+                        <PeacePanel />
+                        <IntelligencePanel />
+                      </>
+                    ),
+                  },
+                  {
+                    key: 'forces',
+                    label: 'Armed forces',
+                    blurb: 'What you could call on, if the situation above ever asked for it.',
+                    content: (
+                      <>
+                        <DefencePanel />
+                        <ForcesPanel />
+                        <FleetPanel />
+                        <AirPanel />
+                        <LogisticsPanel />
+                        <DoctrinePanel />
+                        <TheatrePanel />
+                      </>
+                    ),
+                  },
+                ]}
+              />
             ),
           },
         ]}
