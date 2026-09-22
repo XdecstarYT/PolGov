@@ -44,7 +44,7 @@ Then point the client at the project:
 ```bash
 # .env.local — NOT committed
 VITE_SUPABASE_URL=https://<ref>.supabase.co
-VITE_SUPABASE_ANON_KEY=<the anon/publishable key>
+VITE_SUPABASE_PUBLISHABLE_KEY=<the publishable key, sb_publishable_...>
 ```
 
 Both are *publishable* values and are meant to reach the browser. They are
