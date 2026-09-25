@@ -18,7 +18,7 @@
 
 import { useState } from 'react';
 import { useGame } from '../../state/store.ts';
-import { draftBill } from '../../services/narrator.ts';
+import { draftBill, lastDirectGroqStatus, type NarratorReason } from '../../services/narrator.ts';
 import {
   BILL_CATEGORY_LABELS,
   DRAFT_BILL_LIMIT,
@@ -36,7 +36,48 @@ type Stage =
   | { at: 'idle' }
   | { at: 'drafting' }
   | { at: 'ready'; raw: RawDraft; description: string; magnitude: BillMagnitude }
-  | { at: 'unavailable' };
+  | { at: 'unavailable'; reason: NarratorReason | null };
+
+/**
+ * Turn a failure reason into a sentence a player can act on, without a
+ * console or a network tab. The direct-to-Groq path additionally knows the
+ * HTTP status Groq itself sent back, which is the difference between "the
+ * key is wrong" and "the request never arrived" — two problems that look
+ * identical from "Counsel could not be reached" alone.
+ */
+function describeUnavailable(reason: NarratorReason | null): string {
+  const status = lastDirectGroqStatus();
+
+  switch (reason) {
+    case 'not_configured':
+      return 'AI is not configured for this deployment — no cloud account and no direct key are set up here.';
+    case 'not_signed_in':
+      return "You're not signed in. This deployment's AI needs an account — sign in from the title screen and try again.";
+    case 'rate_limited':
+      return "The hour's AI allowance has been used up. Try again shortly.";
+    case 'upstream_error':
+      if (status === 401 || status === 403) {
+        return `The AI service rejected the key (HTTP ${status}) — it may be wrong, revoked, or not saved yet. Check it on the host's environment settings and redeploy.`;
+      }
+      if (status === 429) {
+        return "The AI service's own rate limit was hit (HTTP 429). Try again shortly.";
+      }
+      if (status !== null) {
+        return `The AI service returned an error (HTTP ${status}).`;
+      }
+      return 'The AI service returned an error. Try again in a moment.';
+    case 'empty':
+      return 'The AI responded with nothing usable. Try again.';
+    case 'timeout':
+      return 'The request timed out before getting a response. Try again.';
+    case 'network_error':
+      return 'The request never reached the AI service — a browser extension, ad blocker, or the network could be blocking it.';
+    case 'invalid_response':
+      return "The AI responded, but not in a form counsel could use. Try rephrasing what you're asking for.";
+    default:
+      return 'Counsel could not be reached.';
+  }
+}
 
 export function DraftingDesk() {
   const { game, dispatch } = useGame();
@@ -62,12 +103,12 @@ export function DraftingDesk() {
 
   const send = async () => {
     setStage({ at: 'drafting' });
-    const raw = await draftBill(game, description.trim(), magnitude);
-    if (!raw) {
-      setStage({ at: 'unavailable' });
+    const { draft, reason } = await draftBill(game, description.trim(), magnitude);
+    if (!draft) {
+      setStage({ at: 'unavailable', reason });
       return;
     }
-    setStage({ at: 'ready', raw, description: description.trim(), magnitude });
+    setStage({ at: 'ready', raw: draft, description: description.trim(), magnitude });
   };
 
   const file = async () => {
@@ -161,8 +202,8 @@ export function DraftingDesk() {
 
       {stage.at === 'unavailable' && (
         <EmptyNote>
-          Counsel could not be reached. Every other way of passing a law is unaffected — the
-          order paper is where it was.
+          {describeUnavailable(stage.reason)} Every other way of passing a law is unaffected —
+          the order paper is where it was.
         </EmptyNote>
       )}
 

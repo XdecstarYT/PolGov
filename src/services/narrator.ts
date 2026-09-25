@@ -62,22 +62,46 @@ function cacheKey(kind: NarratorKind, gameId: string, turn: number, extra = ''):
   return `${kind}:${gameId}:${turn}:${extra}`;
 }
 
+/**
+ * Why a call produced no text. The eight ambient callers below (news,
+ * events, quotes, columns…) don't care — they already have a fallback line
+ * and showing a reason for something the player never asked for would be
+ * noise. `draftBill` is different: the player pressed a button and got
+ * nothing, and "could not be reached" with no further detail is not an
+ * answer. This is what makes it possible to say more than that, without
+ * a dev tools tour.
+ */
+export type NarratorReason =
+  | 'not_configured'
+  | 'not_signed_in'
+  | 'rate_limited'
+  | 'upstream_error'
+  | 'empty'
+  | 'timeout'
+  | 'network_error'
+  | 'invalid_response';
+
+interface NarratorResult {
+  text: string | null;
+  reason: NarratorReason | null;
+}
+
 async function callNarrator(
   kind: NarratorKind,
   gameId: string,
   context: unknown,
-): Promise<string | null> {
+): Promise<NarratorResult> {
   if (isCloudConfigured && supabase) return callViaEdgeFunction(kind, gameId, context);
   if (directApiKey) return callGroqDirect(kind, context);
-  return null;
+  return { text: null, reason: 'not_configured' };
 }
 
 async function callViaEdgeFunction(
   kind: NarratorKind,
   gameId: string,
   context: unknown,
-): Promise<string | null> {
-  if (!supabase) return null;
+): Promise<NarratorResult> {
+  if (!supabase) return { text: null, reason: 'not_configured' };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -86,14 +110,39 @@ async function callViaEdgeFunction(
     const { data, error } = await supabase.functions.invoke('ai-narrator', {
       body: { kind, gameId, context },
     });
-    if (error) return null;
-    const text = (data as { text?: string } | null)?.text;
-    return typeof text === 'string' && text.trim().length > 0 ? text.trim() : null;
+    if (error) return { text: null, reason: 'network_error' };
+
+    const body = data as { text?: string; reason?: string } | null;
+    const text = body?.text;
+    if (typeof text === 'string' && text.trim().length > 0) {
+      return { text: text.trim(), reason: null };
+    }
+    /*
+     * The function itself distinguishes rate-limited / not-configured /
+     * upstream failures in its own `reason` field. When that field is
+     * ABSENT on an empty response, the function returned early — before
+     * ever reaching the part that sets one — which only happens when
+     * there is no Authorization header or no signed-in user behind it.
+     */
+    const serverReason = body?.reason;
+    return {
+      text: null,
+      reason: isNarratorReason(serverReason) ? serverReason : 'not_signed_in',
+    };
   } catch {
-    return null;
+    return { text: null, reason: 'timeout' };
   } finally {
     clearTimeout(timer);
   }
+}
+
+function isNarratorReason(value: unknown): value is NarratorReason {
+  return (
+    typeof value === 'string' &&
+    ['not_configured', 'rate_limited', 'upstream_error', 'empty', 'timeout', 'network_error'].includes(
+      value,
+    )
+  );
 }
 
 /**
@@ -116,8 +165,12 @@ function withinDirectRateLimit(): boolean {
   return directCallTimestamps.length < DIRECT_RATE_LIMIT_PER_HOUR;
 }
 
-async function callGroqDirect(kind: NarratorKind, context: unknown): Promise<string | null> {
-  if (!directApiKey || !withinDirectRateLimit()) return null;
+/** Set on the last direct call that got an HTTP response Groq itself sent back. */
+let lastDirectHttpStatus: number | null = null;
+
+async function callGroqDirect(kind: NarratorKind, context: unknown): Promise<NarratorResult> {
+  if (!directApiKey) return { text: null, reason: 'not_configured' };
+  if (!withinDirectRateLimit()) return { text: null, reason: 'rate_limited' };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -142,17 +195,32 @@ async function callGroqDirect(kind: NarratorKind, context: unknown): Promise<str
       }),
     });
 
-    if (!response.ok) return null;
+    /* A response at all — even a bad one — proves the request reached Groq,
+       which rules out CORS and network blocks as the cause of a failure. */
+    lastDirectHttpStatus = response.status;
+    if (!response.ok) return { text: null, reason: 'upstream_error' };
     directCallTimestamps.push(Date.now());
 
     const payload = await response.json();
     const text: unknown = payload?.choices?.[0]?.message?.content;
-    return typeof text === 'string' && text.trim().length > 0 ? text.trim() : null;
-  } catch {
-    return null;
+    if (typeof text === 'string' && text.trim().length > 0) {
+      return { text: text.trim(), reason: null };
+    }
+    return { text: null, reason: 'empty' };
+  } catch (error) {
+    /* Never reached Groq at all: a timeout (our own abort) or the browser
+       refusing the request outright — a network failure, an extension, or
+       Groq's own CORS policy declining a browser-origin call. */
+    const reason = (error as Error)?.name === 'AbortError' ? 'timeout' : 'network_error';
+    return { text: null, reason };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** The HTTP status Groq itself last returned to the direct path, if any. */
+export function lastDirectGroqStatus(): number | null {
+  return lastDirectHttpStatus;
 }
 
 /**
@@ -172,15 +240,18 @@ async function callGroqDirect(kind: NarratorKind, context: unknown): Promise<str
  * nonsense, or nothing, the player would get a small dull legal bill and
  * the simulation would be unaffected.
  *
- * Returns null when the AI is unreachable, which the caller should treat as
- * "drafting is unavailable" rather than as a failed bill.
+ * Returns a null draft when the AI is unreachable, which the caller should
+ * treat as "drafting is unavailable" rather than as a failed bill — paired
+ * with a reason, since this is the one call in the file the player pressed
+ * a button and is waiting on, rather than ambient polish with its own
+ * fallback line already on screen.
  */
 export async function draftBill(
   state: GameState,
   description: string,
   magnitude: BillMagnitude = 'major',
-): Promise<RawDraft | null> {
-  const text = await callNarrator('bill_draft', state.id, {
+): Promise<{ draft: RawDraft | null; reason: NarratorReason | null }> {
+  const { text, reason } = await callNarrator('bill_draft', state.id, {
     request: description.slice(0, 600),
     country: compactContext(state),
     /* The engine's own vocabulary, sent rather than written into a prompt,
@@ -188,15 +259,17 @@ export async function draftBill(
     vocabulary: draftingVocabulary(magnitude),
     magnitude,
   });
-  if (!text) return null;
+  if (!text) return { draft: null, reason };
 
   try {
     /* Some models fence their JSON however firmly they are asked not to. */
     const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
     const parsed: unknown = JSON.parse(cleaned);
-    return parsed && typeof parsed === 'object' ? (parsed as RawDraft) : null;
+    return parsed && typeof parsed === 'object'
+      ? { draft: parsed as RawDraft, reason: null }
+      : { draft: null, reason: 'invalid_response' };
   } catch {
-    return null;
+    return { draft: null, reason: 'invalid_response' };
   }
 }
 
@@ -225,7 +298,7 @@ export async function leaderVoice(
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const text = await callNarrator(
+  const { text } = await callNarrator(
     'leader_voice',
     state.id,
     voiceContext(persona, outlet, about, { ...facts, country: compactContext(state) }),
@@ -253,7 +326,7 @@ export async function pressColumn(
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const text = await callNarrator(
+  const { text } = await callNarrator(
     'press_column',
     state.id,
     voiceContext(persona, outlet, 'the week', { ...facts, country: compactContext(state) }),
@@ -303,10 +376,12 @@ export async function embellishNews(
   const cached = cache.get(key);
   const raw =
     cached ??
-    (await callNarrator('news', state.id, {
-      ...compactContext(state),
-      headlines: items.map((i) => ({ headline: i.headline, body: i.body })),
-    }));
+    (
+      await callNarrator('news', state.id, {
+        ...compactContext(state),
+        headlines: items.map((i) => ({ headline: i.headline, body: i.body })),
+      })
+    ).text;
 
   if (!raw) return items;
   cache.set(key, raw);
@@ -341,7 +416,7 @@ export async function embellishEvent(
   const cached = cache.get(key);
   if (cached) return cached;
 
-  const text = await callNarrator('event_narrative', state.id, {
+  const { text } = await callNarrator('event_narrative', state.id, {
     ...compactContext(state),
     event: {
       title: event.title,
@@ -374,7 +449,7 @@ export async function oppositionQuote(
   if (cached) return cached;
   if (!opposition) return offline;
 
-  const text = await callNarrator('opposition_quote', state.id, {
+  const { text } = await callNarrator('opposition_quote', state.id, {
     ...compactContext(state),
     opposition: { name: opposition.name, title: opposition.leaderTitle, ideology: opposition.ideology },
     bill: { title: billTitle, passed },
@@ -405,7 +480,7 @@ export async function coalitionDialogue(
   if (cached) return cached;
   if (!party) return offline;
 
-  const text = await callNarrator('coalition_dialogue', state.id, {
+  const { text } = await callNarrator('coalition_dialogue', state.id, {
     ...compactContext(state),
     partner: {
       name: party.name,
@@ -430,7 +505,7 @@ export async function debateLine(state: GameState, partyId: string): Promise<str
   if (cached) return cached;
   if (!party) return offline;
 
-  const text = await callNarrator('debate_line', state.id, {
+  const { text } = await callNarrator('debate_line', state.id, {
     ...compactContext(state),
     opponent: { name: party.name, title: party.leaderTitle, ideology: party.ideology },
   });
@@ -449,7 +524,7 @@ export async function careerSummary(
   const cached = cache.get(key);
   if (cached) return cached;
 
-  const text = await callNarrator('career_summary', state.id, {
+  const { text } = await callNarrator('career_summary', state.id, {
     ...compactContext(state),
     career: state.career,
     legacyTotal,
